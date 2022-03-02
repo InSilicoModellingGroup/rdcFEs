@@ -32,5 +32,21 @@ rdcFEs.*
 *.out
 *.app
 
-# Simulation output files
-output.txt out*.m job_output.txt output.txt* *.gmv.* *.plt.* out*.xdr* out*.xda* PI* *.e *.ex2 *.vtk *.vtu *.pvd *.pvsm
+# Simulation I/O data files
+*.dat
+*.msh
+*.m
+job_output.txt
+output.txt*
+*.gmv.*
+*.plt.*
+out*.xdr*
+out*.xda*
+PI*
+*.e
+*.ex2
+*.vtk
+*.vtu
+*.pvd
+*.pvsm
+
