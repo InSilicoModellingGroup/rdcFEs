@@ -12,7 +12,7 @@ objects  := $(patsubst src/%.C, src/%.$(obj-suffix), $(srcfiles))
 
 ###############################################################################
 
-all:: $(notdir $(target))
+all: $(notdir $(target))
 
 # Production rules:  how to make the target - depends on library configuration
 $(notdir $(target)): $(objects)
@@ -23,7 +23,7 @@ $(notdir $(target)): $(objects)
 ###############################################################################
 dust:
 	@echo "Deleting old output and runtime files"
-	@rm -f out*.m job_output.txt output.txt* *.gmv.* *.plt.* out*.xdr* out*.xda* PI* *.e *.ex2 *.vtk *.vtu *.pvd *.pvsm $(target)
+	@rm -f out*.m job_output.txt output.txt* *.gmv.* *.plt.* out*.xdr* out*.xda* PI* *.e *.ex2 *.vtk *.vtu *.pvd $(target)
 
 clean: dust
 	@rm -f $(objects) *.$(obj-suffix) *.lo
@@ -39,10 +39,7 @@ echo:
 	@echo objects = $(objects)
 	@echo target = $(target)
 
-run: complete
-
-complete: $(wildcard *.in)
-#	@$(MAKE) dust
+run: $(wildcard *.in)
 	@$(MAKE) -C $(dir $(target)) $(notdir $(target))
 	@echo "***************************************************************"
 	@echo "* Running App " $(notdir $(target))
