@@ -166,30 +166,50 @@ void initial_tracts (EquationSystems & es,
   // ...done
 }
 
-Real ramp            (Real t, const Real& t0, const Real& t1)
+Real ramp            (const Real & t, const Real & t0, const Real & t1)
 {
   if      (t < t0) return  0.0;
   else if (t < t1) return  (t-t0)/(t1-t0);
   else             return  1.0;
 }
-Real ramp_derivative (Real t, const Real& t0, const Real& t1)
+Real ramp            (const Real & t, const Real * t_)
+{
+  // ...as above
+  return ramp(t, t_[0], t_[1]);
+}
+Real ramp_derivative (const Real & t, const Real & t0, const Real & t1)
 {
   if      (t < t0) return  0.0;
   else if (t < t1) return  1.0/(t1-t0);
   else             return  0.0;
 }
+Real ramp_derivative (const Real & t, const Real * t_)
+{
+  // ...as above
+  return ramp_derivative(t, t_[0], t_[1]);
+}
 
-Real drop            (Real t, const Real& t0, const Real& t1)
+Real drop            (const Real & t, const Real & t0, const Real & t1)
 {
   if      (t < t0) return  1.0;
   else if (t < t1) return  (t1-t)/(t1-t0);
   else             return  0.0;
 }
-Real drop_derivative (Real t, const Real& t0, const Real& t1)
+Real drop            (const Real & t, const Real * t_)
+{
+  // ...as above
+  return drop(t, t_[0], t_[1]);
+}
+Real drop_derivative (const Real & t, const Real & t0, const Real & t1)
 {
   if      (t < t0) return  0.0;
   else if (t < t1) return -1.0/(t1-t0);
   else             return  0.0;
+}
+Real drop_derivative (const Real & t, const Real * t_)
+{
+  // ...as above
+  return drop_derivative(t, t_[0], t_[1]);
 }
 
 void initial_adpm (EquationSystems & es,
