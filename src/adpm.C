@@ -234,6 +234,48 @@ Real SG_(const Real & C, const Real * p_)
   else             return  0.0;
 }
 
+inline // Boltzmann (sigmoidal) increase function
+Real Bsi_(const Real & C, const Real * p_)
+{
+  const Real & cM = p_[0];
+  if (0.0==cM) return 0.0;
+  const Real & C0 = p_[1];
+  const Real & dC = p_[2];
+  const Real G = exp((C-C0)/dC);
+  return G/(1.0+G);
+}
+inline // Boltzmann (sigmoidal) increase function - derivative
+Real deriv_Bsi_(const Real & C, const Real * p_)
+{
+  const Real & cM = p_[0];
+  if (0.0==cM) return 0.0;
+  const Real & C0 = p_[1];
+  const Real & dC = p_[2];
+  const Real G = exp((C-C0)/dC);
+  return G/(dC*(1.0+G)*(1.0+G));
+}
+
+inline // Boltzmann (sigmoidal) dencrease function
+Real Bsd_(const Real & C, const Real * p_)
+{
+  const Real & cM = p_[0];
+  if (0.0==cM) return 0.0;
+  const Real & C0 = p_[1];
+  const Real & dC = p_[2];
+  const Real G = exp((C-C0)/dC);
+  return 1.0/(1.0+G);
+}
+inline // Boltzmann (sigmoidal) dencrease function - derivative
+Real deriv_Bsd_(const Real & C, const Real * p_)
+{
+  const Real & cM = p_[0];
+  if (0.0==cM) return 0.0;
+  const Real & C0 = p_[1];
+  const Real & dC = p_[2];
+  const Real G = exp((C-C0)/dC);
+  return -G/(dC*(1.0+G)*(1.0+G));
+}
+
 void initial_adpm (EquationSystems & es,
                    const std::string & libmesh_dbg_var(system_name))
 {
