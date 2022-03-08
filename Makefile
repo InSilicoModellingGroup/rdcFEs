@@ -3,9 +3,10 @@ LIBMESH_DIR ?= /Users/vasvav/Work/libmesh
 
 include $(LIBMESH_DIR)/Make.common
 
-target   := ./rdcFEs.$(METHOD)
-srcfiles := $(wildcard src/*.C)
-objects  := $(patsubst src/%.C, src/%.$(obj-suffix), $(srcfiles))
+this_project = $(shell pwd)
+target   := $(this_project)/./rdcFEs.$(METHOD)
+srcfiles := $(wildcard $(this_project)/src/*.C)
+objects  := $(patsubst %.C, %.$(obj-suffix), $(srcfiles))
 ###############################################################################
 
 .PHONY: dust clean distclean
@@ -38,17 +39,5 @@ echo:
 	@echo srcfiles = $(srcfiles)
 	@echo objects = $(objects)
 	@echo target = $(target)
-
-run: $(wildcard *.in)
-	@$(MAKE) -C $(dir $(target)) $(notdir $(target))
-	@echo "***************************************************************"
-	@echo "* Running App " $(notdir $(target))
-	@echo "***************************************************************"
-	@echo " "
-	mpiexec -n 1 $(target) ${LIBMESH_OPTIONS} 2>&1 | tee output.txt
-	@echo " "
-	@echo "***************************************************************"
-	@echo "* Done Running App " $(notdir $(target))
-	@echo "***************************************************************"
 
 ###############################################################################
