@@ -126,6 +126,8 @@ void input (GetPot & in, EquationSystems & es)
   // parameters for the species: PrP
   {
     name = "decay/PrP";             es.parameters.set<Real>(name) = in(name, 0.);
+    name = "decay/PrP/pulse/0";     es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "decay/PrP/pulse/1";     es.parameters.set<Real>(name) = in(name,+1.0e+20);
   }
 
   // parameters for the species: A_b
@@ -143,6 +145,8 @@ void input (GetPot & in, EquationSystems & es)
     name = "transform/A_b/pulse/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "transform/A_b/pulse/1"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "decay/A_b";             es.parameters.set<Real>(name) = in(name, 0.);
+    name = "decay/A_b/pulse/0";     es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "decay/A_b/pulse/1";     es.parameters.set<Real>(name) = in(name,+1.0e+20);
   }
 
   // parameters for the species: Tau
@@ -160,6 +164,8 @@ void input (GetPot & in, EquationSystems & es)
     name = "transform/Tau/pulse/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "transform/Tau/pulse/1"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "decay/Tau";             es.parameters.set<Real>(name) = in(name, 0.);
+    name = "decay/Tau/pulse/0";     es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "decay/Tau/pulse/1";     es.parameters.set<Real>(name) = in(name,+1.0e+20);
   }
 
   // ...done
@@ -357,12 +363,13 @@ void assemble_adpm (EquationSystems & es,
 
   //const RealVectorValue velocity = es.parameters.get<RealVectorValue>("velocity");
 
-  const Real decay_PrP = es.parameters.get<Real>("decay/PrP");
-
-  const Real diffuse_A_b[] = { es.parameters.get<Real>("diffuse/A_b")           ,
+  const Real decay_PrP[] = { es.parameters.get<Real>("decay/PrP")         ,
+                             es.parameters.get<Real>("decay/PrP/pulse/0") ,
+                             es.parameters.get<Real>("decay/PrP/pulse/1") };
+  const Real diffuse_A_b[] = { es.parameters.get<Real>("diffuse/A_b")         ,
                                es.parameters.get<Real>("diffuse/A_b/pulse/0") ,
                                es.parameters.get<Real>("diffuse/A_b/pulse/1") };
-  const Real taxis_A_b[]   = { es.parameters.get<Real>("taxis/A_b")           ,
+  const Real taxis_A_b[]   = { es.parameters.get<Real>("taxis/A_b")         ,
                                es.parameters.get<Real>("taxis/A_b/pulse/0") ,
                                es.parameters.get<Real>("taxis/A_b/pulse/1") };
   const Real produce_A_b[] = { es.parameters.get<Real>("produce/A_b")           ,
@@ -371,12 +378,13 @@ void assemble_adpm (EquationSystems & es,
   const Real transform_A_b[] = { es.parameters.get<Real>("transform/A_b")         ,
                                  es.parameters.get<Real>("transform/A_b/pulse/0") ,
                                  es.parameters.get<Real>("transform/A_b/pulse/1") };
-  const Real decay_A_b = es.parameters.get<Real>("decay/A_b");
-
-  const Real diffuse_Tau[] = { es.parameters.get<Real>("diffuse/Tau")           ,
+  const Real decay_A_b[] = { es.parameters.get<Real>("decay/A_b")         ,
+                             es.parameters.get<Real>("decay/A_b/pulse/0") ,
+                             es.parameters.get<Real>("decay/A_b/pulse/1") };
+  const Real diffuse_Tau[] = { es.parameters.get<Real>("diffuse/Tau")         ,
                                es.parameters.get<Real>("diffuse/Tau/pulse/0") ,
                                es.parameters.get<Real>("diffuse/Tau/pulse/1") };
-  const Real taxis_Tau[]   = { es.parameters.get<Real>("taxis/Tau")           ,
+  const Real taxis_Tau[]   = { es.parameters.get<Real>("taxis/Tau")         ,
                                es.parameters.get<Real>("taxis/Tau/pulse/0") ,
                                es.parameters.get<Real>("taxis/Tau/pulse/1") };
   const Real produce_Tau[] = { es.parameters.get<Real>("produce/Tau")           ,
@@ -385,7 +393,9 @@ void assemble_adpm (EquationSystems & es,
   const Real transform_Tau[] = { es.parameters.get<Real>("transform/Tau")         ,
                                  es.parameters.get<Real>("transform/Tau/pulse/0") ,
                                  es.parameters.get<Real>("transform/Tau/pulse/1") };
-  const Real decay_Tau = es.parameters.get<Real>("decay/Tau");
+  const Real decay_Tau[] = { es.parameters.get<Real>("decay/Tau")         ,
+                             es.parameters.get<Real>("decay/Tau/pulse/0") ,
+                             es.parameters.get<Real>("decay/Tau/pulse/1") };
 
   for (const auto & elem : mesh.active_local_element_ptr_range())
     {
@@ -454,7 +464,7 @@ void assemble_adpm (EquationSystems & es,
                                       + DT_2*(
                                              - Pi_(u_old(1),transform_A_b)*u_old(0)*phi[i][qp]
                                              - Pi_(u_old(2),transform_Tau)*u_old(0)*phi[i][qp]
-                                             - decay_PrP*u_old(0)*phi[i][qp]
+                                             - Pi_(u_old(0),decay_PrP)*u_old(0)*phi[i][qp]
                                              //- (GRAD_u_old(0)*velocity)*phi[i][qp]
                                              )
                                       );
@@ -465,7 +475,7 @@ void assemble_adpm (EquationSystems & es,
                                       + DT_2*(
                                                SD_(u_old(1),produce_A_b)*u_old(1)*phi[i][qp]
                                              + Pi_(u_old(1),transform_A_b)*u_old(0)*phi[i][qp]
-                                             - decay_A_b*u_old(1)*phi[i][qp]
+                                             - Pi_(u_old(1),decay_A_b)*u_old(1)*phi[i][qp]
                                              - Pi_(u_old(1),diffuse_A_b)*(GRAD_u_old(1)*dphi[i][qp])
                                              - Pi_(u_old(1),taxis_A_b)*((GRAD_u_old(1)*tracts)*tracts*dphi[i][qp])
                                              //- (GRAD_u_old(1)*velocity)*phi[i][qp]
@@ -478,7 +488,7 @@ void assemble_adpm (EquationSystems & es,
                                       + DT_2*(
                                                SD_(u_old(2),produce_Tau)*u_old(2)*phi[i][qp]
                                              + Pi_(u_old(2),transform_Tau)*u_old(0)*phi[i][qp]
-                                             - decay_Tau*u_old(2)*phi[i][qp]
+                                             - Pi_(u_old(2),decay_Tau)*u_old(2)*phi[i][qp]
                                              - Pi_(u_old(2),diffuse_Tau)*(GRAD_u_old(2)*dphi[i][qp])
                                              - Pi_(u_old(2),taxis_Tau)*((GRAD_u_old(2)*tracts)*tracts*dphi[i][qp])
                                              //- (GRAD_u_old(2)*velocity)*phi[i][qp]
@@ -495,7 +505,7 @@ void assemble_adpm (EquationSystems & es,
                                                - DT_2*(
                                                       - Pi_(u_old(1),transform_A_b)*phi[i][qp]*phi[j][qp]
                                                       - Pi_(u_old(2),transform_Tau)*phi[i][qp]*phi[j][qp]
-                                                      - decay_PrP*phi[i][qp]*phi[j][qp]
+                                                      - Pi_(u_old(0),decay_PrP)*phi[i][qp]*phi[j][qp]
                                                       //- (dphi[j][qp]*velocity)*phi[i][qp]
                                                       )
                                                );
@@ -512,7 +522,7 @@ void assemble_adpm (EquationSystems & es,
                                                  // convection, diffusion, source/sink terms
                                                - DT_2*(
                                                         SD_(u_old(1),produce_A_b)*phi[i][qp]*phi[j][qp]
-                                                      - decay_A_b*phi[i][qp]*phi[j][qp]
+                                                      - Pi_(u_old(1),decay_A_b)*phi[i][qp]*phi[j][qp]
                                                       - Pi_(u_old(1),diffuse_A_b)*(dphi[i][qp]*dphi[j][qp])
                                                       - Pi_(u_old(1),taxis_A_b)*((dphi[j][qp]*tracts)*tracts*dphi[i][qp])
                                                       //- (dphi[j][qp]*velocity)*phi[i][qp]
@@ -531,7 +541,7 @@ void assemble_adpm (EquationSystems & es,
                                                  // convection, diffusion, source/sink terms
                                                - DT_2*(
                                                         SD_(u_old(2),produce_Tau)*phi[i][qp]*phi[j][qp]
-                                                      - decay_Tau*phi[i][qp]*phi[j][qp]
+                                                      - Pi_(u_old(2),decay_Tau)*phi[i][qp]*phi[j][qp]
                                                       - Pi_(u_old(2),diffuse_Tau)*(dphi[i][qp]*dphi[j][qp])
                                                       - Pi_(u_old(2),taxis_Tau)*((dphi[j][qp]*tracts)*tracts*dphi[i][qp])
                                                       //- (dphi[j][qp]*velocity)*phi[i][qp]
