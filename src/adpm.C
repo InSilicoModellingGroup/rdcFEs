@@ -125,40 +125,40 @@ void input (GetPot & in, EquationSystems & es)
 
   // parameters for the species: PrP
   {
-    name = "decay/PrP";               es.parameters.set<Real>(name) = in(name, 0.);
+    name = "decay/PrP";             es.parameters.set<Real>(name) = in(name, 0.);
   }
 
   // parameters for the species: A_b
   {
     name = "diffuse/A_b";           es.parameters.set<Real>(name) = in(name, 0.);
-    name = "diffuse/A_b/pulse/0";   es.parameters.set<Real>(name) = in(name, 0.);
-    name = "diffuse/A_b/pulse/1";   es.parameters.set<Real>(name) = in(name, 1.);
+    name = "diffuse/A_b/pulse/0";   es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "diffuse/A_b/pulse/1";   es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "taxis/A_b";             es.parameters.set<Real>(name) = in(name, 0.);
-    name = "taxis/A_b/pulse/0";     es.parameters.set<Real>(name) = in(name, 0.);
-    name = "taxis/A_b/pulse/1";     es.parameters.set<Real>(name) = in(name, 1.);
+    name = "taxis/A_b/pulse/0";     es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "taxis/A_b/pulse/1";     es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "produce/A_b";           es.parameters.set<Real>(name) = in(name, 0.);
-    name = "produce/A_b/sigmoid/0"; es.parameters.set<Real>(name) = in(name, 0.);
-    name = "produce/A_b/sigmoid/1"; es.parameters.set<Real>(name) = in(name, 1.);
+    name = "produce/A_b/sigmoid/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "produce/A_b/sigmoid/1"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "transform/A_b";         es.parameters.set<Real>(name) = in(name, 0.);
-    name = "transform/A_b/pulse/0"; es.parameters.set<Real>(name) = in(name, 0.);
-    name = "transform/A_b/pulse/1"; es.parameters.set<Real>(name) = in(name, 0.);
+    name = "transform/A_b/pulse/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "transform/A_b/pulse/1"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "decay/A_b";             es.parameters.set<Real>(name) = in(name, 0.);
   }
 
   // parameters for the species: Tau
   {
     name = "diffuse/Tau";           es.parameters.set<Real>(name) = in(name, 0.);
-    name = "diffuse/Tau/pulse/0";   es.parameters.set<Real>(name) = in(name, 0.);
-    name = "diffuse/Tau/pulse/1";   es.parameters.set<Real>(name) = in(name, 1.);
+    name = "diffuse/Tau/pulse/0";   es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "diffuse/Tau/pulse/1";   es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "taxis/Tau";             es.parameters.set<Real>(name) = in(name, 0.);
-    name = "taxis/Tau/pulse/0";     es.parameters.set<Real>(name) = in(name, 0.);
-    name = "taxis/Tau/pulse/1";     es.parameters.set<Real>(name) = in(name, 1.);
+    name = "taxis/Tau/pulse/0";     es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "taxis/Tau/pulse/1";     es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "produce/Tau";           es.parameters.set<Real>(name) = in(name, 0.);
-    name = "produce/Tau/sigmoid/0"; es.parameters.set<Real>(name) = in(name, 0.);
-    name = "produce/Tau/sigmoid/1"; es.parameters.set<Real>(name) = in(name, 1.);
+    name = "produce/Tau/sigmoid/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "produce/Tau/sigmoid/1"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "transform/Tau";         es.parameters.set<Real>(name) = in(name, 0.);
-    name = "transform/Tau/pulse/0"; es.parameters.set<Real>(name) = in(name, 0.);
-    name = "transform/Tau/pulse/1"; es.parameters.set<Real>(name) = in(name, 0.);
+    name = "transform/Tau/pulse/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "transform/Tau/pulse/1"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "decay/Tau";             es.parameters.set<Real>(name) = in(name, 0.);
   }
 
