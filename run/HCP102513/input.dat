@@ -9,21 +9,26 @@ time_step_number = 400
 time_step = 0.05
 output_step = 20
 #
-taxis/A_b = 4.999999e+2
-taxis/A_b/pulse/0 =-0.00000000001
-taxis/A_b/pulse/1 = 0.005
-transform/A_b = 1.000000e-5
-transform/A_b/pulse/0 = 0.0001
-transform/A_b/pulse/1 = 0.01
+decay/PrP = 1.000000e-4
+decay/PrP/pulse/0 = 0.01
+decay/PrP/pulse/1 = 10.0
+#
+taxis/A_b = 0.999999e+3
+taxis/A_b/pulse/0 = -1
+taxis/A_b/pulse/1 = 0.01
+# transform/A_b = 1.000000e-5
+# transform/A_b/pulse/0 = 0.0001
+# transform/A_b/pulse/1 = 0.01
 #
 # diffuse/Tau = 1.999999e-22
 # diffuse/Tau/pulse/0 = 0.00001e-0
 # diffuse/Tau/pulse/1 = 0.10000e-0
-taxis/Tau = 4.999999e+2
-taxis/Tau/pulse/0 =-0.00000000001
-taxis/Tau/pulse/1 = 0.005
+taxis/Tau = 0.999999e+3
+taxis/Tau/pulse/0 = -1
+taxis/Tau/pulse/1 = 0.01
 # produce/Tau = 0.
 # produce/Tau/sigmoid/0 = 0.500000e-0
 # produce/Tau/sigmoid/1 = 0.900000e-0
-# decay/Tau = 1.000000e-2
+decay/Tau = 1.000000e+1
+decay/Tau/pulse/0 = 0.0005
 #
