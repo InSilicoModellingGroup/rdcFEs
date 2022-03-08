@@ -114,13 +114,6 @@ void input (GetPot & in, EquationSystems & es)
 
   es.parameters.set<RealVectorValue>("velocity") = RealVectorValue(0., 0., 0.);
 
-  name = "diffusion";
-  es.parameters.set<Real>(name) = in(name, 0.);
-  name = "taxis";
-  es.parameters.set<Real>(name) = in(name, 0.);
-  name = "source";
-  es.parameters.set<Real>(name) = in(name, 0.);
-
   es.parameters.set<Real>("time") = 0.0;
 
   name = "time_step";
@@ -129,6 +122,45 @@ void input (GetPot & in, EquationSystems & es)
   es.parameters.set<int>(name) = in(name, 1);
   name = "output_step";
   es.parameters.set<int>(name) = in(name, 1);
+
+  // parameters for the species: PrP
+  {
+    name = "decay/PrP";               es.parameters.set<Real>(name) = in(name, 0.);
+  }
+
+  // parameters for the species: A_b
+  {
+    name = "diffuse/A_b";           es.parameters.set<Real>(name) = in(name, 0.);
+    name = "diffuse/A_b/pulse/0";   es.parameters.set<Real>(name) = in(name, 0.);
+    name = "diffuse/A_b/pulse/1";   es.parameters.set<Real>(name) = in(name, 1.);
+    name = "taxis/A_b";             es.parameters.set<Real>(name) = in(name, 0.);
+    name = "taxis/A_b/pulse/0";     es.parameters.set<Real>(name) = in(name, 0.);
+    name = "taxis/A_b/pulse/1";     es.parameters.set<Real>(name) = in(name, 1.);
+    name = "produce/A_b";           es.parameters.set<Real>(name) = in(name, 0.);
+    name = "produce/A_b/sigmoid/0"; es.parameters.set<Real>(name) = in(name, 0.);
+    name = "produce/A_b/sigmoid/1"; es.parameters.set<Real>(name) = in(name, 1.);
+    name = "transform/A_b";         es.parameters.set<Real>(name) = in(name, 0.);
+    name = "transform/A_b/pulse/0"; es.parameters.set<Real>(name) = in(name, 0.);
+    name = "transform/A_b/pulse/1"; es.parameters.set<Real>(name) = in(name, 0.);
+    name = "decay/A_b";             es.parameters.set<Real>(name) = in(name, 0.);
+  }
+
+  // parameters for the species: Tau
+  {
+    name = "diffuse/Tau";           es.parameters.set<Real>(name) = in(name, 0.);
+    name = "diffuse/Tau/pulse/0";   es.parameters.set<Real>(name) = in(name, 0.);
+    name = "diffuse/Tau/pulse/1";   es.parameters.set<Real>(name) = in(name, 1.);
+    name = "taxis/Tau";             es.parameters.set<Real>(name) = in(name, 0.);
+    name = "taxis/Tau/pulse/0";     es.parameters.set<Real>(name) = in(name, 0.);
+    name = "taxis/Tau/pulse/1";     es.parameters.set<Real>(name) = in(name, 1.);
+    name = "produce/Tau";           es.parameters.set<Real>(name) = in(name, 0.);
+    name = "produce/Tau/sigmoid/0"; es.parameters.set<Real>(name) = in(name, 0.);
+    name = "produce/Tau/sigmoid/1"; es.parameters.set<Real>(name) = in(name, 1.);
+    name = "transform/Tau";         es.parameters.set<Real>(name) = in(name, 0.);
+    name = "transform/Tau/pulse/0"; es.parameters.set<Real>(name) = in(name, 0.);
+    name = "transform/Tau/pulse/1"; es.parameters.set<Real>(name) = in(name, 0.);
+    name = "decay/Tau";             es.parameters.set<Real>(name) = in(name, 0.);
+  }
 
   // ...done
 }
@@ -166,50 +198,34 @@ void initial_tracts (EquationSystems & es,
   // ...done
 }
 
-Real ramp            (const Real & t, const Real & t0, const Real & t1)
+Real Pi_(const Real & C, const Real * p_)
 {
-  if      (t < t0) return  0.0;
-  else if (t < t1) return  (t-t0)/(t1-t0);
-  else             return  1.0;
-}
-Real ramp            (const Real & t, const Real * t_)
-{
-  // ...as above
-  return ramp(t, t_[0], t_[1]);
-}
-Real ramp_derivative (const Real & t, const Real & t0, const Real & t1)
-{
-  if      (t < t0) return  0.0;
-  else if (t < t1) return  1.0/(t1-t0);
+  const Real & cM = p_[0];
+  const Real & c0 = p_[1];
+  const Real & c1 = p_[2];
+  if      (C < c0) return  0.0;
+  else if (C < c1) return  cM;
   else             return  0.0;
-}
-Real ramp_derivative (const Real & t, const Real * t_)
-{
-  // ...as above
-  return ramp_derivative(t, t_[0], t_[1]);
 }
 
-Real drop            (const Real & t, const Real & t0, const Real & t1)
+Real SD_(const Real & C, const Real * p_)
 {
-  if      (t < t0) return  1.0;
-  else if (t < t1) return  (t1-t)/(t1-t0);
+  const Real & cM = p_[0];
+  const Real & c0 = p_[1];
+  const Real & c1 = p_[2];
+  if      (C < c0) return  cM;
+  else if (C < c1) return  cM*(c1-C)/(c1-c0);
   else             return  0.0;
 }
-Real drop            (const Real & t, const Real * t_)
+
+Real SG_(const Real & C, const Real * p_)
 {
-  // ...as above
-  return drop(t, t_[0], t_[1]);
-}
-Real drop_derivative (const Real & t, const Real & t0, const Real & t1)
-{
-  if      (t < t0) return  0.0;
-  else if (t < t1) return -1.0/(t1-t0);
+  const Real & cM = p_[0];
+  const Real & c0 = p_[1];
+  const Real & c1 = p_[2];
+  if      (C < c0) return  cM;
+  else if (C < c1) return  cM*(C-c0)/(c1-c0);
   else             return  0.0;
-}
-Real drop_derivative (const Real & t, const Real * t_)
-{
-  // ...as above
-  return drop_derivative(t, t_[0], t_[1]);
 }
 
 void initial_adpm (EquationSystems & es,
@@ -289,11 +305,39 @@ void assemble_adpm (EquationSystems & es,
 
   const System & tracts_system = es.get_system<System>("Tracts");
 
-  const RealVectorValue velocity = es.parameters.get<RealVectorValue>("velocity");
   const Real DT_2 = es.parameters.get<Real>("time_step") / 2.0;
-  const Real diffusion = es.parameters.get<Real>("diffusion");
-  const Real taxis = es.parameters.get<Real>("taxis");
-  const Real source = es.parameters.get<Real>("source");
+
+  //const RealVectorValue velocity = es.parameters.get<RealVectorValue>("velocity");
+
+  const Real decay_PrP = es.parameters.get<Real>("decay/PrP");
+
+  const Real diffuse_A_b[] = { es.parameters.get<Real>("diffuse/A_b")           ,
+                               es.parameters.get<Real>("diffuse/A_b/pulse/0") ,
+                               es.parameters.get<Real>("diffuse/A_b/pulse/1") };
+  const Real taxis_A_b[]   = { es.parameters.get<Real>("taxis/A_b")           ,
+                               es.parameters.get<Real>("taxis/A_b/pulse/0") ,
+                               es.parameters.get<Real>("taxis/A_b/pulse/1") };
+  const Real produce_A_b[] = { es.parameters.get<Real>("produce/A_b")           ,
+                               es.parameters.get<Real>("produce/A_b/sigmoid/0") ,
+                               es.parameters.get<Real>("produce/A_b/sigmoid/1") };
+  const Real transform_A_b[] = { es.parameters.get<Real>("transform/A_b")         ,
+                                 es.parameters.get<Real>("transform/A_b/pulse/0") ,
+                                 es.parameters.get<Real>("transform/A_b/pulse/1") };
+  const Real decay_A_b = es.parameters.get<Real>("decay/A_b");
+
+  const Real diffuse_Tau[] = { es.parameters.get<Real>("diffuse/Tau")           ,
+                               es.parameters.get<Real>("diffuse/Tau/pulse/0") ,
+                               es.parameters.get<Real>("diffuse/Tau/pulse/1") };
+  const Real taxis_Tau[]   = { es.parameters.get<Real>("taxis/Tau")           ,
+                               es.parameters.get<Real>("taxis/Tau/pulse/0") ,
+                               es.parameters.get<Real>("taxis/Tau/pulse/1") };
+  const Real produce_Tau[] = { es.parameters.get<Real>("produce/Tau")           ,
+                               es.parameters.get<Real>("produce/Tau/sigmoid/0") ,
+                               es.parameters.get<Real>("produce/Tau/sigmoid/1") };
+  const Real transform_Tau[] = { es.parameters.get<Real>("transform/Tau")         ,
+                                 es.parameters.get<Real>("transform/Tau/pulse/0") ,
+                                 es.parameters.get<Real>("transform/Tau/pulse/1") };
+  const Real decay_Tau = es.parameters.get<Real>("decay/Tau");
 
   for (const auto & elem : mesh.active_local_element_ptr_range())
     {
@@ -339,18 +383,17 @@ void assemble_adpm (EquationSystems & es,
           tracts(l) = tracts_system.solution->el(dof_indices_T_var[l][0]);
         }
 
-
       for (unsigned int qp=0; qp<qrule.n_points(); qp++)
         {
           VectorValue<Number>        u_old(0.0, 0.0, 0.0);
           VectorValue<Gradient> GRAD_u_old({0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0});
-          for (unsigned int v=0; v<3; v++)
+          for (std::size_t l=0; l<n_var_dofs; l++)
             {
-              for (std::size_t l=0; l<n_var_dofs; l++)
-                {
-                  u_old(v) += phi[l][qp] * system.old_solution(dof_indices_var[v][l]);
-                  GRAD_u_old(v).add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[v][l]));
-                }
+              u_old(0) += phi[l][qp] * system.old_solution(dof_indices_var[0][l]);
+              u_old(1) += phi[l][qp] * system.old_solution(dof_indices_var[1][l]);
+              u_old(2) += phi[l][qp] * system.old_solution(dof_indices_var[2][l]);
+              GRAD_u_old(1).add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[1][l]));
+              GRAD_u_old(2).add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[2][l]));
             }
 
           for (std::size_t i=0; i<n_var_dofs; i++)
@@ -360,21 +403,37 @@ void assemble_adpm (EquationSystems & es,
                                         // capacity (mass) term
                                         phi[i][qp]*u_old(0)
                                         // convection, diffusion, source/sink terms
+                                      + DT_2*(
+                                             - Pi_(u_old(1),transform_A_b)*u_old(0)*phi[i][qp]
+                                             - Pi_(u_old(2),transform_Tau)*u_old(0)*phi[i][qp]
+                                             - decay_PrP*u_old(0)*phi[i][qp]
+                                             //- (GRAD_u_old(0)*velocity)*phi[i][qp]
+                                             )
                                       );
               Fe_var[1](i) += JxW[qp]*(
                                         // capacity (mass) term
                                         phi[i][qp]*u_old(1)
                                         // convection, diffusion, source/sink terms
+                                      + DT_2*(
+                                               SD_(u_old(1),produce_A_b)*u_old(1)*phi[i][qp]
+                                             + Pi_(u_old(1),transform_A_b)*u_old(0)*phi[i][qp]
+                                             - decay_A_b*u_old(1)*phi[i][qp]
+                                             - Pi_(u_old(1),diffuse_A_b)*(GRAD_u_old(1)*dphi[i][qp])
+                                             - Pi_(u_old(1),taxis_A_b)*((GRAD_u_old(1)*tracts)*tracts*dphi[i][qp])
+                                             //- (GRAD_u_old(1)*velocity)*phi[i][qp]
+                                             )
                                       );
               Fe_var[2](i) += JxW[qp]*(
                                         // capacity (mass) term
                                         phi[i][qp]*u_old(2)
                                         // convection, diffusion, source/sink terms
                                       + DT_2*(
-                                               source*drop(u_old(2),0.0,1.0)*phi[i][qp]
-                                             //- (GRAD_u_old(1)*velocity)*phi[i][qp]
-                                             - diffusion*(GRAD_u_old(2)*dphi[i][qp])
-                                             - taxis*((GRAD_u_old(2)*tracts)*tracts*dphi[i][qp])
+                                               SD_(u_old(2),produce_Tau)*u_old(2)*phi[i][qp]
+                                             + Pi_(u_old(2),transform_Tau)*u_old(0)*phi[i][qp]
+                                             - decay_Tau*u_old(2)*phi[i][qp]
+                                             - Pi_(u_old(2),diffuse_Tau)*(GRAD_u_old(2)*dphi[i][qp])
+                                             - Pi_(u_old(2),taxis_Tau)*((GRAD_u_old(2)*tracts)*tracts*dphi[i][qp])
+                                             //- (GRAD_u_old(2)*velocity)*phi[i][qp]
                                              )
                                       );
 
@@ -384,23 +443,50 @@ void assemble_adpm (EquationSystems & es,
                   Ke_var[0][0](i,j) += JxW[qp]*(
                                                  // capacity (mass) term
                                                  phi[i][qp]*phi[j][qp]
+                                                 // convection, diffusion, source/sink terms
+                                               - DT_2*(
+                                                      - Pi_(u_old(1),transform_A_b)*phi[i][qp]*phi[j][qp]
+                                                      - Pi_(u_old(2),transform_Tau)*phi[i][qp]*phi[j][qp]
+                                                      - decay_PrP*phi[i][qp]*phi[j][qp]
+                                                      //- (dphi[j][qp]*velocity)*phi[i][qp]
+                                                      )
                                                );
                   // Matrix contribution
+                  Ke_var[1][0](i,j) += JxW[qp]*(
+                                                 // convection, diffusion, source/sink terms
+                                               - DT_2*(
+                                                        Pi_(u_old(1),transform_A_b)*phi[i][qp]*phi[j][qp]
+                                                      )
+                                               );
                   Ke_var[1][1](i,j) += JxW[qp]*(
                                                  // capacity (mass) term
                                                  phi[i][qp]*phi[j][qp]
                                                  // convection, diffusion, source/sink terms
+                                               - DT_2*(
+                                                        SD_(u_old(1),produce_A_b)*phi[i][qp]*phi[j][qp]
+                                                      - decay_A_b*phi[i][qp]*phi[j][qp]
+                                                      - Pi_(u_old(1),diffuse_A_b)*(dphi[i][qp]*dphi[j][qp])
+                                                      - Pi_(u_old(1),taxis_A_b)*((dphi[j][qp]*tracts)*tracts*dphi[i][qp])
+                                                      //- (dphi[j][qp]*velocity)*phi[i][qp]
+                                                      )
                                                );
                   // Matrix contribution
+                  Ke_var[2][0](i,j) += JxW[qp]*(
+                                                 // convection, diffusion, source/sink terms
+                                               - DT_2*(
+                                                        Pi_(u_old(2),transform_Tau)*phi[i][qp]*phi[j][qp]
+                                                      )
+                                               );
                   Ke_var[2][2](i,j) += JxW[qp]*(
                                                  // capacity (mass) term
                                                  phi[i][qp]*phi[j][qp]
                                                  // convection, diffusion, source/sink terms
                                                - DT_2*(
-                                                        source*drop_derivative(u_old(2),0.0,1.0)*phi[i][qp]*phi[j][qp]
+                                                        SD_(u_old(2),produce_Tau)*phi[i][qp]*phi[j][qp]
+                                                      - decay_Tau*phi[i][qp]*phi[j][qp]
+                                                      - Pi_(u_old(2),diffuse_Tau)*(dphi[i][qp]*dphi[j][qp])
+                                                      - Pi_(u_old(2),taxis_Tau)*((dphi[j][qp]*tracts)*tracts*dphi[i][qp])
                                                       //- (dphi[j][qp]*velocity)*phi[i][qp]
-                                                      - diffusion*(dphi[i][qp]*dphi[j][qp])
-                                                      - taxis*((dphi[j][qp]*tracts)*tracts*dphi[i][qp])
                                                       )
                                                );
                 }
@@ -423,29 +509,33 @@ void assemble_adpm (EquationSystems & es,
 
                 VectorValue<Number>        u_old(0.0, 0.0, 0.0);
                 VectorValue<Gradient> GRAD_u_old({0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0});
-                for (unsigned int v=0; v<3; v++)
+                for (std::size_t l=0; l<n_var_dofs; l++)
                   {
-                    for (std::size_t l=0; l<n_var_dofs; l++)
-                      {
-                        u_old(v) += psi[l][qp] * system.old_solution(dof_indices_var[v][l]);
-                        GRAD_u_old(v).add_scaled(dpsi[l][qp], system.old_solution(dof_indices_var[v][l]));
-                      }
+                    u_old(1) += psi[l][qp] * system.old_solution(dof_indices_var[1][l]);
+                    u_old(2) += psi[l][qp] * system.old_solution(dof_indices_var[2][l]);
+                    GRAD_u_old(1).add_scaled(dpsi[l][qp], system.old_solution(dof_indices_var[1][l]));
+                    GRAD_u_old(2).add_scaled(dpsi[l][qp], system.old_solution(dof_indices_var[2][l]));
                   }
 
                 VectorValue<Number> field(0.0, 0.0, 0.0);
-                // field(0) = qface_normals[qp] * (velocity*u_old + diffusion*GRAD_u_old);
-                // field(1) = qface_normals[qp] * (velocity*u_old + diffusion*GRAD_u_old);
+
+                field(1) = qface_normals[qp] * ( //velocity*u_old(1) +
+                                                 Pi_(u_old(1),diffuse_A_b)*GRAD_u_old(1));
                 field(2) = qface_normals[qp] * ( //velocity*u_old(2) +
-                                                 diffusion*GRAD_u_old(2));
+                                                 Pi_(u_old(2),diffuse_Tau)*GRAD_u_old(2));
 
                 for (std::size_t i=0; i<psi.size(); i++)
                   {
                     // RHS contribution
+                    Fe_var[1](i) += JxW_face[qp] * (psi[i][qp]*field(1))
+                                  * penalty;
                     Fe_var[2](i) += JxW_face[qp] * (psi[i][qp]*field(2))
                                   * penalty;
                     // Matrix contribution
                     for (std::size_t j=0; j<psi.size(); j++)
                       {
+                        Ke_var[1][1](i,j) += JxW_face[qp] * (psi[i][qp]*psi[j][qp])
+                                           * penalty;
                         Ke_var[2][2](i,j) += JxW_face[qp] * (psi[i][qp]*psi[j][qp])
                                            * penalty;
                       }
