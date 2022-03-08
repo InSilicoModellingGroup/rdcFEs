@@ -198,9 +198,11 @@ void initial_tracts (EquationSystems & es,
   // ...done
 }
 
+inline // Pi or rectangular function
 Real Pi_(const Real & C, const Real * p_)
 {
   const Real & cM = p_[0];
+  if (0.0==cM) return 0.0;
   const Real & c0 = p_[1];
   const Real & c1 = p_[2];
   if      (C < c0) return  0.0;
@@ -208,9 +210,11 @@ Real Pi_(const Real & C, const Real * p_)
   else             return  0.0;
 }
 
+inline // step-decay function
 Real SD_(const Real & C, const Real * p_)
 {
   const Real & cM = p_[0];
+  if (0.0==cM) return 0.0;
   const Real & c0 = p_[1];
   const Real & c1 = p_[2];
   if      (C < c0) return  cM;
@@ -218,9 +222,11 @@ Real SD_(const Real & C, const Real * p_)
   else             return  0.0;
 }
 
+inline // step-growth function
 Real SG_(const Real & C, const Real * p_)
 {
   const Real & cM = p_[0];
+  if (0.0==cM) return 0.0;
   const Real & c0 = p_[1];
   const Real & c1 = p_[2];
   if      (C < c0) return  cM;
