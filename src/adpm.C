@@ -43,13 +43,13 @@ void adpm (LibMeshInit & init)
 
   input(in, es);
 
-  TransientLinearImplicitSystem & adpm =
+  TransientLinearImplicitSystem & model =
     es.add_system<TransientLinearImplicitSystem>("ADPM");
-  adpm.add_variable("PrP", FIRST, LAGRANGE);
-  adpm.add_variable("A_b", FIRST, LAGRANGE);
-  adpm.add_variable("Tau", FIRST, LAGRANGE);
-  adpm.attach_assemble_function(assemble_adpm);
-  adpm.attach_init_function(initial_adpm);
+  model.add_variable("PrP", FIRST, LAGRANGE);
+  model.add_variable("A_b", FIRST, LAGRANGE);
+  model.add_variable("Tau", FIRST, LAGRANGE);
+  model.attach_assemble_function(assemble_adpm);
+  model.attach_init_function(initial_adpm);
 
   ExplicitSystem & tracts =
     es.add_system<ExplicitSystem>("Tracts");
@@ -79,16 +79,16 @@ void adpm (LibMeshInit & init)
       es.parameters.set<Real>("time") +=
       es.parameters.get<Real>("time_step");
       // increment this time counter
-      adpm.time = es.parameters.get<Real>("time");
-      const Real current_time = adpm.time;
+      model.time = es.parameters.get<Real>("time");
+      const Real current_time = model.time;
 
       libMesh::out << " Solving time increment: " << t
                    << " (time=" << current_time <<  ") ..." << std::endl;
 
       // copy the previously-current solution into the old solution
-      *(adpm.old_local_solution) = *(adpm.current_local_solution);
+      *(model.old_local_solution) = *(model.current_local_solution);
       // now solve the AD progression model
-      adpm.solve();
+      model.solve();
 
       if (0 == t%output_step)
         ex2.write_timestep(ex2_filename, es, t, current_time);
