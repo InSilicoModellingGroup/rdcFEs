@@ -114,5 +114,20 @@ Real deriv_Bsd_(const Real & C, const Real * p_)
   return -G/(dC*(1.0+G)*(1.0+G));
 }
 //-------------------------------------------------------------------------------------------------
+inline
+double uniform_rand (const double from, const double to) {
+    std::random_device rd;
+    std::default_random_engine rgen(rd());
+    std::uniform_real_distribution<double> dist(from, to);
+    return dist(rgen);
+}
+inline
+double normal_rand (const double mean, const double stdev) {
+    std::random_device rd;
+    std::mt19937 rgen(rd());
+    std::normal_distribution<double> dist(mean, stdev);
+    return dist(rgen);
+}
+//-------------------------------------------------------------------------------------------------
 
 #endif // __UTILS_H__
