@@ -15,10 +15,10 @@
 #include "libmesh/linear_implicit_system.h"
 #include "libmesh/transient_system.h"
 
-void input (GetPot & , EquationSystems & );
-void initial_adpm (EquationSystems & , const std::string & );
-void assemble_adpm (EquationSystems & , const std::string & );
-void initial_tracts (EquationSystems & , const std::string & );
+static void input (GetPot & , EquationSystems & );
+static void initial_tracts (EquationSystems & , const std::string & );
+static void initial_adpm (EquationSystems & , const std::string & );
+static void assemble_adpm (EquationSystems & , const std::string & );
 
 extern PerfLog plog;
 
