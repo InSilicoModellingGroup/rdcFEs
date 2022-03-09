@@ -29,6 +29,13 @@
 using namespace libMesh;
 
 //-------------------------------------------------------------------------------------------------
+inline
+Real apply_lbound (const Real& L, const Real& X) { return ( X < L ? L : X ); }
+inline
+Real apply_ubound (const Real& X, const Real& U) { return ( X > U ? U : X ); }
+inline
+Real apply_bounds (const Real& L, const Real& X, const Real& U) { return ( X < L ? L : ( X > U ? U : X ) ); }
+//-------------------------------------------------------------------------------------------------
 inline // Pi or rectangular function
 Real Pi_(const Real & C, const Real * p_)
 {
