@@ -97,6 +97,30 @@ void initial_structure (EquationSystems & es,
 {
   libmesh_assert_equal_to(system_name, "uStructure");
 
+  const MeshBase& mesh = es.get_mesh();
+
+  ExplicitSystem & system =
+    es.get_system<ExplicitSystem>("uStructure");
+  libmesh_assert_equal_to(system.n_vars(), 2);
+
+  std::ifstream fin(es.parameters.get<std::string>("input_elemental"));
+
+  for (const auto & elem : mesh.active_element_ptr_range())
+    {
+      Real HU_, RT_;
+      fin >> HU_ >> RT_;
+
+      std::vector<std::vector<dof_id_type>> dof_indices_T_var(2);
+
+      system.get_dof_map().dof_indices(elem, dof_indices_T_var[0], 0);
+      system.solution->set(dof_indices_T_var[0][0], HU_);
+      system.get_dof_map().dof_indices(elem, dof_indices_T_var[1], 1);
+      system.solution->set(dof_indices_T_var[1][0], RT_);
+    }
+
+  // close solution vector and update the system
+  system.solution->close();
+  system.update();
   // ...done
 }
 
