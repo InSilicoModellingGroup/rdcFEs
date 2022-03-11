@@ -89,6 +89,64 @@ void input (GetPot & in, EquationSystems & es)
 {
   std::string name;
 
+  name = "input_GMSH";
+  es.parameters.set<std::string>(name) = in(name, "input.msh");
+  name = "output_GMSH";
+  es.parameters.set<std::string>(name) = in(name, "output.msh");
+  name = "input_nodal";
+  es.parameters.set<std::string>(name) = in(name, "input.nodal");
+  name = "input_elemental";
+  es.parameters.set<std::string>(name) = in(name, "input.elemental");
+  name = "output_EXODUS";
+  es.parameters.set<std::string>(name) = in(name, "output.ex2");
+
+  es.parameters.set<Real>("time") = 0.0;
+
+  name = "time_step";
+  es.parameters.set<Real>(name) = in(name, 1.0e-9);
+  name = "time_step_number";
+  es.parameters.set<int>(name) = in(name, 1);
+  name = "output_step";
+  es.parameters.set<int>(name) = in(name, 1);
+
+  name = "cells_max_capacity";
+  es.parameters.set<Real>(name) = in(name, 1.0);
+  name = "cytokines_max_capacity";
+  es.parameters.set<Real>(name) = in(name, 1.0);
+
+  // parameters for the species: n
+  {
+    name = "necrosis/c";       es.parameters.set<Real>(name) = in(name, 0.);
+    name = "necrosis/h";       es.parameters.set<Real>(name) = in(name, 0.);
+    name = "necrosis/v";       es.parameters.set<Real>(name) = in(name, 0.);
+  }
+
+  // parameters for the species: c & h
+  {
+    name = "diffuse/c";        es.parameters.set<Real>(name) = in(name, 0.);
+    name = "taxis/c";          es.parameters.set<Real>(name) = in(name, 0.);
+    name = "diffuse/h";        es.parameters.set<Real>(name) = in(name, 0.);
+    name = "taxis/h";          es.parameters.set<Real>(name) = in(name, 0.);
+    name = "produce/c";        es.parameters.set<Real>(name) = in(name, 0.);
+    name = "switch/c/to/h";    es.parameters.set<Real>(name) = in(name, 0.);
+    name = "switch/h/to/c";    es.parameters.set<Real>(name) = in(name, 0.);
+  }
+
+  // parameters for the species: v
+  {
+    name = "diffuse/v";        es.parameters.set<Real>(name) = in(name, 0.);
+    name = "taxis/v";          es.parameters.set<Real>(name) = in(name, 0.);
+    name = "produce/v";        es.parameters.set<Real>(name) = in(name, 0.);
+  }
+
+  // parameters for the species: a
+  {
+    name = "secrete/a/from/c"; es.parameters.set<Real>(name) = in(name, 0.);
+    name = "secrete/a/from/h"; es.parameters.set<Real>(name) = in(name, 0.);
+    name = "uptake/a/from/v";  es.parameters.set<Real>(name) = in(name, 0.);
+    name = "decay/a";          es.parameters.set<Real>(name) = in(name, 0.);
+  }
+
   // ...done
 }
 
