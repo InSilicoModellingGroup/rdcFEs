@@ -105,6 +105,43 @@ void initial_pihna (EquationSystems & es,
 {
   libmesh_assert_equal_to(system_name, "PIHNA");
 
+  const MeshBase& mesh = es.get_mesh();
+
+  TransientLinearImplicitSystem & system =
+    es.get_system<TransientLinearImplicitSystem>("PIHNA");
+  libmesh_assert_equal_to(system.n_vars(), 5);
+
+  es.parameters.set<Real> ("time") =
+  system.time = 0.0;
+
+  std::ifstream fin(es.parameters.get<std::string>("input_nodal"));
+
+  for (const auto & node : mesh.node_ptr_range())
+    {
+      Real n_, c_, h_, v_, a_;
+      fin >> n_ >> c_ >> h_ >> v_ >> a_;
+
+      const dof_id_type idof[] = { node->dof_number(system.number(), 0, 0) ,
+                                   node->dof_number(system.number(), 1, 0) ,
+                                   node->dof_number(system.number(), 2, 0) ,
+                                   node->dof_number(system.number(), 3, 0) ,
+                                   node->dof_number(system.number(), 4, 0) };
+      libmesh_assert( node->n_comp(system.number(), 0) == 1 );
+      libmesh_assert( node->n_comp(system.number(), 1) == 1 );
+      libmesh_assert( node->n_comp(system.number(), 2) == 1 );
+      libmesh_assert( node->n_comp(system.number(), 3) == 1 );
+      libmesh_assert( node->n_comp(system.number(), 4) == 1 );
+
+      system.solution->set(idof[0], n_);
+      system.solution->set(idof[1], c_);
+      system.solution->set(idof[2], h_);
+      system.solution->set(idof[3], v_);
+      system.solution->set(idof[4], a_);
+    }
+
+  // close solution vector and update the system
+  system.solution->close();
+  system.update();
   // ...done
 }
 
