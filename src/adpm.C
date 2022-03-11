@@ -210,8 +210,8 @@ void initial_adpm (EquationSystems & es,
 
   for (const auto & node : mesh.node_ptr_range())
     {
-      Real PrP, A_b, Tau;
-      fin >> PrP >> A_b >> Tau;
+      Real PrP_, A_b_, Tau_;
+      fin >> PrP_ >> A_b_ >> Tau_;
 
       const dof_id_type idof[] = { node->dof_number(system.number(), 0, 0) ,
                                    node->dof_number(system.number(), 1, 0) ,
@@ -220,9 +220,9 @@ void initial_adpm (EquationSystems & es,
       libmesh_assert( node->n_comp(system.number(), 1) == 1 );
       libmesh_assert( node->n_comp(system.number(), 2) == 1 );
 
-      system.solution->set(idof[0], PrP);
-      system.solution->set(idof[1], A_b);
-      system.solution->set(idof[2], Tau);
+      system.solution->set(idof[0], PrP_);
+      system.solution->set(idof[1], A_b_);
+      system.solution->set(idof[2], Tau_);
     }
 
   // close solution vector and update the system
@@ -368,21 +368,18 @@ void assemble_adpm (EquationSystems & es,
             {
               // RHS contribution
               Fe_var[0](i) += JxW[qp]*(
-                                        // capacity (mass) term
-                                        phi[i][qp]*u_old[0]
-                                        // convection, diffusion, source/sink terms
-                                      + DT_2*(
+                                        phi[i][qp]*u_old[0] // capacity term
+                                      + DT_2*( // transport, source, sink terms
                                              - Pi_(u_old[1],transform_A_b)*u_old[0]*phi[i][qp]
                                              - Pi_(u_old[2],transform_Tau)*u_old[0]*phi[i][qp]
                                              - Pi_(u_old[0],decay_PrP)*u_old[0]*phi[i][qp]
                                              //- (GRAD_u_old[0]*velocity)*phi[i][qp]
                                              )
                                       );
+              // RHS contribution
               Fe_var[1](i) += JxW[qp]*(
-                                        // capacity (mass) term
-                                        phi[i][qp]*u_old[1]
-                                        // convection, diffusion, source/sink terms
-                                      + DT_2*(
+                                        phi[i][qp]*u_old[1] // capacity term
+                                      + DT_2*( // transport, source, sink terms
                                                SD_(u_old[1],produce_A_b)*u_old[1]*phi[i][qp]
                                              + Pi_(u_old[1],transform_A_b)*u_old[0]*phi[i][qp]
                                              - Pi_(u_old[1],decay_A_b)*u_old[1]*phi[i][qp]
@@ -391,11 +388,10 @@ void assemble_adpm (EquationSystems & es,
                                              //- (GRAD_u_old[1]*velocity)*phi[i][qp]
                                              )
                                       );
+              // RHS contribution
               Fe_var[2](i) += JxW[qp]*(
-                                        // capacity (mass) term
-                                        phi[i][qp]*u_old[2]
-                                        // convection, diffusion, source/sink terms
-                                      + DT_2*(
+                                        phi[i][qp]*u_old[2] // capacity term
+                                      + DT_2*( // transport, source, sink terms
                                                SD_(u_old[2],produce_Tau)*u_old[2]*phi[i][qp]
                                              + Pi_(u_old[2],transform_Tau)*u_old[0]*phi[i][qp]
                                              - Pi_(u_old[2],decay_Tau)*u_old[2]*phi[i][qp]
@@ -409,10 +405,8 @@ void assemble_adpm (EquationSystems & es,
                 {
                   // Matrix contribution
                   Ke_var[0][0](i,j) += JxW[qp]*(
-                                                 // capacity (mass) term
-                                                 phi[i][qp]*phi[j][qp]
-                                                 // convection, diffusion, source/sink terms
-                                               - DT_2*(
+                                                 phi[j][qp] * phi[i][qp] // capacity term
+                                               - DT_2*( // transport, source, sink terms
                                                       - Pi_(u_old[1],transform_A_b)*phi[i][qp]*phi[j][qp]
                                                       - Pi_(u_old[2],transform_Tau)*phi[i][qp]*phi[j][qp]
                                                       - Pi_(u_old[0],decay_PrP)*phi[i][qp]*phi[j][qp]
@@ -421,16 +415,13 @@ void assemble_adpm (EquationSystems & es,
                                                );
                   // Matrix contribution
                   Ke_var[1][0](i,j) += JxW[qp]*(
-                                                 // convection, diffusion, source/sink terms
-                                               - DT_2*(
+                                               - DT_2*( // transport, source, sink terms
                                                         Pi_(u_old[1],transform_A_b)*phi[i][qp]*phi[j][qp]
                                                       )
                                                );
                   Ke_var[1][1](i,j) += JxW[qp]*(
-                                                 // capacity (mass) term
-                                                 phi[i][qp]*phi[j][qp]
-                                                 // convection, diffusion, source/sink terms
-                                               - DT_2*(
+                                                 phi[j][qp] * phi[i][qp] // capacity term
+                                               - DT_2*( // transport, source, sink terms
                                                         SD_(u_old[1],produce_A_b)*phi[i][qp]*phi[j][qp]
                                                       - Pi_(u_old[1],decay_A_b)*phi[i][qp]*phi[j][qp]
                                                       - Pi_(u_old[1],diffuse_A_b)*(dphi[i][qp]*dphi[j][qp])
@@ -440,16 +431,13 @@ void assemble_adpm (EquationSystems & es,
                                                );
                   // Matrix contribution
                   Ke_var[2][0](i,j) += JxW[qp]*(
-                                                 // convection, diffusion, source/sink terms
-                                               - DT_2*(
+                                               - DT_2*( // transport, source, sink terms
                                                         Pi_(u_old[2],transform_Tau)*phi[i][qp]*phi[j][qp]
                                                       )
                                                );
                   Ke_var[2][2](i,j) += JxW[qp]*(
-                                                 // capacity (mass) term
-                                                 phi[i][qp]*phi[j][qp]
-                                                 // convection, diffusion, source/sink terms
-                                               - DT_2*(
+                                                 phi[j][qp] * phi[i][qp] // capacity term
+                                               - DT_2*( // transport, source, sink terms
                                                         SD_(u_old[2],produce_Tau)*phi[i][qp]*phi[j][qp]
                                                       - Pi_(u_old[2],decay_Tau)*phi[i][qp]*phi[j][qp]
                                                       - Pi_(u_old[2],diffuse_Tau)*(dphi[i][qp]*dphi[j][qp])
