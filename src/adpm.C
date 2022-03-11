@@ -210,8 +210,8 @@ void initial_adpm (EquationSystems & es,
 
   for (const auto & node : mesh.node_ptr_range())
     {
-      Real PrP, A_b, Tau;
-      fin >> PrP >> A_b >> Tau;
+      Real PrP_, A_b_, Tau_;
+      fin >> PrP_ >> A_b_ >> Tau_;
 
       const dof_id_type idof[] = { node->dof_number(system.number(), 0, 0) ,
                                    node->dof_number(system.number(), 1, 0) ,
@@ -220,9 +220,9 @@ void initial_adpm (EquationSystems & es,
       libmesh_assert( node->n_comp(system.number(), 1) == 1 );
       libmesh_assert( node->n_comp(system.number(), 2) == 1 );
 
-      system.solution->set(idof[0], PrP);
-      system.solution->set(idof[1], A_b);
-      system.solution->set(idof[2], Tau);
+      system.solution->set(idof[0], PrP_);
+      system.solution->set(idof[1], A_b_);
+      system.solution->set(idof[2], Tau_);
     }
 
   // close solution vector and update the system
@@ -236,13 +236,17 @@ void assemble_adpm (EquationSystems & es,
 {
   libmesh_ignore(es, system_name);
   libmesh_assert_equal_to(system_name, "ADPM");
-  libmesh_assert_equal_to(system.n_vars(), 3);
 
   const MeshBase & mesh = es.get_mesh();
   const unsigned int dim = mesh.mesh_dimension();
 
   TransientLinearImplicitSystem & system =
     es.get_system<TransientLinearImplicitSystem>("ADPM");
+  libmesh_assert_equal_to(system.n_vars(), 3);
+
+  const System & tracts_system =
+    es.get_system<System>("Tracts");
+  libmesh_assert_equal_to(tracts_system.n_vars(), 3);
 
   FEType fe_type = system.variable_type(0);
 
@@ -266,8 +270,6 @@ void assemble_adpm (EquationSystems & es,
 
   //const std::vector<Point> & qface_points  = fe_face->get_xyz();
   const std::vector<Point> & qface_normals = fe_face->get_normals();
-
-  const System & tracts_system = es.get_system<System>("Tracts");
 
   const Real DT_2 = es.parameters.get<Real>("time_step") / 2.0;
 
@@ -318,7 +320,7 @@ void assemble_adpm (EquationSystems & es,
 
       std::vector<std::vector<dof_id_type>> dof_indices_T_var(3);
       for (unsigned int l=0; l<3; l++)
-        system.get_dof_map().dof_indices(elem, dof_indices_T_var[l], l);
+        tracts_system.get_dof_map().dof_indices(elem, dof_indices_T_var[l], l);
 
       const unsigned int n_dofs     = dof_indices.size();
       const unsigned int n_var_dofs = dof_indices_var[0].size();
@@ -353,55 +355,52 @@ void assemble_adpm (EquationSystems & es,
 
       for (unsigned int qp=0; qp<qrule.n_points(); qp++)
         {
-          Number        u_old[] = {0.0, 0.0, 0.0};
-          Gradient GRAD_u_old[] = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
+          Number PrP_old(0.0), A_b_old(0.0), Tau_old(0.0);
+          Gradient GRAD_PrP_old({0.0, 0.0, 0.0}), GRAD_A_b_old({0.0, 0.0, 0.0}), GRAD_Tau_old({0.0, 0.0, 0.0});
           for (std::size_t l=0; l<n_var_dofs; l++)
             {
-              u_old[0] += phi[l][qp] * system.old_solution(dof_indices_var[0][l]);
-              u_old[1] += phi[l][qp] * system.old_solution(dof_indices_var[1][l]);
-              u_old[2] += phi[l][qp] * system.old_solution(dof_indices_var[2][l]);
-              GRAD_u_old[1].add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[1][l]));
-              GRAD_u_old[2].add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[2][l]));
+              PrP_old += phi[l][qp] * system.old_solution(dof_indices_var[0][l]);
+              A_b_old += phi[l][qp] * system.old_solution(dof_indices_var[1][l]);
+              Tau_old += phi[l][qp] * system.old_solution(dof_indices_var[2][l]);
+              GRAD_PrP_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[0][l]));
+              GRAD_A_b_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[1][l]));
+              GRAD_Tau_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[2][l]));
             }
 
           for (std::size_t i=0; i<n_var_dofs; i++)
             {
               // RHS contribution
               Fe_var[0](i) += JxW[qp]*(
-                                        // capacity (mass) term
-                                        phi[i][qp]*u_old[0]
-                                        // convection, diffusion, source/sink terms
-                                      + DT_2*(
-                                             - Pi_(u_old[1],transform_A_b)*u_old[0]*phi[i][qp]
-                                             - Pi_(u_old[2],transform_Tau)*u_old[0]*phi[i][qp]
-                                             - Pi_(u_old[0],decay_PrP)*u_old[0]*phi[i][qp]
-                                             //- (GRAD_u_old[0]*velocity)*phi[i][qp]
+                                        PrP_old * phi[i][qp] // capacity term
+                                      + DT_2*( // transport, source, sink terms
+                                             - Pi_(A_b_old,transform_A_b) * PrP_old * phi[i][qp]
+                                             - Pi_(Tau_old,transform_Tau) * PrP_old * phi[i][qp]
+                                             - Pi_(PrP_old,decay_PrP) * PrP_old * phi[i][qp]
+                                             //- (GRAD_PrP_old * velocity) * phi[i][qp]
                                              )
                                       );
+              // RHS contribution
               Fe_var[1](i) += JxW[qp]*(
-                                        // capacity (mass) term
-                                        phi[i][qp]*u_old[1]
-                                        // convection, diffusion, source/sink terms
-                                      + DT_2*(
-                                               SD_(u_old[1],produce_A_b)*u_old[1]*phi[i][qp]
-                                             + Pi_(u_old[1],transform_A_b)*u_old[0]*phi[i][qp]
-                                             - Pi_(u_old[1],decay_A_b)*u_old[1]*phi[i][qp]
-                                             - Pi_(u_old[1],diffuse_A_b)*(GRAD_u_old[1]*dphi[i][qp])
-                                             - Pi_(u_old[1],taxis_A_b)*((GRAD_u_old[1]*tracts)*tracts*dphi[i][qp])
-                                             //- (GRAD_u_old[1]*velocity)*phi[i][qp]
+                                        A_b_old * phi[i][qp] // capacity term
+                                      + DT_2*( // transport, source, sink terms
+                                               SD_(A_b_old,produce_A_b) * A_b_old * phi[i][qp]
+                                             + Pi_(A_b_old,transform_A_b) * PrP_old * phi[i][qp]
+                                             - Pi_(A_b_old,decay_A_b) * A_b_old * phi[i][qp]
+                                             - Pi_(A_b_old,diffuse_A_b) * (GRAD_A_b_old * dphi[i][qp])
+                                             - Pi_(A_b_old,taxis_A_b) * (GRAD_A_b_old * tracts) * (tracts * dphi[i][qp])
+                                             //- (GRAD_A_b_old * velocity) * phi[i][qp]
                                              )
                                       );
+              // RHS contribution
               Fe_var[2](i) += JxW[qp]*(
-                                        // capacity (mass) term
-                                        phi[i][qp]*u_old[2]
-                                        // convection, diffusion, source/sink terms
-                                      + DT_2*(
-                                               SD_(u_old[2],produce_Tau)*u_old[2]*phi[i][qp]
-                                             + Pi_(u_old[2],transform_Tau)*u_old[0]*phi[i][qp]
-                                             - Pi_(u_old[2],decay_Tau)*u_old[2]*phi[i][qp]
-                                             - Pi_(u_old[2],diffuse_Tau)*(GRAD_u_old[2]*dphi[i][qp])
-                                             - Pi_(u_old[2],taxis_Tau)*((GRAD_u_old[2]*tracts)*tracts*dphi[i][qp])
-                                             //- (GRAD_u_old[2]*velocity)*phi[i][qp]
+                                        Tau_old * phi[i][qp] // capacity term
+                                      + DT_2*( // transport, source, sink terms
+                                               SD_(Tau_old,produce_Tau) * Tau_old * phi[i][qp]
+                                             + Pi_(Tau_old,transform_Tau) * PrP_old * phi[i][qp]
+                                             - Pi_(Tau_old,decay_Tau) * Tau_old * phi[i][qp]
+                                             - Pi_(Tau_old,diffuse_Tau) * (GRAD_Tau_old * dphi[i][qp])
+                                             - Pi_(Tau_old,taxis_Tau) * (GRAD_Tau_old * tracts) * (tracts * dphi[i][qp])
+                                             //- (GRAD_Tau_old * velocity) * phi[i][qp]
                                              )
                                       );
 
@@ -409,52 +408,44 @@ void assemble_adpm (EquationSystems & es,
                 {
                   // Matrix contribution
                   Ke_var[0][0](i,j) += JxW[qp]*(
-                                                 // capacity (mass) term
-                                                 phi[i][qp]*phi[j][qp]
-                                                 // convection, diffusion, source/sink terms
-                                               - DT_2*(
-                                                      - Pi_(u_old[1],transform_A_b)*phi[i][qp]*phi[j][qp]
-                                                      - Pi_(u_old[2],transform_Tau)*phi[i][qp]*phi[j][qp]
-                                                      - Pi_(u_old[0],decay_PrP)*phi[i][qp]*phi[j][qp]
-                                                      //- (dphi[j][qp]*velocity)*phi[i][qp]
+                                                 phi[j][qp] * phi[i][qp] // capacity term
+                                               - DT_2*( // transport, source, sink terms
+                                                      - Pi_(A_b_old,transform_A_b) * phi[j][qp] * phi[i][qp]
+                                                      - Pi_(Tau_old,transform_Tau) * phi[j][qp] * phi[i][qp]
+                                                      - Pi_(PrP_old,decay_PrP) * phi[j][qp] * phi[i][qp]
+                                                      //- (dphi[j][qp] * velocity) * phi[i][qp]
                                                       )
                                                );
                   // Matrix contribution
                   Ke_var[1][0](i,j) += JxW[qp]*(
-                                                 // convection, diffusion, source/sink terms
-                                               - DT_2*(
-                                                        Pi_(u_old[1],transform_A_b)*phi[i][qp]*phi[j][qp]
+                                               - DT_2*( // transport, source, sink terms
+                                                        Pi_(A_b_old,transform_A_b) * phi[j][qp] * phi[i][qp]
                                                       )
                                                );
                   Ke_var[1][1](i,j) += JxW[qp]*(
-                                                 // capacity (mass) term
-                                                 phi[i][qp]*phi[j][qp]
-                                                 // convection, diffusion, source/sink terms
-                                               - DT_2*(
-                                                        SD_(u_old[1],produce_A_b)*phi[i][qp]*phi[j][qp]
-                                                      - Pi_(u_old[1],decay_A_b)*phi[i][qp]*phi[j][qp]
-                                                      - Pi_(u_old[1],diffuse_A_b)*(dphi[i][qp]*dphi[j][qp])
-                                                      - Pi_(u_old[1],taxis_A_b)*((dphi[j][qp]*tracts)*tracts*dphi[i][qp])
-                                                      //- (dphi[j][qp]*velocity)*phi[i][qp]
+                                                 phi[j][qp] * phi[i][qp] // capacity term
+                                               - DT_2*( // transport, source, sink terms
+                                                        SD_(A_b_old,produce_A_b) * phi[j][qp] * phi[i][qp]
+                                                      - Pi_(A_b_old,decay_A_b) * phi[j][qp] * phi[i][qp]
+                                                      - Pi_(A_b_old,diffuse_A_b) * (dphi[j][qp] * dphi[i][qp])
+                                                      - Pi_(A_b_old,taxis_A_b) * (dphi[j][qp] * tracts) * (tracts * dphi[i][qp])
+                                                      //- (dphi[j][qp] * velocity) * phi[i][qp]
                                                       )
                                                );
                   // Matrix contribution
                   Ke_var[2][0](i,j) += JxW[qp]*(
-                                                 // convection, diffusion, source/sink terms
-                                               - DT_2*(
-                                                        Pi_(u_old[2],transform_Tau)*phi[i][qp]*phi[j][qp]
+                                               - DT_2*( // transport, source, sink terms
+                                                        Pi_(Tau_old,transform_Tau) * phi[j][qp] * phi[i][qp]
                                                       )
                                                );
                   Ke_var[2][2](i,j) += JxW[qp]*(
-                                                 // capacity (mass) term
-                                                 phi[i][qp]*phi[j][qp]
-                                                 // convection, diffusion, source/sink terms
-                                               - DT_2*(
-                                                        SD_(u_old[2],produce_Tau)*phi[i][qp]*phi[j][qp]
-                                                      - Pi_(u_old[2],decay_Tau)*phi[i][qp]*phi[j][qp]
-                                                      - Pi_(u_old[2],diffuse_Tau)*(dphi[i][qp]*dphi[j][qp])
-                                                      - Pi_(u_old[2],taxis_Tau)*((dphi[j][qp]*tracts)*tracts*dphi[i][qp])
-                                                      //- (dphi[j][qp]*velocity)*phi[i][qp]
+                                                 phi[j][qp] * phi[i][qp] // capacity term
+                                               - DT_2*( // transport, source, sink terms
+                                                        SD_(Tau_old,produce_Tau) * phi[j][qp] * phi[i][qp]
+                                                      - Pi_(Tau_old,decay_Tau) * phi[j][qp] * phi[i][qp]
+                                                      - Pi_(Tau_old,diffuse_Tau) * (dphi[j][qp] * dphi[i][qp])
+                                                      - Pi_(Tau_old,taxis_Tau) * (dphi[j][qp] * tracts) * (tracts * dphi[i][qp])
+                                                      //- (dphi[j][qp] * velocity) * phi[i][qp]
                                                       )
                                                );
                 }
@@ -475,22 +466,22 @@ void assemble_adpm (EquationSystems & es,
             for (unsigned int qp=0; qp<qface.n_points(); qp++)
               {
 
-                Number        u_old[] = {0.0, 0.0, 0.0};
-                Gradient GRAD_u_old[] = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
+                Number  A_b_old(0.0), Tau_old(0.0);
+                Gradient GRAD_A_b_old({0.0, 0.0, 0.0}), GRAD_Tau_old({0.0, 0.0, 0.0});
                 for (std::size_t l=0; l<n_var_dofs; l++)
                   {
-                    u_old[1] += psi[l][qp] * system.old_solution(dof_indices_var[1][l]);
-                    u_old[2] += psi[l][qp] * system.old_solution(dof_indices_var[2][l]);
-                    GRAD_u_old[1].add_scaled(dpsi[l][qp], system.old_solution(dof_indices_var[1][l]));
-                    GRAD_u_old[2].add_scaled(dpsi[l][qp], system.old_solution(dof_indices_var[2][l]));
+                    A_b_old += psi[l][qp] * system.old_solution(dof_indices_var[1][l]);
+                    Tau_old += psi[l][qp] * system.old_solution(dof_indices_var[2][l]);
+                    GRAD_A_b_old.add_scaled(dpsi[l][qp], system.old_solution(dof_indices_var[1][l]));
+                    GRAD_Tau_old.add_scaled(dpsi[l][qp], system.old_solution(dof_indices_var[2][l]));
                   }
 
                 Number field[] = {0.0, 0.0, 0.0};
 
-                field[1] = qface_normals[qp] * ( //velocity*u_old[1] +
-                                                 Pi_(u_old[1],diffuse_A_b)*GRAD_u_old[1]);
-                field[2] = qface_normals[qp] * ( //velocity*u_old[2] +
-                                                 Pi_(u_old[2],diffuse_Tau)*GRAD_u_old[2]);
+                field[1] = qface_normals[qp] * ( //velocity * A_b_old +
+                                                 Pi_(A_b_old,diffuse_A_b) * GRAD_A_b_old );
+                field[2] = qface_normals[qp] * ( //velocity * Tau_old +
+                                                 Pi_(Tau_old,diffuse_Tau) * GRAD_Tau_old );
 
                 for (std::size_t i=0; i<psi.size(); i++)
                   {
