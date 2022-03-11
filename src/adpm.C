@@ -236,13 +236,17 @@ void assemble_adpm (EquationSystems & es,
 {
   libmesh_ignore(es, system_name);
   libmesh_assert_equal_to(system_name, "ADPM");
-  libmesh_assert_equal_to(system.n_vars(), 3);
 
   const MeshBase & mesh = es.get_mesh();
   const unsigned int dim = mesh.mesh_dimension();
 
   TransientLinearImplicitSystem & system =
     es.get_system<TransientLinearImplicitSystem>("ADPM");
+  libmesh_assert_equal_to(system.n_vars(), 3);
+
+  const System & tracts_system =
+    es.get_system<System>("Tracts");
+  libmesh_assert_equal_to(tracts_system.n_vars(), 3);
 
   FEType fe_type = system.variable_type(0);
 
@@ -266,8 +270,6 @@ void assemble_adpm (EquationSystems & es,
 
   //const std::vector<Point> & qface_points  = fe_face->get_xyz();
   const std::vector<Point> & qface_normals = fe_face->get_normals();
-
-  const System & tracts_system = es.get_system<System>("Tracts");
 
   const Real DT_2 = es.parameters.get<Real>("time_step") / 2.0;
 
@@ -318,7 +320,7 @@ void assemble_adpm (EquationSystems & es,
 
       std::vector<std::vector<dof_id_type>> dof_indices_T_var(3);
       for (unsigned int l=0; l<3; l++)
-        system.get_dof_map().dof_indices(elem, dof_indices_T_var[l], l);
+        tracts_system.get_dof_map().dof_indices(elem, dof_indices_T_var[l], l);
 
       const unsigned int n_dofs     = dof_indices.size();
       const unsigned int n_var_dofs = dof_indices_var[0].size();
