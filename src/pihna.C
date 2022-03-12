@@ -113,6 +113,8 @@ void input (GetPot & in, EquationSystems & es)
   es.parameters.set<Real>(name) = in(name, 0.0);
   name = "cells_max_capacity";
   es.parameters.set<Real>(name) = in(name, 1.0);
+  name = "cells_max_capacity/exponent";
+  es.parameters.set<Real>(name) = in(name, 1.0);
   name = "cytokines_max_capacity";
   es.parameters.set<Real>(name) = in(name, 1.0);
 
@@ -275,19 +277,20 @@ void assemble_pihna (EquationSystems & es,
   const Real Lambda_k = es.parameters.get<Real>("cells_min_capacity");
   const Real Kappa_k = es.parameters.get<Real>("cells_max_capacity"),
              Kappa_a = es.parameters.get<Real>("cytokines_max_capacity");
+  const Real ek = es.parameters.get<Real>("cells_max_capacity/exponent");
   const Real necrosis_c = es.parameters.get<Real>("necrosis/c") / Kappa_k,
              necrosis_h = es.parameters.get<Real>("necrosis/h") / Kappa_k,
              necrosis_v = es.parameters.get<Real>("necrosis/v") / Kappa_k;
-  const Real diffuse_c   = es.parameters.get<Real>("diffuse/c"),
-             taxis_c     = es.parameters.get<Real>("taxis/c"),
-             diffuse_h   = es.parameters.get<Real>("diffuse/h"),
-             taxis_h     = es.parameters.get<Real>("taxis/h"),
+  const Real diffuse_c_  = es.parameters.get<Real>("diffuse/c"),
+             taxis_c_    = es.parameters.get<Real>("taxis/c"),
+             diffuse_h_  = es.parameters.get<Real>("diffuse/h"),
+             taxis_h_    = es.parameters.get<Real>("taxis/h"),
              produce_c   = es.parameters.get<Real>("produce/c"),
              switch_c2h  = es.parameters.get<Real>("switch/c/to/h"),
              switch_h2c  = es.parameters.get<Real>("switch/h/to/c"),
              switch_h2n  = es.parameters.get<Real>("switch/h/to/n");
-  const Real diffuse_v   = es.parameters.get<Real>("diffuse/v"),
-             taxis_v     = es.parameters.get<Real>("taxis/v"),
+  const Real diffuse_v_  = es.parameters.get<Real>("diffuse/v"),
+             taxis_v_    = es.parameters.get<Real>("taxis/v"),
              produce_v   = es.parameters.get<Real>("produce/v");
   const Real secrete_a_c = es.parameters.get<Real>("secrete/a/from/c"),
              secrete_a_h = es.parameters.get<Real>("secrete/a/from/h"),
@@ -360,8 +363,8 @@ void assemble_pihna (EquationSystems & es,
           if (v_old<Lambda_k) v_old = 0.0;
           if (a_old<0.0) a_old = 0.0;
 
-          const Real Tau = 1.0 - apply_bounds(0.0, (n_old+c_old+h_old+v_old)/Kappa_k, 1.0),
-                     Tau__dn = -1.0/Kappa_k, Tau__dc = Tau__dn, Tau__dh = Tau__dn, Tau__dv = Tau__dn;
+          const Real Tau = pow(1.0-apply_bounds(0.0, (n_old+c_old+h_old+v_old)/Kappa_k, 1.0), ek),
+                     Tau__dn = -(ek*pow(1.0-apply_bounds(0.0, (n_old+c_old+h_old+v_old)/Kappa_k, 1.0), ek-1.0))/Kappa_k, Tau__dc = Tau__dn, Tau__dh = Tau__dn, Tau__dv = Tau__dn;
 
           const Real Ve = apply_bounds(0.0, v_old/(c_old+h_old+v_old), 1.0),
                      Ve__dc = -Ve/(c_old+h_old+v_old), Ve__dh = Ve__dc, Ve__dv = Ve/v_old+Ve__dc;
