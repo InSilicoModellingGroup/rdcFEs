@@ -109,6 +109,8 @@ void input (GetPot & in, EquationSystems & es)
   name = "output_step";
   es.parameters.set<int>(name) = in(name, 1);
 
+  name = "cells_min_capacity";
+  es.parameters.set<Real>(name) = in(name, 0.0);
   name = "cells_max_capacity";
   es.parameters.set<Real>(name) = in(name, 1.0);
   name = "cytokines_max_capacity";
@@ -270,6 +272,7 @@ void assemble_pihna (EquationSystems & es,
 
   const Real DT_2 = es.parameters.get<Real>("time_step") / 2.0;
 
+  const Real Lambda_k = es.parameters.get<Real>("cells_min_capacity");
   const Real Kappa_k = es.parameters.get<Real>("cells_max_capacity"),
              Kappa_a = es.parameters.get<Real>("cytokines_max_capacity");
   const Real necrosis_c = es.parameters.get<Real>("necrosis/c") / Kappa_k,
@@ -351,6 +354,11 @@ void assemble_pihna (EquationSystems & es,
               GRAD_v_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[3][l]));
               GRAD_a_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[4][l]));
             }
+          if (n_old<Lambda_k) n_old = 0.0;
+          if (c_old<Lambda_k) c_old = 0.0;
+          if (h_old<Lambda_k) h_old = 0.0;
+          if (v_old<Lambda_k) v_old = 0.0;
+          if (a_old<0.0) a_old = 0.0;
 
           const Real Tau = 1.0 - apply_bounds(0.0, (n_old+c_old+h_old+v_old)/Kappa_k, 1.0),
                      Tau__dn = -1.0/Kappa_k, Tau__dc = Tau__dn, Tau__dh = Tau__dn, Tau__dv = Tau__dn;
@@ -360,6 +368,13 @@ void assemble_pihna (EquationSystems & es,
 
           const Real Ua = a_old/(a_old+Kappa_a),
                      Ua__da = 1.0/(a_old+Kappa_a)-Ua/(a_old+Kappa_a);
+
+          const Real diffuse_c = (c_old>Lambda_k ? diffuse_c_ : 0.0),
+                     taxis_c   = (c_old>Lambda_k ? taxis_c_   : 0.0),
+                     diffuse_h = (h_old>Lambda_k ? diffuse_h_ : 0.0),
+                     taxis_h   = (h_old>Lambda_k ? taxis_h_   : 0.0),
+                     diffuse_v = (v_old>Lambda_k ? diffuse_v_ : 0.0),
+                     taxis_v   = (v_old>Lambda_k ? taxis_v_   : 0.0);
 
           for (std::size_t i=0; i<n_var_dofs; i++)
             {
