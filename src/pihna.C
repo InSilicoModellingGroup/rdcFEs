@@ -130,6 +130,7 @@ void input (GetPot & in, EquationSystems & es)
     name = "produce/c";        es.parameters.set<Real>(name) = in(name, 0.);
     name = "switch/c/to/h";    es.parameters.set<Real>(name) = in(name, 0.);
     name = "switch/h/to/c";    es.parameters.set<Real>(name) = in(name, 0.);
+    name = "switch/h/to/n";    es.parameters.set<Real>(name) = in(name, 0.);
   }
 
   // parameters for the species: v
@@ -280,7 +281,8 @@ void assemble_pihna (EquationSystems & es,
              taxis_h     = es.parameters.get<Real>("taxis/h"),
              produce_c   = es.parameters.get<Real>("produce/c"),
              switch_c2h  = es.parameters.get<Real>("switch/c/to/h"),
-             switch_h2c  = es.parameters.get<Real>("switch/h/to/c");
+             switch_h2c  = es.parameters.get<Real>("switch/h/to/c"),
+             switch_h2n  = es.parameters.get<Real>("switch/h/to/n");
   const Real diffuse_v   = es.parameters.get<Real>("diffuse/v"),
              taxis_v     = es.parameters.get<Real>("taxis/v"),
              produce_v   = es.parameters.get<Real>("produce/v");
@@ -368,6 +370,7 @@ void assemble_pihna (EquationSystems & es,
                                                necrosis_c * c_old * n_old * phi[i][qp]
                                              + necrosis_h * h_old * n_old * phi[i][qp]
                                              + necrosis_v * v_old * n_old * phi[i][qp]
+                                             + switch_h2n * (1.0-Ve) * h_old * phi[i][qp]
                                              )
                                       );
               // RHS contribution
@@ -391,6 +394,7 @@ void assemble_pihna (EquationSystems & es,
                                              - necrosis_h * h_old * n_old * phi[i][qp]
                                              - diffuse_h * Tau * (GRAD_h_old * dphi[i][qp])
                                              - taxis_h * Tau * h_old * (GRAD_v_old * dphi[i][qp])
+                                             - switch_h2n * (1.0-Ve) * h_old * phi[i][qp]
                                              )
                                       );
               // RHS contribution
@@ -428,16 +432,20 @@ void assemble_pihna (EquationSystems & es,
                   Ke_var[0][1](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
                                                         necrosis_c * phi[j][qp] * n_old * phi[i][qp]
+                                                      + switch_h2n * (-Ve__dc) * phi[j][qp] * h_old * phi[i][qp]
                                                       )
                                                );
                   Ke_var[0][2](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
                                                         necrosis_h * phi[j][qp] * n_old * phi[i][qp]
+                                                      + switch_h2n * (-Ve__dh) * phi[j][qp] * h_old * phi[i][qp]
+                                                      + switch_h2n * (1.0-Ve) * phi[j][qp] * phi[i][qp]
                                                       )
                                                );
                   Ke_var[0][3](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
                                                         necrosis_v * phi[j][qp] * n_old * phi[i][qp]
+                                                      + switch_h2n * (-Ve__dv) * phi[j][qp] * h_old * phi[i][qp]
                                                       )
                                                );
                   // Matrix contribution
@@ -499,6 +507,7 @@ void assemble_pihna (EquationSystems & es,
                                                       - switch_h2c * Ve__dc    * phi[j][qp] * h_old * phi[i][qp]
                                                       - diffuse_h * Tau__dc * phi[j][qp] * (GRAD_h_old * dphi[i][qp])
                                                       - taxis_h * Tau__dc * phi[j][qp] * h_old * (GRAD_v_old * dphi[i][qp])
+                                                      - switch_h2n * (-Ve__dc) * phi[j][qp] * h_old * phi[i][qp]
                                                       )
                                                );
                   Ke_var[2][2](i,j) += JxW[qp]*(
@@ -512,6 +521,8 @@ void assemble_pihna (EquationSystems & es,
                                                       - diffuse_h * Tau * (dphi[j][qp] * dphi[i][qp])
                                                       - taxis_h * Tau__dh * phi[j][qp] * h_old * (GRAD_v_old * dphi[i][qp])
                                                       - taxis_h * Tau * phi[j][qp] * (GRAD_v_old * dphi[i][qp])
+                                                      - switch_h2n * (-Ve__dh) * phi[j][qp] * h_old * phi[i][qp]
+                                                      - switch_h2n * (1.0-Ve) * phi[j][qp] * phi[i][qp]
                                                       )
                                                );
                   Ke_var[2][3](i,j) += JxW[qp]*(
@@ -521,6 +532,7 @@ void assemble_pihna (EquationSystems & es,
                                                       - diffuse_h * Tau__dv * phi[j][qp] * (GRAD_h_old * dphi[i][qp])
                                                       - taxis_h * Tau__dv * phi[j][qp] * h_old * (GRAD_v_old * dphi[i][qp])
                                                       - taxis_h * Tau * h_old * (dphi[j][qp] * dphi[i][qp])
+                                                      - switch_h2n * (-Ve__dv) * phi[j][qp] * h_old * phi[i][qp]
                                                       )
                                                );
                   // Matrix contribution
