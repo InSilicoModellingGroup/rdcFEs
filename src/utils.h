@@ -129,5 +129,26 @@ double normal_rand (const double mean, const double stdev) {
     return dist(rgen);
 }
 //-------------------------------------------------------------------------------------------------
+inline
+std::ostream& format_date_time (std::ostream& out, const std::tm& t, const char* fmt) {
+  const std::time_put<char>& dateWriter =
+    std::use_facet< std::time_put<char> >(out.getloc());
+  int n = strlen(fmt);
+  if (dateWriter.put(out, out, ' ', &t, fmt, fmt+n).failed())
+    throw std::runtime_error("failure to format date time");
+  return out;
+}
+inline
+std::string date_time_to_string (const std::tm& t, const char* format) {
+  std::stringstream s;
+  format_date_time(s, t, format);
+  return s.str();
+}
+inline
+std::tm date_now () {
+  std::time_t now = std::time(0);
+  return *std::localtime(&now);
+}
+//-------------------------------------------------------------------------------------------------
 
 #endif // __UTILS_H__
