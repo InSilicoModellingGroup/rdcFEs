@@ -7,6 +7,7 @@ using namespace libMesh;
 PerfLog plog("rdcFEs");
 
 extern void adpm (LibMeshInit & );
+extern void pihna (LibMeshInit & );
 
 int main (int argc, char* argv[])
 {
@@ -20,6 +21,8 @@ int main (int argc, char* argv[])
 
   // Alzheimer's disease progression model
   if ("adpm"==model) adpm(init);
+  // PIHNA cancer model
+  else if ("pihna"==model) pihna(init);
 
   libMesh::out << std::endl << plog.get_log() << std::endl;
   // ...done
