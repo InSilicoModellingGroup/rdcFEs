@@ -15,7 +15,7 @@
 #include "libmesh/linear_implicit_system.h"
 #include "libmesh/transient_system.h"
 
-static void input (GetPot & , EquationSystems & );
+static void input (const std::string & , EquationSystems & );
 static void initial_structure (EquationSystems & , const std::string & );
 static void initial_pihna (EquationSystems & , const std::string & );
 static void assemble_pihna (EquationSystems & , const std::string & );
@@ -26,9 +26,8 @@ void pihna (LibMeshInit & init)
 {
   Mesh mesh(init.comm(), 3);
   EquationSystems es(mesh);
-  GetPot in("input.dat");
 
-  input(in, es);
+  input("input.dat", es);
 
   TransientLinearImplicitSystem & model =
     es.add_system<TransientLinearImplicitSystem>("PIHNA");
@@ -85,20 +84,38 @@ void pihna (LibMeshInit & init)
   // ...done
 }
 
-void input (GetPot & in, EquationSystems & es)
+void input (const std::string & file_name, EquationSystems & es)
 {
+  GetPot in(file_name);
+
   std::string name;
+
+  // create a time-stamped directory to store in simulation results
+  const std::string DIR = date_time_to_string(date_now(), "%Y%m%d_%H%M%S") + "/";
+  if (0==global_processor_id())
+    std::system(std::string("mkdir "+DIR).c_str());
+  // create a copy of the input file containing all model parameters
+  if (0==global_processor_id())
+    std::system(std::string("cp "+file_name+" "+DIR+file_name).c_str());
 
   name = "input_GMSH";
   es.parameters.set<std::string>(name) = in(name, "input.msh");
+  //
   name = "output_GMSH";
-  es.parameters.set<std::string>(name) = in(name, "output.msh");
+  es.parameters.set<std::string>(name) = DIR + in(name, "output.msh");
+  //
   name = "input_nodal";
   es.parameters.set<std::string>(name) = in(name, "input.nodal");
+  if (0==global_processor_id())
+    std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+es.parameters.get<std::string>(name)).c_str());
+  //
   name = "input_elemental";
   es.parameters.set<std::string>(name) = in(name, "input.elemental");
+  if (0==global_processor_id())
+    std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+es.parameters.get<std::string>(name)).c_str());
+  //
   name = "output_EXODUS";
-  es.parameters.set<std::string>(name) = in(name, "output.ex2");
+  es.parameters.set<std::string>(name) = DIR + in(name, "output.ex2");
 
   es.parameters.set<Real>("time") = 0.0;
 
