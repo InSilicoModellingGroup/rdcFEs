@@ -19,6 +19,7 @@ static void input (const std::string & , EquationSystems & );
 static void initial_structure (EquationSystems & , const std::string & );
 static void initial_pihna (EquationSystems & , const std::string & );
 static void assemble_pihna (EquationSystems & , const std::string & );
+static void check_solution (EquationSystems & );
 
 extern PerfLog plog;
 
@@ -76,6 +77,8 @@ void pihna (LibMeshInit & init)
       *(model.old_local_solution) = *(model.current_local_solution);
       // now solve the AD progression model
       model.solve();
+
+      check_solution(es);
 
       if (0 == t%output_step)
         ex2.write_timestep(ex2_filename, es, t, current_time);
@@ -637,5 +640,49 @@ void assemble_pihna (EquationSystems & es,
       system.get_system_matrix().add_matrix(Ke, dof_indices);
       system.rhs->add_vector(Fe, dof_indices);
     }
+  // ...done
+}
+
+void check_solution (EquationSystems & es)
+{
+  const MeshBase& mesh = es.get_mesh();
+
+  TransientLinearImplicitSystem & system =
+    es.get_system<TransientLinearImplicitSystem>("PIHNA");
+  libmesh_assert_equal_to(system.n_vars(), 5);
+
+  std::vector<Number> soln;
+  system.update_global_solution(soln);
+
+  for (const auto & node : mesh.node_ptr_range())
+    {
+      const dof_id_type idof[] = { node->dof_number(system.number(), 0, 0) ,
+                                   node->dof_number(system.number(), 1, 0) ,
+                                   node->dof_number(system.number(), 2, 0) ,
+                                   node->dof_number(system.number(), 3, 0) ,
+                                   node->dof_number(system.number(), 4, 0) };
+      libmesh_assert( node->n_comp(system.number(), 0) == 1 );
+      libmesh_assert( node->n_comp(system.number(), 1) == 1 );
+      libmesh_assert( node->n_comp(system.number(), 2) == 1 );
+      libmesh_assert( node->n_comp(system.number(), 3) == 1 );
+      libmesh_assert( node->n_comp(system.number(), 4) == 1 );
+
+      Real n_, c_, h_, v_, a_;
+      n_ = soln[idof[0]]; if (n_<0.0) n_ = 0.0;
+      c_ = soln[idof[1]]; if (c_<0.0) c_ = 0.0;
+      h_ = soln[idof[2]]; if (h_<0.0) h_ = 0.0;
+      v_ = soln[idof[3]]; if (v_<0.0) v_ = 0.0;
+      a_ = soln[idof[4]]; if (a_<0.0) a_ = 0.0;
+
+      system.solution->set(idof[0], n_);
+      system.solution->set(idof[1], c_);
+      system.solution->set(idof[2], h_);
+      system.solution->set(idof[3], v_);
+      system.solution->set(idof[4], a_);
+    }
+
+  // close solution vector and update the system
+  system.solution->close();
+  system.update();
   // ...done
 }

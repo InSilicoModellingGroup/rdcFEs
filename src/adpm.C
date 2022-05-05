@@ -19,6 +19,7 @@ static void input (const std::string & , EquationSystems & );
 static void initial_tracts (EquationSystems & , const std::string & );
 static void initial_adpm (EquationSystems & , const std::string & );
 static void assemble_adpm (EquationSystems & , const std::string & );
+static void check_solution (EquationSystems & );
 
 extern PerfLog plog;
 
@@ -75,6 +76,8 @@ void adpm (LibMeshInit & init)
       *(model.old_local_solution) = *(model.current_local_solution);
       // now solve the AD progression model
       model.solve();
+
+      check_solution(es);
 
       if (0 == t%output_step)
         ex2.write_timestep(ex2_filename, es, t, current_time);
@@ -525,5 +528,47 @@ void assemble_adpm (EquationSystems & es,
       system.get_system_matrix().add_matrix(Ke, dof_indices);
       system.rhs->add_vector(Fe, dof_indices);
     }
+  // ...done
+}
+
+void check_solution (EquationSystems & es)
+{
+  const MeshBase& mesh = es.get_mesh();
+
+  TransientLinearImplicitSystem & system =
+    es.get_system<TransientLinearImplicitSystem>("ADPM");
+  libmesh_assert_equal_to(system.n_vars(), 3);
+
+  std::vector<Number> soln;
+  system.update_global_solution(soln);
+
+  for (const auto & node : mesh.node_ptr_range())
+    {
+      const dof_id_type idof[] = { node->dof_number(system.number(), 0, 0) ,
+                                   node->dof_number(system.number(), 1, 0) ,
+                                   node->dof_number(system.number(), 2, 0) };
+      libmesh_assert( node->n_comp(system.number(), 0) == 1 );
+      libmesh_assert( node->n_comp(system.number(), 1) == 1 );
+      libmesh_assert( node->n_comp(system.number(), 2) == 1 );
+
+      Real PrP_, A_b_, Tau_;
+      PrP_ = soln[idof[0]]; if (PrP_<0.0) PrP_ = 0.0;
+      A_b_ = soln[idof[0]]; if (A_b_<0.0) A_b_ = 0.0;
+      Tau_ = soln[idof[0]]; if (Tau_<0.0) Tau_ = 0.0;
+      PrP_ = system.solution->el(idof[0]);
+      A_b_ = system.solution->el(idof[1]);
+      Tau_ = system.solution->el(idof[2]);
+      if (PrP_<0.0) PrP_ = 0.0;
+      if (A_b_<0.0) A_b_ = 0.0;
+      if (Tau_<0.0) Tau_ = 0.0;
+
+      system.solution->set(idof[0], PrP_);
+      system.solution->set(idof[1], A_b_);
+      system.solution->set(idof[2], Tau_);
+    }
+
+  // close solution vector and update the system
+  system.solution->close();
+  system.update();
   // ...done
 }
