@@ -374,11 +374,6 @@ void assemble_pihna (EquationSystems & es,
               GRAD_v_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[3][l]));
               GRAD_a_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[4][l]));
             }
-          if (n_old<Lambda_k) n_old = 0.0;
-          if (c_old<Lambda_k) c_old = 0.0;
-          if (h_old<Lambda_k) h_old = 0.0;
-          if (v_old<Lambda_k) v_old = 0.0;
-          if (a_old<0.0) a_old = 0.0;
 
           const Real Tau = pow(1.0-apply_bounds(0.0, (n_old+c_old+h_old+v_old)/Kappa_k, 1.0), ek),
                      Tau__dn = -(ek*pow(1.0-apply_bounds(0.0, (n_old+c_old+h_old+v_old)/Kappa_k, 1.0), ek-1.0))/Kappa_k, Tau__dc = Tau__dn, Tau__dh = Tau__dn, Tau__dv = Tau__dn;
