@@ -553,14 +553,8 @@ void check_solution (EquationSystems & es)
 
       Real PrP_, A_b_, Tau_;
       PrP_ = soln[idof[0]]; if (PrP_<0.0) PrP_ = 0.0;
-      A_b_ = soln[idof[0]]; if (A_b_<0.0) A_b_ = 0.0;
-      Tau_ = soln[idof[0]]; if (Tau_<0.0) Tau_ = 0.0;
-      PrP_ = system.solution->el(idof[0]);
-      A_b_ = system.solution->el(idof[1]);
-      Tau_ = system.solution->el(idof[2]);
-      if (PrP_<0.0) PrP_ = 0.0;
-      if (A_b_<0.0) A_b_ = 0.0;
-      if (Tau_<0.0) Tau_ = 0.0;
+      A_b_ = soln[idof[1]]; if (A_b_<0.0) A_b_ = 0.0;
+      Tau_ = soln[idof[2]]; if (Tau_<0.0) Tau_ = 0.0;
 
       system.solution->set(idof[0], PrP_);
       system.solution->set(idof[1], A_b_);
