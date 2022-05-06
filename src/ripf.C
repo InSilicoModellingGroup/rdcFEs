@@ -40,8 +40,9 @@ void ripf (LibMeshInit & init)
 
   ExplicitSystem & radiotherapy =
     es.add_system<ExplicitSystem>("RT");
-  radiotherapy.add_variable("RT/broad/dose", CONSTANT, MONOMIAL);
-  radiotherapy.add_variable("RT/focus/dose", CONSTANT, MONOMIAL);
+  radiotherapy.add_variable("RT_dose/broad", CONSTANT, MONOMIAL);
+  radiotherapy.add_variable("RT_dose/focus", CONSTANT, MONOMIAL);
+  radiotherapy.add_variable("RT_dose", CONSTANT, MONOMIAL);
   radiotherapy.attach_init_function(initial_radiotherapy);
 
   GmshIO(mesh).read(es.parameters.get<std::string>("input_GMSH"));
@@ -74,7 +75,7 @@ void ripf (LibMeshInit & init)
       // copy the previously-current solution into the old solution
       *(model.old_local_solution) = *(model.current_local_solution);
       // now solve the AD progression model
-      model.solve();
+      //++++++++++++++++++++++++++++++++++++++model.solve();
 
       check_solution(es);
 
@@ -129,10 +130,18 @@ void input (const std::string & file_name, EquationSystems & es)
   name = "output_step";
   es.parameters.set<int>(name) = in(name, 1);
 
-  // parameters for radiotherapy (RT)
+  // general parameters including for radiotherapy (RT)
   {
-    name = "RT/broad/fractions"; es.parameters.set<int>(name)  = in(name, 1);
-    name = "RT/focus/fractions"; es.parameters.set<int>(name)  = in(name, 1);
+    name = "RT_dose/broad/fractions"; es.parameters.set<int>(name) = in(name, 1);
+    name = "RT_dose/focus/fractions"; es.parameters.set<int>(name) = in(name, 1);
+    //
+    name = "RAV/volume";                 es.parameters.set<Real>(name) = in(name, 0.);
+    name = "stroma/volume_fraction";     es.parameters.set<Real>(name) = in(name, 0.);
+    name = "parenchyma/volume_fraction"; es.parameters.set<Real>(name) = in(name, 0.);
+    name = "cc/volume";                  es.parameters.set<Real>(name) = in(name, 1.);
+    name = "fb/volume";                  es.parameters.set<Real>(name) = in(name, 1.);
+    name = "volume_fraction/exponent";   es.parameters.set<Real>(name) = in(name, 1.);
+    name = "volume_fraction/min_vacant"; es.parameters.set<Real>(name) = in(name, 0.);
   }
 
   // parameters for the species: HU
@@ -153,21 +162,23 @@ void initial_radiotherapy (EquationSystems & es,
 
   ExplicitSystem & system =
     es.get_system<ExplicitSystem>("RT");
-  libmesh_assert_equal_to(system.n_vars(), 2);
+  libmesh_assert_equal_to(system.n_vars(), 3);
 
   std::ifstream fin(es.parameters.get<std::string>("input_elemental"));
 
   for (const auto & elem : mesh.active_element_ptr_range())
     {
-      Real RT1_, RT2_;
-      fin >> RT1_ >> RT2_;
+      Real RT_broad_, RT_focus_;
+      fin >> RT_broad_ >> RT_focus_;
 
-      std::vector<std::vector<dof_id_type>> dof_indices_T_var(2);
+      std::vector<std::vector<dof_id_type>> dof_indices_T_var(3);
 
       system.get_dof_map().dof_indices(elem, dof_indices_T_var[0], 0);
-      system.solution->set(dof_indices_T_var[0][0], RT1_);
+      system.solution->set(dof_indices_T_var[0][0], RT_broad_);
       system.get_dof_map().dof_indices(elem, dof_indices_T_var[1], 1);
-      system.solution->set(dof_indices_T_var[1][0], RT2_);
+      system.solution->set(dof_indices_T_var[1][0], RT_focus_);
+      system.get_dof_map().dof_indices(elem, dof_indices_T_var[2], 0);
+      system.solution->set(dof_indices_T_var[2][0], 0.0);
     }
 
   // close solution vector and update the system
@@ -228,9 +239,9 @@ void assemble_ripf (EquationSystems & es,
     es.get_system<TransientLinearImplicitSystem>("RIPF");
   libmesh_assert_equal_to(system.n_vars(), 3);
 
-  const System & RT_system =
-    es.get_system<System>("RT");
-  libmesh_assert_equal_to(RT_system.n_vars(), 2);
+  const ExplicitSystem & RT_system =
+    es.get_system<ExplicitSystem>("RT");
+  libmesh_assert_equal_to(RT_system.n_vars(), 3);
 
   FEType fe_type = system.variable_type(0);
 
@@ -256,11 +267,6 @@ void assemble_ripf (EquationSystems & es,
   const std::vector<Point> & qface_normals = fe_face->get_normals();
 
   const Real DT_2 = es.parameters.get<Real>("time_step") / 2.0;
-  const int day = std::floor( system.time ); // simulation time is expressed in "days"
-
-  const Real RT_broad_frac = es.parameters.get<int>("RT/broad/fractions"),
-             RT_focus_frac = es.parameters.get<int>("RT/focus/fractions"),
-             RT_total_frac = RT_broad_frac + RT_focus_frac;
 
   for (const auto & elem : mesh.active_local_element_ptr_range())
     {
@@ -271,7 +277,7 @@ void assemble_ripf (EquationSystems & es,
       for (unsigned int v=0; v<3; v++)
         system.get_dof_map().dof_indices(elem, dof_indices_var[v], v);
 
-      std::vector<std::vector<dof_id_type>> dof_indices_RT_var(2);
+      std::vector<std::vector<dof_id_type>> dof_indices_RT_var(3);
       for (unsigned int l=0; l<3; l++)
         RT_system.get_dof_map().dof_indices(elem, dof_indices_RT_var[l], l);
 
@@ -299,17 +305,7 @@ void assemble_ripf (EquationSystems & es,
 
       fe->reinit(elem);
 
-      Real RT_dose[2];
-      for (unsigned int l=0; l<2; l++)
-        {
-          RT_system.get_dof_map().dof_indices(elem, dof_indices_RT_var[l], l);
-          RT_dose[l] = RT_system.solution->el(dof_indices_RT_var[l][0]);
-        }
-
-      Real RT = 0.0; // radiation therapy (RT) dose per fraction
-      if      ( day < RT_broad_frac ) RT = RT_dose[0] / RT_broad_frac * (day+1);
-      else if ( day < RT_total_frac ) RT = RT_dose[1] / RT_focus_frac * ((day+1)-RT_broad_frac) + RT_dose[0];
-      else                            RT = RT_dose[0] + RT_dose[1];
+      const Real RT = RT_system.solution->el(dof_indices_RT_var[2][0]);
 
       // WIP !!!
 
@@ -354,5 +350,45 @@ void check_solution (EquationSystems & es)
   // close solution vector and update the system
   system.solution->close();
   system.update();
+
+  // now check the element-based data
+
+  ExplicitSystem & RT_system =
+    es.get_system<ExplicitSystem>("RT");
+  libmesh_assert_equal_to(RT_system.n_vars(), 3);
+
+  std::vector<Number> RT_soln;
+  RT_system.update_global_solution(RT_soln);
+
+  const Real RT_broad_frac = es.parameters.get<int>("RT_dose/broad/fractions"),
+             RT_focus_frac = es.parameters.get<int>("RT_dose/focus/fractions"),
+             RT_total_frac = RT_broad_frac + RT_focus_frac;
+  // simulation time is expressed in "days"
+  const int day = std::floor( system.time );
+
+  for (const auto & elem : mesh.active_local_element_ptr_range())
+    {
+      std::vector<std::vector<dof_id_type>> dof_indices_RT_var(3);
+      for (unsigned int l=0; l<3; l++)
+        RT_system.get_dof_map().dof_indices(elem, dof_indices_RT_var[l], l);
+
+      const dof_id_type idof[] = { dof_indices_RT_var[0][0] ,
+                                   dof_indices_RT_var[1][0] ,
+                                   dof_indices_RT_var[2][0] };
+
+      const Real RT_broad = RT_soln[idof[0]],
+                 RT_focus = RT_soln[idof[1]];
+
+      Real RT = 0.0; // radiation therapy (RT) dose per fraction
+      if      ( day < RT_broad_frac ) RT = RT_broad / RT_broad_frac * (day+1);
+      else if ( day < RT_total_frac ) RT = RT_focus / RT_focus_frac * ((day+1)-RT_broad_frac) + RT_broad;
+      else                            RT = RT_broad + RT_focus;
+
+      RT_system.solution->set(idof[2], RT);
+    }
+
+  // close solution vector and update the system
+  RT_system.solution->close();
+  RT_system.update();
   // ...done
 }
