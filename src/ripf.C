@@ -32,9 +32,9 @@ void ripf (LibMeshInit & init)
 
   TransientLinearImplicitSystem & model =
     es.add_system<TransientLinearImplicitSystem>("RIPF");
+  model.add_variable("HU", FIRST, LAGRANGE);
   model.add_variable("cc", FIRST, LAGRANGE);
   model.add_variable("fb", FIRST, LAGRANGE);
-  model.add_variable("HU", FIRST, LAGRANGE);
   model.attach_assemble_function(assemble_ripf);
   model.attach_init_function(initial_ripf);
 
@@ -205,8 +205,8 @@ void initial_ripf (EquationSystems & es,
 
   for (const auto & node : mesh.node_ptr_range())
     {
-      Real cc, fb, HU;
-      fin >> cc >> fb >> HU;
+      Real HU_, cc_, fb_;
+      fin >> HU_ >> cc_ >> fb_;
 
       const dof_id_type idof[] = { node->dof_number(system.number(), 0, 0) ,
                                    node->dof_number(system.number(), 1, 0) ,
@@ -215,9 +215,9 @@ void initial_ripf (EquationSystems & es,
       libmesh_assert( node->n_comp(system.number(), 1) == 1 );
       libmesh_assert( node->n_comp(system.number(), 2) == 1 );
 
-      system.solution->set(idof[0], cc);
-      system.solution->set(idof[1], fb);
-      system.solution->set(idof[2], HU);
+      system.solution->set(idof[0], HU_);
+      system.solution->set(idof[1], cc_);
+      system.solution->set(idof[2], fb_);
     }
 
   // close solution vector and update the system
@@ -337,14 +337,14 @@ void check_solution (EquationSystems & es)
       libmesh_assert( node->n_comp(system.number(), 1) == 1 );
       libmesh_assert( node->n_comp(system.number(), 2) == 1 );
 
-      Real cc, fb, HU;
-      cc = soln[idof[0]]; if (cc<0.0) cc = 0.0;
-      fb = soln[idof[1]]; if (fb<0.0) fb = 0.0;
-      HU = soln[idof[2]]; if (HU<0.0) HU = 0.0;
+      Real HU_, cc_, fb_;
+      HU_ = soln[idof[0]]; if (HU_<0.0) HU_ = 0.0;
+      cc_ = soln[idof[1]]; if (cc_<0.0) cc_ = 0.0;
+      fb_ = soln[idof[2]]; if (fb_<0.0) fb_ = 0.0;
 
-      system.solution->set(idof[0], cc);
-      system.solution->set(idof[1], fb);
-      system.solution->set(idof[2], HU);
+      system.solution->set(idof[0], HU_);
+      system.solution->set(idof[1], cc_);
+      system.solution->set(idof[2], fb_);
     }
 
   // close solution vector and update the system
