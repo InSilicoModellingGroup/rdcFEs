@@ -135,19 +135,12 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "RT_dose/broad/fractions"; es.parameters.set<int>(name) = in(name, 1);
     name = "RT_dose/focus/fractions"; es.parameters.set<int>(name) = in(name, 1);
     //
-    name = "RAV/volume";                 es.parameters.set<Real>(name) = in(name, 0.);
-    name = "stroma/volume_fraction";     es.parameters.set<Real>(name) = in(name, 0.);
-    name = "parenchyma/volume_fraction"; es.parameters.set<Real>(name) = in(name, 0.);
-    name = "cc/volume";                  es.parameters.set<Real>(name) = in(name, 1.);
-    name = "fb/volume";                  es.parameters.set<Real>(name) = in(name, 1.);
+    name = "volume_fraction/stroma";     es.parameters.set<Real>(name) = in(name, 0.);
+    name = "volume_fraction/parenchyma"; es.parameters.set<Real>(name) = in(name, 0.);
     name = "volume_fraction/exponent";   es.parameters.set<Real>(name) = in(name, 1.);
-    name = "volume_fraction/min_vacant"; es.parameters.set<Real>(name) = in(name, 0.);
-  }
-
-  // parameters for the species: HU
-  {
-    name = "rate/HU/cc"; es.parameters.set<Real>(name) = in(name, 0.);
-    name = "rate/HU/fb"; es.parameters.set<Real>(name) = in(name, 0.);
+    name = "volume_fraction/min_vacant"; es.parameters.set<Real>(name) = in(name, 1.e-12);
+    const Real VF_ = es.parameters.get<Real>(name);
+    name = "volume_fraction/max_vacant"; es.parameters.set<Real>(name) = in(name, 1.-VF_);
   }
 
   // ...done
