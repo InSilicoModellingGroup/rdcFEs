@@ -162,11 +162,20 @@ void initial_radiotherapy (EquationSystems & es,
 
   std::ifstream fin(es.parameters.get<std::string>("input_nodal_RT"));
 
+  const Real RT_broad_frac = es.parameters.get<int>("RT_dose/broad/fractions"),
+             RT_focus_frac = es.parameters.get<int>("RT_dose/focus/fractions"),
+             RT_total_frac = RT_broad_frac + RT_focus_frac;
+  // simulation time is expressed in "days"
+  const int day = std::floor( 0.0 );
+
   for (const auto & node : mesh.node_ptr_range())
     {
-      Real RT_broad_, RT_focus_, RT_total_;
+      Real RT_broad_, RT_focus_;
       fin >> RT_broad_ >> RT_focus_;
-      RT_total_ = 0.0;
+      Real RT_total_ = 0.0; // radiation therapy (RT) dose per fraction
+      if      ( day < RT_broad_frac ) RT_total_ = RT_broad_ / RT_broad_frac * (day+1);
+      else if ( day < RT_total_frac ) RT_total_ = RT_focus_ / RT_focus_frac * ((day+1)-RT_broad_frac) + RT_broad_;
+      else                            RT_total_ = RT_broad_ + RT_focus_;
 
       const dof_id_type idof[] = { node->dof_number(system.number(), 0, 0) ,
                                    node->dof_number(system.number(), 1, 0) ,
