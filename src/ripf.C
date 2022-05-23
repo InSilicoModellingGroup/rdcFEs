@@ -73,6 +73,7 @@ void ripf (LibMeshInit & init)
                    << " (time=" << current_time <<  ") ..." << std::endl;
 
       // copy the previously-current solution into the old solution
+      *(model.older_local_solution) = *(model.old_local_solution);
       *(model.old_local_solution) = *(model.current_local_solution);
       // now solve the AD progression model
       //++++++++++++++++++++++++++++++++++++++model.solve();
@@ -291,6 +292,7 @@ void assemble_ripf (EquationSystems & es,
   const std::vector<Point> & qface_normals = fe_face->get_normals();
 
   const Real DT_2 = es.parameters.get<Real>("time_step") / 2.0;
+  const Real DT_R = 1.0 / es.parameters.get<Real>("time_step");
 
   const Real VolFr_stroma     = es.parameters.get<Real>("volume_fraction/stroma"),
              VolFr_parenchyma = es.parameters.get<Real>("volume_fraction/parenchyma"),
@@ -358,6 +360,13 @@ void assemble_ripf (EquationSystems & es,
               GRAD_HU_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[0][l]));
               GRAD_fb_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[2][l]));
             }
+          Number cc_older(0.0), fb_older(0.0);
+          for (std::size_t l=0; l<n_var_dofs; l++)
+            {
+              cc_older += phi[l][qp] * system.older_solution(dof_indices_var[1][l]);
+              fb_older += phi[l][qp] * system.older_solution(dof_indices_var[2][l]);
+            }
+          Number cc__dtime((cc_old-cc_older)*DT_R), fb__dtime((fb_old-fb_older)*DT_R);
 
           const Real VolFr_cells = cc_old + fb_old;
           const Real VolFr_TOTAL = VolFr_stroma + VolFr_parenchyma + VolFr_cells;
