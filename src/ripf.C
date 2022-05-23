@@ -146,6 +146,14 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "HU/max"; es.parameters.set<Real>(name) = in(name, +1000.);
   }
 
+  // parameters for the species: cc
+  {
+    name = "cc/kappa";      es.parameters.set<Real>(name) = in(name, 0.);
+    name = "cc/delta";      es.parameters.set<Real>(name) = in(name, 0.);
+    name = "cc/delta/RT/a"; es.parameters.set<Real>(name) = in(name, 0.);
+    name = "cc/delta/RT/b"; es.parameters.set<Real>(name) = in(name, 0.);
+  }
+
   // ...done
 }
 
@@ -276,6 +284,17 @@ void assemble_ripf (EquationSystems & es,
 
   const Real DT_2 = es.parameters.get<Real>("time_step") / 2.0;
 
+  const Real VolFr_stroma     = es.parameters.get<Real>("volume_fraction/stroma"),
+             VolFr_parenchyma = es.parameters.get<Real>("volume_fraction/parenchyma"),
+             VolFr_exponent   = es.parameters.get<Real>("volume_fraction/exponent"),
+             VolFr_min_vacant = es.parameters.get<Real>("volume_fraction/min_vacant"),
+             VolFr_max_vacant = es.parameters.get<Real>("volume_fraction/max_vacant");
+
+  const Real kappa      = es.parameters.get<Real>("cc/kappa"),
+             delta      = es.parameters.get<Real>("cc/delta"),
+             delta_RT_a = es.parameters.get<Real>("cc/delta/RT/a"),
+             delta_RT_b = es.parameters.get<Real>("cc/delta/RT/b");
+
   for (const auto & elem : mesh.active_local_element_ptr_range())
     {
       std::vector<dof_id_type> dof_indices;
@@ -315,7 +334,68 @@ void assemble_ripf (EquationSystems & es,
 
       const Real RT = RT_system.solution->el(dof_indices_RT_var[2][0]);
 
-      // WIP !!!
+      for (unsigned int qp=0; qp<qrule.n_points(); qp++)
+        {
+          Number HU_old(0.0), cc_old(0.0), fb_old(0.0);
+          for (std::size_t l=0; l<n_var_dofs; l++)
+            {
+              HU_old += phi[l][qp] * system.old_solution(dof_indices_var[0][l]);
+              cc_old += phi[l][qp] * system.old_solution(dof_indices_var[1][l]);
+              fb_old += phi[l][qp] * system.old_solution(dof_indices_var[2][l]);
+            }
+
+          const Real VolFr_cells = cc_old + fb_old;
+          const Real VolFr_TOTAL = VolFr_stroma + VolFr_parenchyma + VolFr_cells;
+
+          Real Tau = 0.0;
+          Real Tau__dcc = 0.0,
+               Tau__dfb = 0.0;
+          if (1.0 > VolFr_TOTAL)
+            {
+              Tau = pow(1.0-VolFr_TOTAL, VolFr_exponent);
+              Tau__dcc =
+              Tau__dfb = -VolFr_exponent * pow(1.0-VolFr_TOTAL, VolFr_exponent-1.0);
+              if ( Tau <= VolFr_min_vacant ) {
+                Tau = 0.0;
+                Tau__dcc =
+                Tau__dfb = 0.0;
+              }
+            }
+
+          const Real delta_RT = delta * (1.0 - exp(-delta_RT_a*RT-delta_RT_b*RT*RT));
+
+          for (std::size_t i=0; i<n_var_dofs; i++)
+            {
+              // RHS contribution
+              Fe_var[1](i) += JxW[qp]*(
+                                        cc_old * phi[i][qp] // capacity term
+                                      + DT_2*( // source, sink terms
+                                               kappa * Tau * (cc_old-cc_old*cc_old) * phi[i][qp]
+                                             - delta_RT * cc_old * phi[i][qp]
+                                             )
+                                      );
+
+              for (std::size_t j=0; j<n_var_dofs; j++)
+                {
+                  // Matrix contribution
+                  Ke_var[1][1](i,j) += JxW[qp]*(
+                                                 phi[j][qp] * phi[i][qp] // capacity term
+                                               - DT_2*( // transport, source, sink terms
+                                                        kappa * Tau__dcc * (cc_old-cc_old*cc_old) * phi[j][qp] * phi[i][qp]
+                                                      + kappa * Tau * (1.0-2.0*cc_old) * phi[j][qp] * phi[i][qp]
+                                                      - delta_RT * phi[j][qp] * phi[i][qp]
+                                                      //- (dphi[j][qp] * velocity) * phi[i][qp]
+                                                      )
+                                               );
+                  Ke_var[1][2](i,j) += JxW[qp]*(
+                                               - DT_2*( // transport, source, sink terms
+                                                        kappa * Tau__dfb * (cc_old-cc_old*cc_old) * phi[j][qp] * phi[i][qp]
+                                                      //- (dphi[j][qp] * velocity) * phi[i][qp]
+                                                      )
+                                               );
+                }
+            }
+        }
 
       system.get_dof_map().constrain_element_matrix_and_vector(Ke, Fe, dof_indices);
       //
