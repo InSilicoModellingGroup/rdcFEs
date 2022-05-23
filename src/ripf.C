@@ -141,6 +141,9 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "volume_fraction/min_vacant"; es.parameters.set<Real>(name) = in(name, 1.e-12);
     const Real VF_ = es.parameters.get<Real>(name);
     name = "volume_fraction/max_vacant"; es.parameters.set<Real>(name) = in(name, 1.-VF_);
+    //
+    name = "HU/min"; es.parameters.set<Real>(name) = in(name, -1000.);
+    name = "HU/max"; es.parameters.set<Real>(name) = in(name, +1000.);
   }
 
   // ...done
@@ -331,6 +334,8 @@ void check_solution (EquationSystems & es)
   std::vector<Number> RT_soln;
   RT_system.update_global_solution(RT_soln);
 
+  const Real HU_min = es.parameters.get<Real>("HU/min"),
+             HU_max = es.parameters.get<Real>("HU/max");
   const Real RT_broad_frac = es.parameters.get<int>("RT_dose/broad/fractions"),
              RT_focus_frac = es.parameters.get<int>("RT_dose/focus/fractions"),
              RT_total_frac = RT_broad_frac + RT_focus_frac;
@@ -347,7 +352,7 @@ void check_solution (EquationSystems & es)
       libmesh_assert( node->n_comp(system.number(), 2) == 1 );
 
       Real HU_, cc_, fb_;
-      HU_ = soln[idof[0]]; if (HU_<0.0) HU_ = 0.0;
+      HU_ = soln[idof[0]]; if (HU_<HU_min) HU_ = HU_min; else if (HU_>HU_max) HU_ = HU_max;
       cc_ = soln[idof[1]]; if (cc_<0.0) cc_ = 0.0;
       fb_ = soln[idof[2]]; if (fb_<0.0) fb_ = 0.0;
 
