@@ -36,6 +36,14 @@ Real apply_ubound (const Real& X, const Real& U) { return ( X > U ? U : X ); }
 inline
 Real apply_bounds (const Real& L, const Real& X, const Real& U) { return ( X < L ? L : ( X > U ? U : X ) ); }
 //-------------------------------------------------------------------------------------------------
+inline
+int sign (Real r, Real tol =0.0)
+{
+  if (r >  tol) return  1;
+  if (r < -tol) return -1;
+  return 0;
+}
+//-------------------------------------------------------------------------------------------------
 inline // Pi or rectangular function
 Real Pi_(const Real & C, const Real * p_)
 {
