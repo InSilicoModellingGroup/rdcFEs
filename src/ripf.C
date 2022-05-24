@@ -19,7 +19,7 @@ static void input (const std::string & , EquationSystems & );
 static void initial_radiotherapy (EquationSystems & , const std::string & );
 static void initial_ripf (EquationSystems & , const std::string & );
 static void assemble_ripf (EquationSystems & , const std::string & );
-static void check_solution (EquationSystems & );
+static void check_solution (EquationSystems & , std::vector<Number> & );
 
 extern PerfLog plog;
 
@@ -61,7 +61,10 @@ void ripf (LibMeshInit & init)
   const std::string ex2_filename =
     es.parameters.get<std::string>("output_EXODUS");
 
-  check_solution(es);
+  std::vector<Number> soln;
+  model.update_global_solution(soln);
+
+  check_solution(es, soln);
 
   ExodusII_IO ex2(mesh);
   ex2.write_equation_systems(ex2_filename, es);
@@ -86,7 +89,7 @@ void ripf (LibMeshInit & init)
       // now solve the AD progression model
       //++++++++++++++++++++++++++++++++++++++model.solve();
 
-      check_solution(es);
+      check_solution(es, soln);
 
       if (0 == t%output_step)
         ex2.write_timestep(ex2_filename, es, t, current_time);
@@ -526,13 +529,17 @@ void assemble_ripf (EquationSystems & es,
   // ...done
 }
 
-void check_solution (EquationSystems & es)
+void check_solution (EquationSystems & es, std::vector<Number> & prev_soln)
 {
   const MeshBase& mesh = es.get_mesh();
 
   TransientLinearImplicitSystem & system =
     es.get_system<TransientLinearImplicitSystem>("RIPF");
   libmesh_assert_equal_to(system.n_vars(), 3);
+
+  System & TD_system =
+    es.get_system<System>("RIPF-TimeDeriv");
+  libmesh_assert_equal_to(TD_system.n_vars(), 3);
 
   ExplicitSystem & RT_system =
     es.get_system<ExplicitSystem>("RT");
@@ -543,6 +550,8 @@ void check_solution (EquationSystems & es)
 
   std::vector<Number> RT_soln;
   RT_system.update_global_solution(RT_soln);
+
+  const Real DT_R = 1.0 / es.parameters.get<Real>("time_step");
 
   const Real HU_min = es.parameters.get<Real>("HU/min"),
              HU_max = es.parameters.get<Real>("HU/max");
@@ -566,9 +575,25 @@ void check_solution (EquationSystems & es)
       cc_ = soln[idof[1]]; if (cc_<0.0) cc_ = 0.0;
       fb_ = soln[idof[2]]; if (fb_<0.0) fb_ = 0.0;
 
+      Real HU_p_, cc_p_, fb_p_;
+      HU_p_ = prev_soln[idof[0]];
+      cc_p_ = prev_soln[idof[1]];
+      fb_p_ = prev_soln[idof[2]];
+
       system.solution->set(idof[0], HU_);
       system.solution->set(idof[1], cc_);
       system.solution->set(idof[2], fb_);
+
+      const dof_id_type TD_idof[] = { node->dof_number(TD_system.number(), 0, 0) ,
+                                      node->dof_number(TD_system.number(), 1, 0) ,
+                                      node->dof_number(TD_system.number(), 2, 0) };
+      libmesh_assert( node->n_comp(TD_system.number(), 0) == 1 );
+      libmesh_assert( node->n_comp(TD_system.number(), 1) == 1 );
+      libmesh_assert( node->n_comp(TD_system.number(), 2) == 1 );
+
+      TD_system.solution->set(TD_idof[0], (HU_-HU_p_)*DT_R);
+      TD_system.solution->set(TD_idof[1], (cc_-cc_p_)*DT_R);
+      TD_system.solution->set(TD_idof[2], (fb_-fb_p_)*DT_R);
 
       const dof_id_type RT_idof[] = { node->dof_number(RT_system.number(), 0, 0) ,
                                       node->dof_number(RT_system.number(), 1, 0) ,
@@ -590,7 +615,11 @@ void check_solution (EquationSystems & es)
   // close solution vector and update the system
   system.solution->close();
   system.update();
+  TD_system.solution->close();
+  TD_system.update();
   RT_system.solution->close();
   RT_system.update();
+  // copy current solution (vector) into previous one
+  prev_soln = soln;
   // ...done
 }
