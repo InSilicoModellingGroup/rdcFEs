@@ -150,26 +150,39 @@ void input (const std::string & file_name, EquationSystems & es)
   // parameters for the species: HU
   {
     name = "HU/phi/cc/build";  es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "HU/phi/cc/decay";  es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)>0.0) libmesh_error();
     name = "HU/phi/fb/build";  es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "HU/phi/fb/decay";  es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)>0.0) libmesh_error();
     name = "HU/phi/tolerance"; es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
   }
 
   // parameters for the species: cc
   {
     name = "cc/kappa";      es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "cc/delta";      es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "cc/delta/RT/a"; es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "cc/delta/RT/b"; es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
   }
 
   // parameters for the species: fb
   {
     name = "fb/lambda";      es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/lambda/RT/r"; es.parameters.set<Real>(name) = in(name, 1.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/diffusion";   es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/haptotaxis";  es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
   }
 
   // ...done
