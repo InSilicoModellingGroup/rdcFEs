@@ -55,6 +55,8 @@ void ripf (LibMeshInit & init)
   const std::string ex2_filename =
     es.parameters.get<std::string>("output_EXODUS");
 
+  check_solution(es);
+
   ExodusII_IO ex2(mesh);
   ex2.write_equation_systems(ex2_filename, es);
   ex2.append(true);
@@ -211,10 +213,6 @@ void initial_radiotherapy (EquationSystems & es,
     {
       Real RT_broad_, RT_focus_;
       fin >> RT_broad_ >> RT_focus_;
-      Real RT_total_ = 0.0; // radiation therapy (RT) dose per fraction
-      if      ( day < RT_broad_frac ) RT_total_ = RT_broad_ / RT_broad_frac * (day+1);
-      else if ( day < RT_total_frac ) RT_total_ = RT_focus_ / RT_focus_frac * ((day+1)-RT_broad_frac) + RT_broad_;
-      else                            RT_total_ = RT_broad_ + RT_focus_;
 
       const dof_id_type idof[] = { node->dof_number(system.number(), 0, 0) ,
                                    node->dof_number(system.number(), 1, 0) ,
@@ -225,7 +223,6 @@ void initial_radiotherapy (EquationSystems & es,
 
       system.solution->set(idof[0], RT_broad_);
       system.solution->set(idof[1], RT_focus_);
-      system.solution->set(idof[2], RT_total_);
     }
 
   // close solution vector and update the system
