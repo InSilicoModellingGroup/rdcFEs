@@ -147,6 +147,15 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "HU/max"; es.parameters.set<Real>(name) = in(name, +1000.);
   }
 
+  // parameters for the species: HU
+  {
+    name = "HU/phi/cc/build";  es.parameters.set<Real>(name) = in(name, 0.);
+    name = "HU/phi/cc/decay";  es.parameters.set<Real>(name) = in(name, 0.);
+    name = "HU/phi/fb/build";  es.parameters.set<Real>(name) = in(name, 0.);
+    name = "HU/phi/fb/decay";  es.parameters.set<Real>(name) = in(name, 0.);
+    name = "HU/phi/tolerance"; es.parameters.set<Real>(name) = in(name, 0.);
+  }
+
   // parameters for the species: cc
   {
     name = "cc/kappa";      es.parameters.set<Real>(name) = in(name, 0.);
@@ -300,6 +309,11 @@ void assemble_ripf (EquationSystems & es,
              VolFr_min_vacant = es.parameters.get<Real>("volume_fraction/min_vacant"),
              VolFr_max_vacant = es.parameters.get<Real>("volume_fraction/max_vacant");
 
+  const Real phi_cc_B = es.parameters.get<Real>("HU/phi/cc/build"),
+             phi_cc_D = es.parameters.get<Real>("HU/phi/cc/decay"),
+             phi_fb_B = es.parameters.get<Real>("HU/phi/fb/build"),
+             phi_fb_D = es.parameters.get<Real>("HU/phi/fb/decay"),
+             phi_tol  = es.parameters.get<Real>("HU/phi/tolerance");
   const Real kappa      = es.parameters.get<Real>("cc/kappa"),
              delta      = es.parameters.get<Real>("cc/delta"),
              delta_RT_a = es.parameters.get<Real>("cc/delta/RT/a"),
@@ -388,9 +402,23 @@ void assemble_ripf (EquationSystems & es,
 
           const Real delta_RT = delta * (1.0 - exp(-delta_RT_a*RT-delta_RT_b*RT*RT));
           const Real lambda_RT = lambda * (RT/lambda_RT_r);
+          Real epsilon_cc = 0.0;
+          if      (cc__dtime> phi_tol) epsilon_cc = phi_cc_B;
+          else if (cc__dtime<-phi_tol) epsilon_cc = phi_cc_D;
+          Real epsilon_fb = 0.0;
+          if      (fb__dtime> phi_tol) epsilon_fb = phi_fb_B;
+          else if (fb__dtime<-phi_tol) epsilon_fb = phi_fb_D;
 
           for (std::size_t i=0; i<n_var_dofs; i++)
             {
+              // RHS contribution
+              Fe_var[0](i) += JxW[qp]*(
+                                        HU_old * phi[i][qp] // capacity term
+                                      + DT_2*( // source, sink terms
+                                               epsilon_cc * cc_old * phi[i][qp]
+                                             + epsilon_fb * fb_old * phi[i][qp]
+                                             )
+                                      );
               // RHS contribution
               Fe_var[1](i) += JxW[qp]*(
                                         cc_old * phi[i][qp] // capacity term
@@ -411,6 +439,22 @@ void assemble_ripf (EquationSystems & es,
 
               for (std::size_t j=0; j<n_var_dofs; j++)
                 {
+                  // Matrix contribution
+                  Ke_var[0][0](i,j) += JxW[qp]*(
+                                                 phi[j][qp] * phi[i][qp] // capacity term
+                                               //- DT_2*( // source, sink terms
+                                               //       )
+                                               );
+                  Ke_var[0][1](i,j) += JxW[qp]*(
+                                               - DT_2*( // source, sink terms
+                                                        epsilon_cc * phi[j][qp] * phi[i][qp]
+                                                      )
+                                               );
+                  Ke_var[0][2](i,j) += JxW[qp]*(
+                                               - DT_2*( // source, sink terms
+                                                        epsilon_fb * phi[j][qp] * phi[i][qp]
+                                                      )
+                                               );
                   // Matrix contribution
                   Ke_var[1][1](i,j) += JxW[qp]*(
                                                  phi[j][qp] * phi[i][qp] // capacity term
