@@ -38,6 +38,12 @@ void ripf (LibMeshInit & init)
   model.attach_assemble_function(assemble_ripf);
   model.attach_init_function(initial_ripf);
 
+  System & model_rates =
+    es.add_system<System>("RIPF-TimeDeriv");
+  model_rates.add_variable("HU_TimeDeriv", FIRST, LAGRANGE);
+  model_rates.add_variable("cc_TimeDeriv", FIRST, LAGRANGE);
+  model_rates.add_variable("fb_TimeDeriv", FIRST, LAGRANGE);
+
   ExplicitSystem & radiotherapy =
     es.add_system<ExplicitSystem>("RT");
   radiotherapy.add_variable("RT_dose/broad", FIRST, LAGRANGE);
