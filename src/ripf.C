@@ -74,25 +74,23 @@ void ripf (LibMeshInit & init)
   const int n_t_step = es.parameters.get<int>("time_step_number");
   for (int t=1; t<=n_t_step; t++)
     {
-      es.parameters.set<Real>("time") +=
-      es.parameters.get<Real>("time_step");
-      // increment this time counter
+      // update the simulation time
+      es.parameters.set<Real>("time") += es.parameters.get<Real>("time_step");
       model.time = es.parameters.get<Real>("time");
-      const Real current_time = model.time;
 
       libMesh::out << " Solving time increment: " << t
-                   << " (time=" << current_time <<  ") ..." << std::endl;
+                   << " (time=" << model.time <<  ") ..." << std::endl;
 
       // copy the previously-current solution into the old solution
       *(model.older_local_solution) = *(model.old_local_solution);
       *(model.old_local_solution) = *(model.current_local_solution);
       // now solve the AD progression model
-      //++++++++++++++++++++++++++++++++++++++model.solve();
+      model.solve();
 
       check_solution(es, soln);
 
       if (0 == t%output_step)
-        ex2.write_timestep(ex2_filename, es, t, current_time);
+        ex2.write_timestep(ex2_filename, es, t, model.time);
     }
 
   // ...done
