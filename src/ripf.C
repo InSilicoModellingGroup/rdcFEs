@@ -448,11 +448,12 @@ void assemble_ripf (EquationSystems & es,
             }
           //
           Real Lombda = 0.0;
-          Real Lombda__dfb = 0.0;
+          Real Lombda__dcc = 0.0, Lombda__dfb = 0.0;
           if (fb_old<1.0)
             {
-              Lombda = 1.0-fb_old*fb_old;
-              Lombda__dfb = -2.0*fb_old;
+              Lombda = cc_old*(1.0-fb_old*fb_old);
+              Lombda__dcc = 1.0-fb_old*fb_old;
+              Lombda__dfb = cc_old*(-2.0*fb_old);
             }
 
           for (std::size_t i=0; i<n_var_dofs; i++)
@@ -528,6 +529,7 @@ void assemble_ripf (EquationSystems & es,
                   Ke_var[2][1](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
                                                         lambda_RT * Tau__dcc * Lombda * phi[j][qp] * phi[i][qp]
+                                                      + lambda_RT * Tau * Lombda__dcc * phi[j][qp] * phi[i][qp]
                                                       - diffusion * Tau__dcc * phi[j][qp] * (GRAD_fb_old * dphi[i][qp])
                                                       - haptotaxis * Tau__dcc * phi[j][qp] * (GRAD_HU_old * fb_old * dphi[i][qp])
                                                       //- (dphi[j][qp] * velocity) * phi[i][qp]
