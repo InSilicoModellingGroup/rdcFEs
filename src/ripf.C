@@ -443,16 +443,16 @@ void assemble_ripf (EquationSystems & es,
           Real Koppa__dcc = 0.0;
           if (cc_old<1.0)
             {
-              Koppa = cc_old - cc_old*cc_old;
-              Koppa__dcc = 1.0 - 2.0*cc_old;
+              Koppa = 4.0*(cc_old-cc_old*cc_old);
+              Koppa__dcc = 4.0-8.0*cc_old;
             }
           //
           Real Lombda = 0.0;
           Real Lombda__dfb = 0.0;
           if (fb_old<1.0)
             {
-              Lombda = fb_old;
-              Lombda__dfb = 1.0;
+              Lombda = 1.0-fb_old*fb_old;
+              Lombda__dfb = -2.0*fb_old;
             }
 
           for (std::size_t i=0; i<n_var_dofs; i++)
