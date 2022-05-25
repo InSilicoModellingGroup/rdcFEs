@@ -292,6 +292,10 @@ void assemble_ripf (EquationSystems & es,
     es.get_system<TransientLinearImplicitSystem>("RIPF");
   libmesh_assert_equal_to(system.n_vars(), 3);
 
+  System & TD_system =
+    es.get_system<System>("RIPF-TimeDeriv");
+  libmesh_assert_equal_to(TD_system.n_vars(), 3);
+
   const ExplicitSystem & RT_system =
     es.get_system<ExplicitSystem>("RT");
   libmesh_assert_equal_to(RT_system.n_vars(), 3);
@@ -315,7 +319,6 @@ void assemble_ripf (EquationSystems & es,
   const std::vector<std::vector<RealGradient>> & dphi = fe->get_dphi();
 
   const Real DT_2 = es.parameters.get<Real>("time_step") / 2.0;
-  const Real DT_R = 1.0 / es.parameters.get<Real>("time_step");
 
   const Real VolFr_stroma     = es.parameters.get<Real>("volume_fraction/stroma"),
              VolFr_parenchyma = es.parameters.get<Real>("volume_fraction/parenchyma"),
@@ -394,7 +397,12 @@ void assemble_ripf (EquationSystems & es,
               cc_older += phi[l][qp] * system.older_solution(dof_indices_var[1][l]);
               fb_older += phi[l][qp] * system.older_solution(dof_indices_var[2][l]);
             }
-          Number cc__dtime((cc_old-cc_older)*DT_R), fb__dtime((fb_old-fb_older)*DT_R);
+          Number cc__dtime(0.0), fb__dtime(0.0);
+          for (std::size_t l=0; l<n_var_dofs; l++)
+            {
+              cc__dtime += phi[l][qp] * TD_system.current_solution(dof_indices_var[1][l]);
+              fb__dtime += phi[l][qp] * TD_system.current_solution(dof_indices_var[2][l]);
+            }
           Number RT_td(0.0);
           for (std::size_t l=0; l<n_RT_var_dofs; l++)
             {
