@@ -187,14 +187,13 @@ void input (const std::string & file_name, EquationSystems & es)
   {
     name = "fb/lambda";      es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "fb/lambda/RT/r"; es.parameters.set<Real>(name) = in(name, 1.);
-    if (es.parameters.get<Real>(name)<=0.0) libmesh_error();
+    name = "fb/lambda/RT/r"; es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/omega";       es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/diffusion";   es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/haptotaxis";  es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
   }
 
   // ...done
@@ -337,7 +336,8 @@ void assemble_ripf (EquationSystems & es,
              delta_RT_a = es.parameters.get<Real>("cc/delta/RT/a"),
              delta_RT_b = es.parameters.get<Real>("cc/delta/RT/b");
   const Real lambda      = es.parameters.get<Real>("fb/lambda"),
-             lambda_RT_r = es.parameters.get<Real>("fb/lambda/RT/r"),
+             lambda_RT_r = es.parameters.get<Real>("fb/lambda/RT/r")
+                         ? es.parameters.get<Real>("fb/lambda/RT/r") : es.parameters.get<int>("RT_dose/total/max"),
              omega       = es.parameters.get<Real>("fb/omega"),
              diffusion   = es.parameters.get<Real>("fb/diffusion"),
              haptotaxis  = es.parameters.get<Real>("fb/haptotaxis");
