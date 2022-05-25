@@ -29,7 +29,8 @@ cc/delta=0.00864
 cc/delta/RT/a=0.3
 cc/delta/RT/b=0.03
 #
-fb/lambda= 0.
+fb/lambda= 0.4
+fb/omega= 0.04
 fb/diffusion =1.0e-20
 fb/haptotaxis=1.0e-20
 #

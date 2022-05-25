@@ -189,6 +189,8 @@ void input (const std::string & file_name, EquationSystems & es)
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/lambda/RT/r"; es.parameters.set<Real>(name) = in(name, 1.);
     if (es.parameters.get<Real>(name)<=0.0) libmesh_error();
+    name = "fb/omega";       es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/diffusion";   es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/haptotaxis";  es.parameters.set<Real>(name) = in(name, 0.);
@@ -336,6 +338,7 @@ void assemble_ripf (EquationSystems & es,
              delta_RT_b = es.parameters.get<Real>("cc/delta/RT/b");
   const Real lambda      = es.parameters.get<Real>("fb/lambda"),
              lambda_RT_r = es.parameters.get<Real>("fb/lambda/RT/r"),
+             omega       = es.parameters.get<Real>("fb/omega"),
              diffusion   = es.parameters.get<Real>("fb/diffusion"),
              haptotaxis  = es.parameters.get<Real>("fb/haptotaxis");
 
@@ -475,6 +478,7 @@ void assemble_ripf (EquationSystems & es,
                                         fb_old * phi[i][qp] // capacity term
                                       + DT_2*( // transport, source, sink terms
                                                lambda_RT * Tau * Lombda * phi[i][qp]
+                                             - omega * fb_old * phi[i][qp]
                                              - diffusion * Tau * (GRAD_fb_old * dphi[i][qp])
                                              - haptotaxis * Tau * (GRAD_HU_old * fb_old * dphi[i][qp])
                                              )
@@ -534,6 +538,7 @@ void assemble_ripf (EquationSystems & es,
                                                - DT_2*( // transport, source, sink terms
                                                         lambda_RT * Tau__dfb * Lombda * phi[j][qp] * phi[i][qp]
                                                       + lambda_RT * Tau * Lombda__dfb * phi[j][qp] * phi[i][qp]
+                                                      - omega * phi[j][qp] * phi[i][qp]
                                                       - diffusion * Tau__dfb * phi[j][qp] * (GRAD_fb_old * dphi[i][qp])
                                                       - diffusion * Tau * (dphi[j][qp] * dphi[i][qp])
                                                       - haptotaxis * Tau__dfb * phi[j][qp] * (GRAD_HU_old * fb_old * dphi[i][qp])
