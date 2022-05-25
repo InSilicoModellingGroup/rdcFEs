@@ -591,6 +591,8 @@ void check_solution (EquationSystems & es, std::vector<Number> & prev_soln)
              RT_total_frac = RT_broad_frac + RT_focus_frac;
   // simulation time is expressed in "days"
   const int day = std::floor( system.time );
+  // calculate the maximum total RT dose
+  Real RT_total_max = -1.0;
 
   for (const auto & node : mesh.node_ptr_range())
     {
@@ -641,6 +643,8 @@ void check_solution (EquationSystems & es, std::vector<Number> & prev_soln)
       else                            RT_total_ = RT_broad_ + RT_focus_;
 
       RT_system.solution->set(RT_idof[2], RT_total_);
+      // ...is it the maximum value?
+      RT_total_max = std::max(RT_total_max, RT_total_);
     }
 
   // close solution vector and update the system
@@ -652,5 +656,8 @@ void check_solution (EquationSystems & es, std::vector<Number> & prev_soln)
   RT_system.update();
   // copy current solution (vector) into previous one
   prev_soln = soln;
+  //
+  es.parameters.set<int>("RT_dose/total/max") = RT_total_max;
+  if (RT_total_max<=0.0) libmesh_error();
   // ...done
 }
