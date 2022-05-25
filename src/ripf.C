@@ -297,27 +297,22 @@ void assemble_ripf (EquationSystems & es,
   libmesh_assert_equal_to(RT_system.n_vars(), 3);
 
   FEType fe_type = system.variable_type(0);
+  FEType fe_type_RT = RT_system.variable_type(0);
 
   std::unique_ptr<FEBase> fe(FEBase::build(dim, fe_type));
-  std::unique_ptr<FEBase> fe_face(FEBase::build(dim, fe_type));
+  std::unique_ptr<FEBase> fe_RT(FEBase::build(dim, fe_type_RT));
 
-  QGauss qrule (dim,   fe_type.default_quadrature_order());
-  QGauss qface (dim-1, fe_type.default_quadrature_order());
+  QGauss qrule(dim, fe_type.default_quadrature_order());
 
   fe->attach_quadrature_rule(&qrule);
-  fe_face->attach_quadrature_rule(&qface);
+  fe_RT->attach_quadrature_rule(&qrule);
 
   const std::vector<Real> & JxW = fe->get_JxW();
-  const std::vector<Real> & JxW_face = fe_face->get_JxW();
 
   const std::vector<std::vector<Real>> & phi = fe->get_phi();
-  const std::vector<std::vector<Real>> & psi = fe_face->get_phi();
+  const std::vector<std::vector<Real>> & theta = fe_RT->get_phi();
 
   const std::vector<std::vector<RealGradient>> & dphi = fe->get_dphi();
-  const std::vector<std::vector<RealGradient>> & dpsi = fe_face->get_dphi();
-
-  //const std::vector<Point> & qface_points  = fe_face->get_xyz();
-  const std::vector<Point> & qface_normals = fe_face->get_normals();
 
   const Real DT_2 = es.parameters.get<Real>("time_step") / 2.0;
   const Real DT_R = 1.0 / es.parameters.get<Real>("time_step");
@@ -357,6 +352,7 @@ void assemble_ripf (EquationSystems & es,
 
       const unsigned int n_dofs     = dof_indices.size();
       const unsigned int n_var_dofs = dof_indices_var[0].size();
+      const unsigned int n_RT_var_dofs = dof_indices_RT_var[0].size();
 
       DenseMatrix<Number> Ke(n_dofs, n_dofs);
       DenseSubMatrix<Number> Ke_var[3][3] =
@@ -378,8 +374,7 @@ void assemble_ripf (EquationSystems & es,
         Fe_var[i].reposition(i*n_var_dofs, n_var_dofs);
 
       fe->reinit(elem);
-
-      const Real RT = RT_system.solution->el(dof_indices_RT_var[2][0]);
+      fe_RT->reinit(elem);
 
       for (unsigned int qp=0; qp<qrule.n_points(); qp++)
         {
@@ -400,6 +395,11 @@ void assemble_ripf (EquationSystems & es,
               fb_older += phi[l][qp] * system.older_solution(dof_indices_var[2][l]);
             }
           Number cc__dtime((cc_old-cc_older)*DT_R), fb__dtime((fb_old-fb_older)*DT_R);
+          Number RT_td(0.0);
+          for (std::size_t l=0; l<n_RT_var_dofs; l++)
+            {
+              RT_td += theta[l][qp] * RT_system.current_solution(dof_indices_RT_var[2][l]);
+            }
 
           const Real VolFr_cells = cc_old + fb_old;
           const Real VolFr_TOTAL = VolFr_stroma + VolFr_parenchyma + VolFr_cells;
@@ -419,8 +419,8 @@ void assemble_ripf (EquationSystems & es,
               }
             }
 
-          const Real delta_RT = delta * (1.0 - exp(-delta_RT_a*RT-delta_RT_b*RT*RT));
-          const Real lambda_RT = lambda * (RT/lambda_RT_r);
+          const Real delta_RT = delta * (1.0 - exp(-delta_RT_a*RT_td-delta_RT_b*RT_td*RT_td));
+          const Real lambda_RT = lambda * (RT_td/lambda_RT_r);
           Real epsilon_cc = 0.0;
           if      (cc__dtime> phi_tol) epsilon_cc = phi_cc_B;
           else if (cc__dtime<-phi_tol) epsilon_cc = phi_cc_D;
