@@ -1,0 +1,35 @@
+#
+input_GMSH     = 'Lung_Model.msh'
+input_nodal    = 'Lung_Model_Initial_Nodal_Field.dat'
+input_nodal_RT = 'Lung_Model_Initial_Nodal_Field~RT.dat'
+output_GMSH    = 'Lung_Model~processed.msh'
+output_EXODUS  = 'Lung_Model.ex2'
+#
+time_step_number = 70
+time_step = 0.1
+output_step = 10
+#
+RT_dose/broad/fractions=28
+RT_dose/focus/fractions=8
+volume_fraction/stroma    =0.30
+volume_fraction/parenchyma=0.20
+volume_fraction/exponent=2.5
+volume_fraction/min_vacant=1.e-5
+HU/min = -1000.
+HU/max = +1000.
+#
+HU/phi/cc/build=0.
+HU/phi/cc/decay=0.
+HU/phi/fb/build=0.
+HU/phi/fb/decay=0.
+HU/phi/tolerance=1.0e-3
+#
+# cc/kappa=0.01
+cc/delta=0.00864
+cc/delta/RT/a=0.3
+cc/delta/RT/b=0.03
+#
+fb/lambda= 0.
+fb/diffusion =1.0e-20
+fb/haptotaxis=1.0e-20
+#
