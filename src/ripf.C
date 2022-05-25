@@ -148,6 +148,7 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "volume_fraction/stroma";     es.parameters.set<Real>(name) = in(name, 0.);
     name = "volume_fraction/parenchyma"; es.parameters.set<Real>(name) = in(name, 0.);
     name = "volume_fraction/exponent";   es.parameters.set<Real>(name) = in(name, 1.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "volume_fraction/min_vacant"; es.parameters.set<Real>(name) = in(name, 1.e-12);
     const Real VF_ = es.parameters.get<Real>(name);
     name = "volume_fraction/max_vacant"; es.parameters.set<Real>(name) = in(name, 1.-VF_);
@@ -177,9 +178,9 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "cc/delta";      es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "cc/delta/RT/a"; es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
+    if (es.parameters.get<Real>(name)<=0.0) libmesh_error();
     name = "cc/delta/RT/b"; es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
+    if (es.parameters.get<Real>(name)<=0.0) libmesh_error();
   }
 
   // parameters for the species: fb
@@ -187,7 +188,7 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "fb/lambda";      es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/lambda/RT/r"; es.parameters.set<Real>(name) = in(name, 1.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
+    if (es.parameters.get<Real>(name)<=0.0) libmesh_error();
     name = "fb/diffusion";   es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/haptotaxis";  es.parameters.set<Real>(name) = in(name, 0.);
@@ -407,32 +408,49 @@ void assemble_ripf (EquationSystems & es,
               RT_td += theta[l][qp] * RT_system.current_solution(dof_indices_RT_var[2][l]);
             }
 
-          const Real VolFr_cells = cc_old + fb_old;
-          const Real VolFr_TOTAL = VolFr_stroma + VolFr_parenchyma + VolFr_cells;
-
-          Real Tau = 0.0;
-          Real Tau__dcc = 0.0,
-               Tau__dfb = 0.0;
-          if (1.0 > VolFr_TOTAL)
-            {
-              Tau = pow(1.0-VolFr_TOTAL, VolFr_exponent);
-              Tau__dcc =
-              Tau__dfb = -VolFr_exponent * pow(1.0-VolFr_TOTAL, VolFr_exponent-1.0);
-              if ( Tau <= VolFr_min_vacant ) {
-                Tau = 0.0;
-                Tau__dcc =
-                Tau__dfb = 0.0;
-              }
-            }
-
           const Real delta_RT = delta * (1.0 - exp(-delta_RT_a*RT_td-delta_RT_b*RT_td*RT_td));
           const Real lambda_RT = lambda * (RT_td/lambda_RT_r);
+          //
           Real epsilon_cc = 0.0;
           if      (cc__dtime> phi_tol) epsilon_cc = phi_cc_B;
           else if (cc__dtime<-phi_tol) epsilon_cc = phi_cc_D;
           Real epsilon_fb = 0.0;
           if      (fb__dtime> phi_tol) epsilon_fb = phi_fb_B;
           else if (fb__dtime<-phi_tol) epsilon_fb = phi_fb_D;
+          //
+          const Real VolFr_cells = cc_old + fb_old;
+          const Real VolFr_TOTAL = VolFr_stroma + VolFr_parenchyma + VolFr_cells;
+          //
+          Real Tau = 0.0;
+          Real Tau__dcc = 0.0, Tau__dfb = 0.0;
+          if (VolFr_TOTAL<1.0)
+            {
+              Tau = pow(1.0-VolFr_TOTAL, VolFr_exponent);
+              Tau__dcc =
+              Tau__dfb = -VolFr_exponent * pow(1.0-VolFr_TOTAL, VolFr_exponent-1.0);
+              if ( Tau < VolFr_min_vacant )
+                {
+                  Tau = 0.0;
+                  Tau__dcc =
+                  Tau__dfb = 0.0;
+                }
+            }
+          //
+          Real Koppa = 0.0;
+          Real Koppa__dcc = 0.0;
+          if (cc_old<1.0)
+            {
+              Koppa = cc_old - cc_old*cc_old;
+              Koppa__dcc = 1.0 - 2.0*cc_old;
+            }
+          //
+          Real Lombda = 0.0;
+          Real Lombda__dfb = 0.0;
+          if (fb_old<1.0)
+            {
+              Lombda = fb_old;
+              Lombda__dfb = 1.0;
+            }
 
           for (std::size_t i=0; i<n_var_dofs; i++)
             {
@@ -448,7 +466,7 @@ void assemble_ripf (EquationSystems & es,
               Fe_var[1](i) += JxW[qp]*(
                                         cc_old * phi[i][qp] // capacity term
                                       + DT_2*( // source, sink terms
-                                               kappa * Tau * (cc_old-cc_old*cc_old) * phi[i][qp]
+                                               kappa * Tau * Koppa * phi[i][qp]
                                              - delta_RT * cc_old * phi[i][qp]
                                              )
                                       );
@@ -456,7 +474,7 @@ void assemble_ripf (EquationSystems & es,
               Fe_var[2](i) += JxW[qp]*(
                                         fb_old * phi[i][qp] // capacity term
                                       + DT_2*( // transport, source, sink terms
-                                               lambda_RT * Tau * fb_old * phi[i][qp]
+                                               lambda_RT * Tau * Lombda * phi[i][qp]
                                              - diffusion * Tau * (GRAD_fb_old * dphi[i][qp])
                                              - haptotaxis * Tau * (GRAD_HU_old * fb_old * dphi[i][qp])
                                              )
@@ -484,15 +502,15 @@ void assemble_ripf (EquationSystems & es,
                   Ke_var[1][1](i,j) += JxW[qp]*(
                                                  phi[j][qp] * phi[i][qp] // capacity term
                                                - DT_2*( // transport, source, sink terms
-                                                        kappa * Tau__dcc * (cc_old-cc_old*cc_old) * phi[j][qp] * phi[i][qp]
-                                                      + kappa * Tau * (1.0-2.0*cc_old) * phi[j][qp] * phi[i][qp]
+                                                        kappa * Tau__dcc * Koppa * phi[j][qp] * phi[i][qp]
+                                                      + kappa * Tau * Koppa__dcc * phi[j][qp] * phi[i][qp]
                                                       - delta_RT * phi[j][qp] * phi[i][qp]
                                                       //- (dphi[j][qp] * velocity) * phi[i][qp]
                                                       )
                                                );
                   Ke_var[1][2](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
-                                                        kappa * Tau__dfb * (cc_old-cc_old*cc_old) * phi[j][qp] * phi[i][qp]
+                                                        kappa * Tau__dfb * Koppa * phi[j][qp] * phi[i][qp]
                                                       //- (dphi[j][qp] * velocity) * phi[i][qp]
                                                       )
                                                );
@@ -505,7 +523,7 @@ void assemble_ripf (EquationSystems & es,
                                                );
                   Ke_var[2][1](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
-                                                        lambda_RT * Tau__dcc * fb_old * phi[j][qp] * phi[i][qp]
+                                                        lambda_RT * Tau__dcc * Lombda * phi[j][qp] * phi[i][qp]
                                                       - diffusion * Tau__dcc * phi[j][qp] * (GRAD_fb_old * dphi[i][qp])
                                                       - haptotaxis * Tau__dcc * phi[j][qp] * (GRAD_HU_old * fb_old * dphi[i][qp])
                                                       //- (dphi[j][qp] * velocity) * phi[i][qp]
@@ -514,8 +532,8 @@ void assemble_ripf (EquationSystems & es,
                   Ke_var[2][2](i,j) += JxW[qp]*(
                                                  phi[j][qp] * phi[i][qp] // capacity term
                                                - DT_2*( // transport, source, sink terms
-                                                        lambda_RT * Tau__dfb * fb_old * phi[j][qp] * phi[i][qp]
-                                                      + lambda_RT * Tau * phi[j][qp] * phi[i][qp]
+                                                        lambda_RT * Tau__dfb * Lombda * phi[j][qp] * phi[i][qp]
+                                                      + lambda_RT * Tau * Lombda__dfb * phi[j][qp] * phi[i][qp]
                                                       - diffusion * Tau__dfb * phi[j][qp] * (GRAD_fb_old * dphi[i][qp])
                                                       - diffusion * Tau * (dphi[j][qp] * dphi[i][qp])
                                                       - haptotaxis * Tau__dfb * phi[j][qp] * (GRAD_HU_old * fb_old * dphi[i][qp])
