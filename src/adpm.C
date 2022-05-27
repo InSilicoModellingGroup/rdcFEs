@@ -1,19 +1,4 @@
 #include "./utils.h"
-#include "libmesh/fe.h"
-#include "libmesh/quadrature_gauss.h"
-#include "libmesh/dof_map.h"
-#include "libmesh/sparse_matrix.h"
-#include "libmesh/numeric_vector.h"
-#include "libmesh/dense_matrix.h"
-#include "libmesh/dense_vector.h"
-#include "libmesh/dense_submatrix.h"
-#include "libmesh/dense_subvector.h"
-#include "libmesh/gmsh_io.h"
-#include "libmesh/exodusII_io.h"
-#include "libmesh/enum_solver_package.h"
-#include "libmesh/getpot.h"
-#include "libmesh/linear_implicit_system.h"
-#include "libmesh/transient_system.h"
 
 static void input (const std::string & , EquationSystems & );
 static void initial_tracts (EquationSystems & , const std::string & );
