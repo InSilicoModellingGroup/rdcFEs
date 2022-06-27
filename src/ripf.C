@@ -163,6 +163,8 @@ void input (const std::string & file_name, EquationSystems & es)
   {
     name = "cc/kappa";      es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
+    name = "cc/kappa/RT/c"; es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "cc/delta";      es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "cc/delta/RT/a"; es.parameters.set<Real>(name) = in(name, 0.);
@@ -320,6 +322,7 @@ void assemble_ripf (EquationSystems & es,
              phi_fb_D = es.parameters.get<Real>("HU/phi/fb/decay"),
              phi_tol  = es.parameters.get<Real>("HU/phi/tolerance");
   const Real kappa      = es.parameters.get<Real>("cc/kappa"),
+             kappa_RT_c = es.parameters.get<Real>("cc/kappa/RT/c"),
              delta      = es.parameters.get<Real>("cc/delta"),
              delta_RT_a = es.parameters.get<Real>("cc/delta/RT/a"),
              delta_RT_b = es.parameters.get<Real>("cc/delta/RT/b");
@@ -399,6 +402,7 @@ void assemble_ripf (EquationSystems & es,
               RT_td += theta[l][qp] * RT_system.current_solution(dof_indices_RT_var[2][l]);
             }
 
+          const Real kappa_RT = kappa * exp(-kappa_RT_c*RT_td);
           const Real delta_RT = delta * (1.0 - exp(-delta_RT_a*RT_td-delta_RT_b*RT_td*RT_td));
           const Real lambda_RT = lambda * (RT_td/lambda_RT_r);
           //
@@ -458,7 +462,7 @@ void assemble_ripf (EquationSystems & es,
               Fe_var[1](i) += JxW[qp]*(
                                         cc_old * phi[i][qp] // capacity term
                                       + DT_2*( // source, sink terms
-                                               kappa * Tau * Koppa * phi[i][qp]
+                                               kappa_RT * Tau * Koppa * phi[i][qp]
                                              - delta_RT * cc_old * phi[i][qp]
                                              )
                                       );
@@ -495,15 +499,15 @@ void assemble_ripf (EquationSystems & es,
                   Ke_var[1][1](i,j) += JxW[qp]*(
                                                  phi[j][qp] * phi[i][qp] // capacity term
                                                - DT_2*( // transport, source, sink terms
-                                                        kappa * Tau__dcc * Koppa * phi[j][qp] * phi[i][qp]
-                                                      + kappa * Tau * Koppa__dcc * phi[j][qp] * phi[i][qp]
+                                                        kappa_RT * Tau__dcc * Koppa * phi[j][qp] * phi[i][qp]
+                                                      + kappa_RT * Tau * Koppa__dcc * phi[j][qp] * phi[i][qp]
                                                       - delta_RT * phi[j][qp] * phi[i][qp]
                                                       //- (dphi[j][qp] * velocity) * phi[i][qp]
                                                       )
                                                );
                   Ke_var[1][2](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
-                                                        kappa * Tau__dfb * Koppa * phi[j][qp] * phi[i][qp]
+                                                        kappa_RT * Tau__dfb * Koppa * phi[j][qp] * phi[i][qp]
                                                       //- (dphi[j][qp] * velocity) * phi[i][qp]
                                                       )
                                                );
