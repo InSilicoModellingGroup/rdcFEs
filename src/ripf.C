@@ -151,10 +151,14 @@ void input (const std::string & file_name, EquationSystems & es)
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "HU/phi/cc/decay";  es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)>0.0) libmesh_error();
+    name = "HU/phi/cc/rate";   es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "HU/phi/fb/build";  es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "HU/phi/fb/decay";  es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)>0.0) libmesh_error();
+    name = "HU/phi/fb/rate";   es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "HU/phi/tolerance"; es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
   }
@@ -318,8 +322,10 @@ void assemble_ripf (EquationSystems & es,
 
   const Real phi_cc_B = es.parameters.get<Real>("HU/phi/cc/build"),
              phi_cc_D = es.parameters.get<Real>("HU/phi/cc/decay"),
+             phi_cc   = es.parameters.get<Real>("HU/phi/cc/rate"),
              phi_fb_B = es.parameters.get<Real>("HU/phi/fb/build"),
              phi_fb_D = es.parameters.get<Real>("HU/phi/fb/decay"),
+             phi_fb   = es.parameters.get<Real>("HU/phi/fb/rate"),
              phi_tol  = es.parameters.get<Real>("HU/phi/tolerance");
   const Real kappa      = es.parameters.get<Real>("cc/kappa"),
              kappa_RT_c = es.parameters.get<Real>("cc/kappa/RT/c"),
@@ -456,6 +462,8 @@ void assemble_ripf (EquationSystems & es,
                                       + DT_2*( // source, sink terms
                                                epsilon_cc * cc_old * phi[i][qp]
                                              + epsilon_fb * fb_old * phi[i][qp]
+                                             + phi_cc * cc__dtime * phi[i][qp]
+                                             + phi_fb * fb__dtime * phi[i][qp]
                                              )
                                       );
               // RHS contribution
