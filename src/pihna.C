@@ -76,8 +76,11 @@ void input (const std::string & file_name, EquationSystems & es)
 
   std::string name;
 
-  // create a time-stamped directory to store in simulation results
-  const std::string DIR = date_time_to_string(date_now(), "%Y%m%d_%H%M%S") + "/";
+  const std::string DIR_default = date_time_to_string(date_now(), "%Y%m%d_%H%M%S");
+  name = "directory";
+  const std::string DIR = in(name, DIR_default) + "/";
+
+  // create a directory to store simulation results
   if (0==global_processor_id())
     std::system(std::string("mkdir "+DIR).c_str());
   // create a copy of the input file containing all model parameters
