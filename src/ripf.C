@@ -451,7 +451,8 @@ void assemble_ripf (EquationSystems & es,
           //
           Real Koppa = 0.0;
           Real Koppa__dcc = 0.0;
-          if (cc_old<1.0)
+          if      (cc_old<0.0) ;
+          else if (cc_old<1.0)
             {
               Koppa = 4.0*(cc_old-cc_old*cc_old);
               Koppa__dcc = 4.0-8.0*cc_old;
@@ -459,7 +460,8 @@ void assemble_ripf (EquationSystems & es,
           //
           Real Lombda = 0.0;
           Real Lombda__dcc = 0.0, Lombda__dfb = 0.0;
-          if (fb_old<1.0)
+          if      (fb_old<0.0) ;
+          else if (fb_old<1.0)
             {
               Lombda = cc_old*(1.0-fb_old*fb_old);
               Lombda__dcc = 1.0-fb_old*fb_old;
