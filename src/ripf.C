@@ -188,6 +188,9 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "fb/diffusion";   es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/haptotaxis";  es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
+    name = "fb/radiotaxis";  es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
   }
 
   // ...done
@@ -311,6 +314,7 @@ void assemble_ripf (EquationSystems & es,
   const std::vector<std::vector<Real>> & theta = fe_RT->get_phi();
 
   const std::vector<std::vector<RealGradient>> & dphi = fe->get_dphi();
+  const std::vector<std::vector<RealGradient>> & dtheta = fe_RT->get_dphi();
 
   const Real DT_2 = es.parameters.get<Real>("time_step") / 2.0;
 
@@ -337,7 +341,8 @@ void assemble_ripf (EquationSystems & es,
                          ? es.parameters.get<Real>("fb/lambda/RT/r") : es.parameters.get<int>("RT_dose/total/max"),
              omega       = es.parameters.get<Real>("fb/omega"),
              diffusion   = es.parameters.get<Real>("fb/diffusion"),
-             haptotaxis  = es.parameters.get<Real>("fb/haptotaxis");
+             haptotaxis  = es.parameters.get<Real>("fb/haptotaxis"),
+             radiotaxis  = es.parameters.get<Real>("fb/radiotaxis");
 
   for (const auto & elem : mesh.active_local_element_ptr_range())
     {
@@ -403,10 +408,17 @@ void assemble_ripf (EquationSystems & es,
               fb__dtime += phi[l][qp] * TD_system.current_solution(dof_indices_var[2][l]);
             }
           Number RT_td(0.0);
+          Gradient GRAD_RT_td({0.0, 0.0, 0.0});
           for (std::size_t l=0; l<n_RT_var_dofs; l++)
             {
               RT_td += theta[l][qp] * RT_system.current_solution(dof_indices_RT_var[2][l]);
+              GRAD_RT_td.add_scaled(dtheta[l][qp], RT_system.current_solution(dof_indices_RT_var[2][l]));
             }
+          // normalize the gradient vector
+          {
+            const Real l2norm = GRAD_RT_td.norm();
+            GRAD_RT_td = l2norm ? GRAD_RT_td.unit() : Gradient(0.0,0.0,0.0);
+          }
 
           const Real kappa_RT = kappa * exp(-kappa_RT_c*RT_td);
           const Real delta_RT = delta * (1.0 - exp(-delta_RT_a*RT_td-delta_RT_b*RT_td*RT_td));
@@ -482,6 +494,7 @@ void assemble_ripf (EquationSystems & es,
                                              - omega * fb_old * phi[i][qp]
                                              - diffusion * Tau * (GRAD_fb_old * dphi[i][qp])
                                              - haptotaxis * Tau * (GRAD_HU_old * fb_old * dphi[i][qp])
+                                             - radiotaxis * Tau * (GRAD_RT_td  * fb_old * dphi[i][qp])
                                              )
                                       );
 
@@ -510,20 +523,17 @@ void assemble_ripf (EquationSystems & es,
                                                         kappa_RT * Tau__dcc * Koppa * phi[j][qp] * phi[i][qp]
                                                       + kappa_RT * Tau * Koppa__dcc * phi[j][qp] * phi[i][qp]
                                                       - delta_RT * phi[j][qp] * phi[i][qp]
-                                                      //- (dphi[j][qp] * velocity) * phi[i][qp]
                                                       )
                                                );
                   Ke_var[1][2](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
                                                         kappa_RT * Tau__dfb * Koppa * phi[j][qp] * phi[i][qp]
-                                                      //- (dphi[j][qp] * velocity) * phi[i][qp]
                                                       )
                                                );
                   // Matrix contribution
                   Ke_var[2][0](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
                                                       - haptotaxis * Tau * (dphi[j][qp] * fb_old * dphi[i][qp])
-                                                      //- (dphi[j][qp] * velocity) * phi[i][qp]
                                                       )
                                                );
                   Ke_var[2][1](i,j) += JxW[qp]*(
@@ -532,7 +542,7 @@ void assemble_ripf (EquationSystems & es,
                                                       + lambda_RT * Tau * Lombda__dcc * phi[j][qp] * phi[i][qp]
                                                       - diffusion * Tau__dcc * phi[j][qp] * (GRAD_fb_old * dphi[i][qp])
                                                       - haptotaxis * Tau__dcc * phi[j][qp] * (GRAD_HU_old * fb_old * dphi[i][qp])
-                                                      //- (dphi[j][qp] * velocity) * phi[i][qp]
+                                                      - radiotaxis * Tau__dcc * phi[j][qp] * (GRAD_RT_td  * fb_old * dphi[i][qp])
                                                       )
                                                );
                   Ke_var[2][2](i,j) += JxW[qp]*(
@@ -545,7 +555,8 @@ void assemble_ripf (EquationSystems & es,
                                                       - diffusion * Tau * (dphi[j][qp] * dphi[i][qp])
                                                       - haptotaxis * Tau__dfb * phi[j][qp] * (GRAD_HU_old * fb_old * dphi[i][qp])
                                                       - haptotaxis * Tau * (GRAD_HU_old * phi[j][qp] * dphi[i][qp])
-                                                      //- (dphi[j][qp] * velocity) * phi[i][qp]
+                                                      - radiotaxis * Tau__dfb * phi[j][qp] * (GRAD_RT_td  * fb_old * dphi[i][qp])
+                                                      - radiotaxis * Tau * (GRAD_RT_td  * phi[j][qp] * dphi[i][qp])
                                                       )
                                                );
                 }
