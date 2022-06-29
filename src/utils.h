@@ -45,6 +45,15 @@
 using namespace libMesh;
 
 //-------------------------------------------------------------------------------------------------
+inline Real pow2 (Real v) { return v*v; }
+inline Real pow3 (Real v) { return v*pow2(v); }
+inline Real pow4 (Real v) { return pow2(pow2(v)); }
+inline Real pow5 (Real v) { return v*pow4(v); }
+inline Real pow6 (Real v) { return pow2(pow3(v)); }
+inline Real pow7 (Real v) { return v*pow6(v); }
+inline Real pow8 (Real v) { return pow2(pow4(v)); }
+inline Real pow9 (Real v) { return pow3(pow3(v)); }
+//-------------------------------------------------------------------------------------------------
 inline
 Real apply_lbound (const Real& L, const Real& X) { return ( X < L ? L : X ); }
 inline
