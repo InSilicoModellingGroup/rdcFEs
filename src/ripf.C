@@ -185,6 +185,10 @@ void input (const std::string & file_name, EquationSystems & es)
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/lambda/HU/r"; es.parameters.set<Real>(name) = in(name, -1.);
     if (es.parameters.get<Real>(name)>=0.0) libmesh_error();
+    name = "fb/omicro";      es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
+    name = "fb/omicro/RT/r"; es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/omega";       es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/diffusion";   es.parameters.set<Real>(name) = in(name, 0.);
@@ -342,6 +346,9 @@ void assemble_ripf (EquationSystems & es,
              lambda_RT_r = es.parameters.get<Real>("fb/lambda/RT/r")
                          ? es.parameters.get<Real>("fb/lambda/RT/r") : es.parameters.get<int>("RT_dose/total/max"),
              lambda_HU_r = es.parameters.get<Real>("fb/lambda/HU/r"),
+             omicro      = es.parameters.get<Real>("fb/omicro"),
+             omicro_RT_r = es.parameters.get<Real>("fb/omicro/RT/r")
+                         ? es.parameters.get<Real>("fb/omicro/RT/r") : es.parameters.get<int>("RT_dose/total/max"),
              omega       = es.parameters.get<Real>("fb/omega"),
              diffusion   = es.parameters.get<Real>("fb/diffusion"),
              haptotaxis  = es.parameters.get<Real>("fb/haptotaxis"),
@@ -426,6 +433,7 @@ void assemble_ripf (EquationSystems & es,
           const Real kappa_RT = kappa * exp(-kappa_RT_c*RT_td);
           const Real delta_RT = delta * (1.0 - exp(-delta_RT_a*RT_td-delta_RT_b*RT_td*RT_td));
           const Real lambda_RT = lambda * (RT_td/lambda_RT_r);
+          const Real omicro_RT = omicro * (4.0*((RT_td/lambda_RT_r)-(RT_td/lambda_RT_r)*(RT_td/lambda_RT_r)));
           //
           Real epsilon_cc = 0.0;
           if      (cc__dtime> phi_tol) epsilon_cc = phi_cc_B;
@@ -463,6 +471,8 @@ void assemble_ripf (EquationSystems & es,
           //
           Real Lombda = 0.0;
           Real Lombda__dHU = 0.0, Lombda__dcc = 0.0, Lombda__dfb = 0.0;
+          Real Omecro = 0.0;
+          Real Omecro__dHU = 0.0, Omecro__dcc = 0.0, Omecro__dfb = 0.0;
           if      (fb_old<0.0) ;
           else if (fb_old<1.0)
             {
@@ -480,6 +490,11 @@ void assemble_ripf (EquationSystems & es,
                   Lombda__dcc = 0.0;
                   Lombda__dfb = -(2.0*fb_old);
                 }
+              //
+              Omecro = (1.0-fb_old*fb_old);
+              Omecro__dHU = 0.0;
+              Omecro__dcc = 0.0;
+              Omecro__dfb = -2.0*fb_old;
             }
 
           for (std::size_t i=0; i<n_var_dofs; i++)
@@ -507,6 +522,7 @@ void assemble_ripf (EquationSystems & es,
                                         fb_old * phi[i][qp] // capacity term
                                       + DT_2*( // transport, source, sink terms
                                                lambda_RT * Tau * Lombda * phi[i][qp]
+                                             + omicro_RT * Tau * Omecro * phi[i][qp]
                                              - omega * fb_old * phi[i][qp]
                                              - diffusion * Tau * (GRAD_fb_old * dphi[i][qp])
                                              - haptotaxis * Tau * (GRAD_HU_old * fb_old * dphi[i][qp])
@@ -550,6 +566,7 @@ void assemble_ripf (EquationSystems & es,
                   Ke_var[2][0](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
                                                         lambda_RT * Tau * Lombda__dHU * phi[j][qp] * phi[i][qp]
+                                                      + omicro_RT * Tau * Omecro__dHU * phi[j][qp] * phi[i][qp]
                                                       - haptotaxis * Tau * (dphi[j][qp] * fb_old * dphi[i][qp])
                                                       )
                                                );
@@ -557,6 +574,8 @@ void assemble_ripf (EquationSystems & es,
                                                - DT_2*( // transport, source, sink terms
                                                         lambda_RT * Tau__dcc * Lombda * phi[j][qp] * phi[i][qp]
                                                       + lambda_RT * Tau * Lombda__dcc * phi[j][qp] * phi[i][qp]
+                                                      + omicro_RT * Tau__dcc * Omecro * phi[j][qp] * phi[i][qp]
+                                                      + omicro_RT * Tau * Omecro__dcc * phi[j][qp] * phi[i][qp]
                                                       - diffusion * Tau__dcc * phi[j][qp] * (GRAD_fb_old * dphi[i][qp])
                                                       - haptotaxis * Tau__dcc * phi[j][qp] * (GRAD_HU_old * fb_old * dphi[i][qp])
                                                       - radiotaxis * Tau__dcc * phi[j][qp] * (GRAD_RT_td  * fb_old * dphi[i][qp])
@@ -567,6 +586,8 @@ void assemble_ripf (EquationSystems & es,
                                                - DT_2*( // transport, source, sink terms
                                                         lambda_RT * Tau__dfb * Lombda * phi[j][qp] * phi[i][qp]
                                                       + lambda_RT * Tau * Lombda__dfb * phi[j][qp] * phi[i][qp]
+                                                      + omicro_RT * Tau__dfb * Omecro * phi[j][qp] * phi[i][qp]
+                                                      + omicro_RT * Tau * Omecro__dfb * phi[j][qp] * phi[i][qp]
                                                       - omega * phi[j][qp] * phi[i][qp]
                                                       - diffusion * Tau__dfb * phi[j][qp] * (GRAD_fb_old * dphi[i][qp])
                                                       - diffusion * Tau * (dphi[j][qp] * dphi[i][qp])
