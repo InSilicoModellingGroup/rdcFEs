@@ -459,13 +459,14 @@ void assemble_ripf (EquationSystems & es,
             }
           //
           Real Lombda = 0.0;
-          Real Lombda__dcc = 0.0, Lombda__dfb = 0.0;
+          Real Lombda__dHU = 0.0, Lombda__dcc = 0.0, Lombda__dfb = 0.0;
           if      (fb_old<0.0) ;
           else if (fb_old<1.0)
             {
-              Lombda = cc_old*(1.0-fb_old*fb_old);
-              Lombda__dcc = 1.0-fb_old*fb_old;
-              Lombda__dfb = cc_old*(-2.0*fb_old);
+              Lombda = (1.0-cc_old)*(1.0-fb_old*fb_old);
+              Lombda__dHU = 0.0;
+              Lombda__dcc = (fb_old*fb_old-1.0);
+              Lombda__dfb = (cc_old-1.0)*(2.0*fb_old);
             }
 
           for (std::size_t i=0; i<n_var_dofs; i++)
@@ -535,6 +536,7 @@ void assemble_ripf (EquationSystems & es,
                   // Matrix contribution
                   Ke_var[2][0](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
+                                                        lambda_RT * Tau * Lombda__dHU * phi[j][qp] * phi[i][qp]
                                                       - haptotaxis * Tau * (dphi[j][qp] * fb_old * dphi[i][qp])
                                                       )
                                                );
