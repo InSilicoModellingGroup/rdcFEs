@@ -183,6 +183,8 @@ void input (const std::string & file_name, EquationSystems & es)
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/lambda/RT/r"; es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
+    name = "fb/lambda/HU/r"; es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)>=0.0) libmesh_error();
     name = "fb/omega";       es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/diffusion";   es.parameters.set<Real>(name) = in(name, 0.);
@@ -339,6 +341,7 @@ void assemble_ripf (EquationSystems & es,
   const Real lambda      = es.parameters.get<Real>("fb/lambda"),
              lambda_RT_r = es.parameters.get<Real>("fb/lambda/RT/r")
                          ? es.parameters.get<Real>("fb/lambda/RT/r") : es.parameters.get<int>("RT_dose/total/max"),
+             lambda_HU_r = es.parameters.get<Real>("fb/lambda/HU/r"),
              omega       = es.parameters.get<Real>("fb/omega"),
              diffusion   = es.parameters.get<Real>("fb/diffusion"),
              haptotaxis  = es.parameters.get<Real>("fb/haptotaxis"),
@@ -463,10 +466,20 @@ void assemble_ripf (EquationSystems & es,
           if      (fb_old<0.0) ;
           else if (fb_old<1.0)
             {
-              Lombda = (1.0-cc_old)*(1.0-fb_old*fb_old);
-              Lombda__dHU = 0.0;
-              Lombda__dcc = (fb_old*fb_old-1.0);
-              Lombda__dfb = (cc_old-1.0)*(2.0*fb_old);
+              if (HU_old<0.0)
+                {
+                  Lombda = (1.0-fb_old*fb_old)*(HU_old/lambda_HU_r);
+                  Lombda__dHU = (1.0-fb_old*fb_old)/lambda_HU_r;
+                  Lombda__dcc = 0.0;
+                  Lombda__dfb = -(2.0*fb_old)*(HU_old/lambda_HU_r);
+                }
+              else
+                {
+                  Lombda = (1.0-fb_old*fb_old);
+                  Lombda__dHU = 0.0;
+                  Lombda__dcc = 0.0;
+                  Lombda__dfb = -(2.0*fb_old);
+                }
             }
 
           for (std::size_t i=0; i<n_var_dofs; i++)
