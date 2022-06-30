@@ -189,6 +189,8 @@ void input (const std::string & file_name, EquationSystems & es)
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/omicro/RT/r"; es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
+    name = "fb/omicro/fb/b"; es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0||es.parameters.get<Real>(name)>1.0) libmesh_error();
     name = "fb/omega";       es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/diffusion";   es.parameters.set<Real>(name) = in(name, 0.);
@@ -349,6 +351,7 @@ void assemble_ripf (EquationSystems & es,
              omicro      = es.parameters.get<Real>("fb/omicro"),
              omicro_RT_r = es.parameters.get<Real>("fb/omicro/RT/r")
                          ? es.parameters.get<Real>("fb/omicro/RT/r") : es.parameters.get<int>("RT_dose/total/max"),
+             omicro_fb_b = es.parameters.get<Real>("fb/omicro/fb/b"),
              omega       = es.parameters.get<Real>("fb/omega"),
              diffusion   = es.parameters.get<Real>("fb/diffusion"),
              haptotaxis  = es.parameters.get<Real>("fb/haptotaxis"),
@@ -491,10 +494,24 @@ void assemble_ripf (EquationSystems & es,
                   Lombda__dfb = -(2.0*fb_old)*(HU_old/lambda_HU_r);
                 }
               //
-              Omecro = (1.0-fb_old*fb_old);
-              Omecro__dHU = 0.0;
-              Omecro__dcc = 0.0;
-              Omecro__dfb = -2.0*fb_old;
+              // Omecro = (1.0-pow2(fb_old));
+              // Omecro__dHU = 0.0;
+              // Omecro__dcc = 0.0;
+              // Omecro__dfb = -2.0*fb_old;
+              if (fb_old<=omicro_fb_b)
+                {
+                  Omecro = 4.0*(omicro_fb_b-pow2(omicro_fb_b));
+                  Omecro__dHU = 0.0;
+                  Omecro__dcc = 0.0;
+                  Omecro__dfb = 0.0;
+                }
+              else
+                {
+                  Omecro = 4.0*(fb_old-pow2(fb_old));
+                  Omecro__dHU = 0.0;
+                  Omecro__dcc = 0.0;
+                  Omecro__dfb = 4.0-8.0*fb_old;
+                }
             }
 
           for (std::size_t i=0; i<n_var_dofs; i++)
