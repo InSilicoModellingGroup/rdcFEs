@@ -431,9 +431,9 @@ void assemble_ripf (EquationSystems & es,
           }
 
           const Real kappa_RT = kappa * exp(-kappa_RT_c*RT_td);
-          const Real delta_RT = delta * (1.0 - exp(-delta_RT_a*RT_td-delta_RT_b*RT_td*RT_td));
+          const Real delta_RT = delta * (1.0 - exp(-delta_RT_a*RT_td-delta_RT_b*pow2(RT_td)));
           const Real lambda_RT = lambda * (RT_td/lambda_RT_r);
-          const Real omicro_RT = omicro * (4.0*((RT_td/lambda_RT_r)-(RT_td/lambda_RT_r)*(RT_td/lambda_RT_r)));
+          const Real omicro_RT = omicro * apply_lbound(0.0, 4.0*((RT_td/lambda_RT_r)-pow2(RT_td/lambda_RT_r)));
           //
           Real epsilon_cc = 0.0;
           if      (cc__dtime> phi_tol) epsilon_cc = phi_cc_B;
@@ -478,17 +478,17 @@ void assemble_ripf (EquationSystems & es,
             {
               if (HU_old<0.0)
                 {
-                  Lombda = (1.0-fb_old*fb_old)*(HU_old/lambda_HU_r);
-                  Lombda__dHU = (1.0-fb_old*fb_old)/lambda_HU_r;
+                  Lombda = (1.0-pow2(fb_old))*(HU_old/lambda_HU_r);
+                  Lombda__dHU = (1.0-pow2(fb_old))/lambda_HU_r;
                   Lombda__dcc = 0.0;
                   Lombda__dfb = -(2.0*fb_old)*(HU_old/lambda_HU_r);
                 }
               else
                 {
-                  Lombda = (1.0-fb_old*fb_old);
+                  Lombda = (1.0-pow2(fb_old));
                   Lombda__dHU = 0.0;
                   Lombda__dcc = 0.0;
-                  Lombda__dfb = -(2.0*fb_old);
+                  Lombda__dfb = -(2.0*fb_old)*(HU_old/lambda_HU_r);
                 }
               //
               Omecro = (1.0-fb_old*fb_old);
