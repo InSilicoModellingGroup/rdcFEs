@@ -5,6 +5,7 @@ static void initial_radiotherapy (EquationSystems & , const std::string & );
 static void initial_ripf (EquationSystems & , const std::string & );
 static void assemble_ripf (EquationSystems & , const std::string & );
 static void check_solution (EquationSystems & , std::vector<Number> & );
+static void save_solution (std::ofstream & , EquationSystems & );
 
 extern PerfLog plog;
 static Parallel::Communicator * pm_ptr = 0;
@@ -58,6 +59,11 @@ void ripf (LibMeshInit & init)
   ex2.write_equation_systems(ex2_filename, es);
   ex2.append(true);
 
+  std::ofstream csv;
+  if (0==global_processor_id())
+    csv.open(es.parameters.get<std::string>("output_CSV"));
+  save_solution(csv, es);
+
   const int output_step = es.parameters.get<int>("output_step");
   const int n_t_step = es.parameters.get<int>("time_step_number");
   for (int t=1; t<=n_t_step; t++)
@@ -78,7 +84,10 @@ void ripf (LibMeshInit & init)
       check_solution(es, soln);
 
       if (0 == t%output_step)
-        ex2.write_timestep(ex2_filename, es, t, model.time);
+        {
+          ex2.write_timestep(ex2_filename, es, t, model.time);
+          save_solution(csv, es);
+        }
     }
 
   // ...done
@@ -119,6 +128,9 @@ void input (const std::string & file_name, EquationSystems & es)
   //
   name = "output_EXODUS";
   es.parameters.set<std::string>(name) = DIR + in(name, "output.ex2");
+  //
+  name = "output_CSV";
+  es.parameters.set<std::string>(name) = DIR + in(name, "output.csv");
 
   es.parameters.set<RealVectorValue>("velocity") = RealVectorValue(0., 0., 0.);
 
@@ -146,6 +158,14 @@ void input (const std::string & file_name, EquationSystems & es)
     //
     name = "HU/min"; es.parameters.set<Real>(name) = in(name, -1000.);
     name = "HU/max"; es.parameters.set<Real>(name) = in(name, +1000.);
+    //
+    name = "range_cc/HU/min"; es.parameters.set<Real>(name) = in(name, es.parameters.get<Real>("HU/min"));
+    name = "range_cc/HU/max"; es.parameters.set<Real>(name) = in(name, es.parameters.get<Real>("HU/max"));
+    name = "range_cc/min"; es.parameters.set<Real>(name) = in(name, 1.0e-9);
+    //
+    name = "range_fb/HU/min"; es.parameters.set<Real>(name) = in(name, es.parameters.get<Real>("HU/min"));
+    name = "range_fb/HU/max"; es.parameters.set<Real>(name) = in(name, es.parameters.get<Real>("HU/max"));
+    name = "range_fb/min"; es.parameters.set<Real>(name) = in(name, 1.0e-9);
   }
 
   // parameters for the species: HU
@@ -728,5 +748,83 @@ void check_solution (EquationSystems & es, std::vector<Number> & prev_soln)
   //
   es.parameters.set<int>("RT_dose/total/max") = RT_total_max;
   if (RT_total_max<=0.0) libmesh_error();
+  // ...done
+}
+
+void save_solution (std::ofstream & csv, EquationSystems & es)
+{
+  const MeshBase& mesh = es.get_mesh();
+  const unsigned int dim = mesh.mesh_dimension();
+
+  const TransientLinearImplicitSystem & system =
+    es.get_system<TransientLinearImplicitSystem>("RIPF");
+  libmesh_assert_equal_to(system.n_vars(), 3);
+
+    FEType fe_type = system.variable_type(0);
+
+    std::unique_ptr<FEBase> fe(FEBase::build(dim, fe_type));
+
+    QGauss qrule(dim, libMesh::CONSTANT);
+
+    fe->attach_quadrature_rule(&qrule);
+
+    const std::vector<Real> & JxW = fe->get_JxW();
+
+    const std::vector<std::vector<Real>> & phi = fe->get_phi();
+
+  std::vector<Number> soln;
+  system.update_global_solution(soln);
+
+  const Real cc__HU_min = es.parameters.get<Real>("range_cc/HU/min"),
+             cc__HU_max = es.parameters.get<Real>("range_cc/HU/max"),
+             cc__min = es.parameters.set<Real>("range_cc/min");
+  const Real fb__HU_min = es.parameters.get<Real>("range_fb/HU/min"),
+             fb__HU_max = es.parameters.get<Real>("range_fb/HU/max"),
+             fb__min = es.parameters.set<Real>("range_fb/min");
+
+  pm_ptr->barrier();
+
+  if (0==global_processor_id())
+    {
+      Real tumour_volume = 0.0;
+      Real fibrosis_volume = 0.0;
+
+      for (const auto & elem : mesh.active_element_ptr_range())
+        {
+          std::vector<dof_id_type> dof_indices;
+          system.get_dof_map().dof_indices(elem, dof_indices);
+
+          std::vector<std::vector<dof_id_type>> dof_indices_var(3);
+          for (unsigned int v=0; v<3; v++)
+            system.get_dof_map().dof_indices(elem, dof_indices_var[v], v);
+
+          const unsigned int n_dofs     = dof_indices.size();
+          const unsigned int n_var_dofs = dof_indices_var[0].size();
+
+          fe->reinit(elem);
+
+          const unsigned int qp=0;
+
+          Number HU_(0.0), cc_(0.0), fb_(0.0);
+          for (std::size_t l=0; l<n_var_dofs; l++)
+            {
+              HU_ += phi[l][qp] * soln[dof_indices_var[0][l]];
+              cc_ += phi[l][qp] * soln[dof_indices_var[1][l]];
+              fb_ += phi[l][qp] * soln[dof_indices_var[2][l]];
+            }
+
+          if (HU_>=cc__HU_min && HU_<=cc__HU_max)
+            if (cc_>=cc__min)
+              tumour_volume += elem->volume();
+
+          if (HU_>=fb__HU_min && HU_<=fb__HU_max)
+            if (fb_>=fb__min)
+              fibrosis_volume += elem->volume();
+        }
+
+        csv << system.time << ',' << tumour_volume << ',' << fibrosis_volume << std::endl;
+    }
+
+  pm_ptr->barrier();
   // ...done
 }
