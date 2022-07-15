@@ -32,7 +32,7 @@ void pihna (LibMeshInit & init)
   ustruct.attach_init_function(initial_structure);
 
   GmshIO(mesh).read(es.parameters.get<std::string>("input_GMSH"));
-  mesh.prepare_for_use();
+  mesh.prepare_for_use(es.parameters.get<bool>("mesh/skip_renumber_nodes_and_elements"));
   mesh.print_info();
   GmshIO(mesh).write(es.parameters.get<std::string>("output_GMSH"));
   es.init();
@@ -114,6 +114,9 @@ void input (const std::string & file_name, EquationSystems & es)
   es.parameters.set<int>(name) = in(name, 1);
   name = "output_step";
   es.parameters.set<int>(name) = in(name, 1);
+
+  name = "mesh/skip_renumber_nodes_and_elements";
+  es.parameters.set<bool>(name) = in(name, true);
 
   name = "cells_min_capacity";
   es.parameters.set<Real>(name) = in(name, 0.0);
