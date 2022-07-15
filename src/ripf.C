@@ -41,7 +41,7 @@ void ripf (LibMeshInit & init)
   radiotherapy.attach_init_function(initial_radiotherapy);
 
   GmshIO(mesh).read(es.parameters.get<std::string>("input_GMSH"));
-  mesh.prepare_for_use(true);
+  mesh.prepare_for_use(es.parameters.get<bool>("mesh/skip_renumber_nodes_and_elements"));
   mesh.print_info();
   GmshIO(mesh).write(es.parameters.get<std::string>("output_GMSH"));
   es.init();
@@ -142,6 +142,9 @@ void input (const std::string & file_name, EquationSystems & es)
   es.parameters.set<int>(name) = in(name, 1);
   name = "output_step";
   es.parameters.set<int>(name) = in(name, 1);
+
+  name = "mesh/skip_renumber_nodes_and_elements";
+  es.parameters.set<bool>(name) = in(name, true);
 
   // general parameters including for radiotherapy (RT)
   {
