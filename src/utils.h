@@ -55,6 +55,11 @@ inline Real pow8 (Real v) { return pow2(pow4(v)); }
 inline Real pow9 (Real v) { return pow3(pow3(v)); }
 //-------------------------------------------------------------------------------------------------
 inline
+Real degrees_to_radians (const Real d) { return d*(libMesh::pi/180.0); }
+inline
+Real radians_to_degrees (const Real r) { return r*(180.0/libMesh::pi); }
+//-------------------------------------------------------------------------------------------------
+inline
 Real apply_lbound (const Real& L, const Real& X) { return ( X < L ? L : X ); }
 inline
 Real apply_ubound (const Real& X, const Real& U) { return ( X > U ? U : X ); }
@@ -182,6 +187,7 @@ std::tm date_now () {
   std::time_t now = std::time(0);
   return *std::localtime(&now);
 }
+//-------------------------------------------------------------------------------------------------
 inline
 std::set<int> export_integers (const std::string& s)
 {
@@ -203,6 +209,36 @@ std::set<int> export_integers (const std::string& s)
       tmp = "";
     }
   return numbers;
+}
+//-------------------------------------------------------------------------------------------------
+template <typename T>
+inline
+std::string number2string (const T& Number) {
+    std::ostringstream ss;
+    ss << Number;
+    return ss.str();
+}
+template <typename T>
+inline
+T string2number (const std::string& Text) {
+    std::istringstream ss(Text);
+    T result;
+    return ( ss >> result ? result : 0 );
+}
+//-------------------------------------------------------------------------------------------------
+inline
+Point rotate (const Point& v, const Real theta_x, const Real theta_y, const Real theta_z) {
+    const Real v_x = v(0),
+               v_y = v(1),
+               v_z = v(2);
+    const Real S_x = sin(theta_x), C_x = cos(theta_x),
+               S_y = sin(theta_y), C_y = cos(theta_y),
+               S_z = sin(theta_z), C_z = cos(theta_z);
+    Point r;
+    r(0) = v_z*(S_x*S_z + C_x*C_z*S_y) - v_y*(C_x*S_z - C_z*S_x*S_y) + C_y*C_z*v_x;
+    r(1) = v_y*(C_x*C_z + S_x*S_y*S_z) - v_z*(C_z*S_x - C_x*S_y*S_z) + C_y*S_z*v_x;
+    r(2) = C_x*C_y*v_z - S_y*v_x + C_y*S_x*v_y;
+    return r;
 }
 //-------------------------------------------------------------------------------------------------
 
