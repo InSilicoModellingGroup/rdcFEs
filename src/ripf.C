@@ -64,7 +64,8 @@ void ripf (LibMeshInit & init)
     csv.open(es.parameters.get<std::string>("output_CSV"));
   save_solution(csv, es);
 
-  const int output_step = es.parameters.get<int>("output_step");
+  const std::set<int> otp = export_integers(es.parameters.get<std::string>("output_time_points"));
+
   const int n_t_step = es.parameters.get<int>("time_step_number");
   for (int t=1; t<=n_t_step; t++)
     {
@@ -83,7 +84,7 @@ void ripf (LibMeshInit & init)
 
       check_solution(es, soln);
 
-      if (0 == t%output_step)
+      if (otp.end()!=otp.find(t))
         {
           ex2.write_timestep(ex2_filename, es, t, model.time);
           save_solution(csv, es);
@@ -141,7 +142,27 @@ void input (const std::string & file_name, EquationSystems & es)
   name = "time_step_number";
   es.parameters.set<int>(name) = in(name, 1);
   name = "output_step";
-  es.parameters.set<int>(name) = in(name, 1);
+  es.parameters.set<int>(name) = in(name, 0);
+
+  std::string otp;
+  if (0==es.parameters.get<int>("output_step"))
+    {
+      name = "output_time_points";
+      otp = in(name, std::to_string(es.parameters.get<int>("time_step_number")));
+      es.parameters.set<std::string>(name) = otp;
+    }
+  else
+    {
+      int t = es.parameters.get<int>("output_step");
+      std::string otp;
+      while (t<=es.parameters.get<int>("time_step_number"))
+        {
+          otp += " " + std::to_string(t) + " ";
+          t += es.parameters.get<int>("output_step");
+        }
+      name = "output_time_points";
+      es.parameters.set<std::string>(name) = otp;
+    }
 
   name = "mesh/skip_renumber_nodes_and_elements";
   es.parameters.set<bool>(name) = in(name, true);

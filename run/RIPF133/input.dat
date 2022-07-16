@@ -7,7 +7,7 @@ output_EXODUS  = 'Lung_Model.ex2'
 #
 time_step_number = 70
 time_step = 0.1
-output_step = 10
+output_time_points = ' 10 20 30 40 50 60 70 '
 #
 RT_dose/broad/fractions=28
 RT_dose/focus/fractions=8
