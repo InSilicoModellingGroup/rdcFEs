@@ -182,6 +182,28 @@ std::tm date_now () {
   std::time_t now = std::time(0);
   return *std::localtime(&now);
 }
+inline
+std::set<int> export_integers (const std::string& s)
+{
+  std::set<int> numbers;
+  // create a copy of the original string
+  std::stringstream ss;
+  ss << s;
+  // iterate till the end of the stream
+  std::string tmp;
+  while (!ss.eof())
+    {
+      // extract word by word from the stream
+      ss >> tmp;
+      // check the given word is integer or not
+      int n;
+      if (std::stringstream(tmp) >> n)
+          numbers.insert(n);
+      // to save from space at the end of string
+      tmp = "";
+    }
+  return numbers;
+}
 //-------------------------------------------------------------------------------------------------
 
 #endif // __UTILS_H__
