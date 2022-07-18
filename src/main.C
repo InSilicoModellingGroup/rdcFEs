@@ -9,6 +9,7 @@ PerfLog plog("rdcFEs");
 extern void adpm (LibMeshInit & );
 extern void pihna (LibMeshInit & );
 extern void ripf (LibMeshInit & );
+extern void process_mesh (LibMeshInit & );
 
 int main (int argc, char* argv[])
 {
@@ -25,6 +26,12 @@ int main (int argc, char* argv[])
       else if ("pihna"==s) pihna(init);
       // radiation-induced pulmonary fibrosis model
       else if ("ripf"==s) ripf(init);
+    }
+  else if (command_line.search(1, "-u"))
+    {
+      s = command_line.next(s);
+      //
+      if ("process_mesh"==s) process_mesh(init);
     }
   else return 1;
 
