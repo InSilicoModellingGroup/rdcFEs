@@ -529,25 +529,21 @@ void assemble_ripf (EquationSystems & es,
           if      (fb_old<0.0) ;
           else if (fb_old<1.0)
             {
-              if (HU_old<0.0)
+              if (HU_old>lambda_HU_r && HU_old<0.0)
                 {
                   Lombda = (1.0-pow2(fb_old))*(HU_old/lambda_HU_r);
                   Lombda__dHU = (1.0-pow2(fb_old))/lambda_HU_r;
                   Lombda__dcc = 0.0;
                   Lombda__dfb = -(2.0*fb_old)*(HU_old/lambda_HU_r);
                 }
-              else
+              else if (HU_old<lambda_HU_r)
                 {
                   Lombda = (1.0-pow2(fb_old));
                   Lombda__dHU = 0.0;
                   Lombda__dcc = 0.0;
-                  Lombda__dfb = -(2.0*fb_old)*(HU_old/lambda_HU_r);
+                  Lombda__dfb = -(2.0*fb_old);
                 }
               //
-              // Omecro = (1.0-pow2(fb_old));
-              // Omecro__dHU = 0.0;
-              // Omecro__dcc = 0.0;
-              // Omecro__dfb = -2.0*fb_old;
               if (fb_old<=omicro_fb_b)
                 {
                   Omecro = 4.0*(omicro_fb_b-pow2(omicro_fb_b));
