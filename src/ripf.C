@@ -800,15 +800,23 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
 
   const Real cc__HU_min = es.parameters.get<Real>("range_cc/HU/min"),
              cc__HU_max = es.parameters.get<Real>("range_cc/HU/max"),
-             cc__min = es.parameters.set<Real>("range_cc/min");
+             cc__min = es.parameters.get<Real>("range_cc/min");
   const Real fb__HU_min = es.parameters.get<Real>("range_fb/HU/min"),
              fb__HU_max = es.parameters.get<Real>("range_fb/HU/max"),
-             fb__min = es.parameters.set<Real>("range_fb/min");
+             fb__min = es.parameters.get<Real>("range_fb/min");
 
   pm_ptr->barrier();
 
   if (0==global_processor_id())
     {
+      /*
+      if (0.0==system.time)
+        {
+          // write the header of the CSV file
+          csv << "\"Time\",\"Tumour_Volume\",\"Fibrosis_Volume\"" << std::endl;
+        }
+      */
+
       Real tumour_volume = 0.0;
       Real fibrosis_volume = 0.0;
 
@@ -836,16 +844,18 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
               fb_ += phi[l][qp] * soln[dof_indices_var[2][l]];
             }
 
+          const Real V = elem->volume();
+
           if (HU_>=cc__HU_min && HU_<=cc__HU_max)
             if (cc_>=cc__min)
-              tumour_volume += elem->volume();
+              tumour_volume += V;
 
           if (HU_>=fb__HU_min && HU_<=fb__HU_max)
             if (fb_>=fb__min)
-              fibrosis_volume += elem->volume();
+              fibrosis_volume += V;
         }
-
-        csv << system.time << ',' << tumour_volume << ',' << fibrosis_volume << std::endl;
+      // save the data in the CSV file
+      csv << system.time << ',' << tumour_volume << ',' << fibrosis_volume << std::endl;
     }
 
   pm_ptr->barrier();
