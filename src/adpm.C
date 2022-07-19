@@ -7,11 +7,14 @@ static void assemble_adpm (EquationSystems & , const std::string & );
 static void check_solution (EquationSystems & );
 
 extern PerfLog plog;
+static Parallel::Communicator * pm_ptr = 0;
 
 void adpm (LibMeshInit & init)
 {
   Mesh mesh(init.comm(), 3);
   EquationSystems es(mesh);
+
+  pm_ptr = & init.comm();
 
   input("input.dat", es);
 
