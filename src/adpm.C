@@ -5,9 +5,11 @@ static void initial_tracts (EquationSystems & , const std::string & );
 static void initial_adpm (EquationSystems & , const std::string & );
 static void assemble_adpm (EquationSystems & , const std::string & );
 static void check_solution (EquationSystems & );
+static void save_solution (std::ofstream & , EquationSystems & );
 
 extern PerfLog plog;
 static Parallel::Communicator * pm_ptr = 0;
+static std::map<subdomain_id_type, Real> region_volume;
 
 void adpm (LibMeshInit & init)
 {
@@ -47,6 +49,11 @@ void adpm (LibMeshInit & init)
   ex2.write_equation_systems(ex2_filename, es);
   ex2.append(true);
 
+  std::ofstream csv;
+  if (0==global_processor_id())
+    csv.open(es.parameters.get<std::string>("output_CSV"));
+  save_solution(csv, es);
+
   const int output_step = es.parameters.get<int>("output_step");
   const int n_t_step = es.parameters.get<int>("time_step_number");
   for (int t=1; t<=n_t_step; t++)
@@ -66,7 +73,10 @@ void adpm (LibMeshInit & init)
       check_solution(es);
 
       if (0 == t%output_step)
-        ex2.write_timestep(ex2_filename, es, t, model.time);
+        {
+          ex2.write_timestep(ex2_filename, es, t, model.time);
+          save_solution(csv, es);
+        }
     }
 
   // ...done
@@ -107,6 +117,9 @@ void input (const std::string & file_name, EquationSystems & es)
   //
   name = "output_EXODUS";
   es.parameters.set<std::string>(name) = DIR + in(name, "output.ex2");
+  //
+  name = "output_CSV";
+  es.parameters.set<std::string>(name) = DIR + in(name, "output.csv");
 
   es.parameters.set<RealVectorValue>("velocity") = RealVectorValue(0., 0., 0.);
 
@@ -556,5 +569,10 @@ void check_solution (EquationSystems & es)
   // close solution vector and update the system
   system.solution->close();
   system.update();
+  // ...done
+}
+
+void save_solution (std::ofstream & csv, EquationSystems & es)
+{
   // ...done
 }
