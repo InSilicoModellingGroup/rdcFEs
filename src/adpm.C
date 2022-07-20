@@ -135,6 +135,13 @@ void input (const std::string & file_name, EquationSystems & es)
   name = "mesh/skip_renumber_nodes_and_elements";
   es.parameters.set<bool>(name) = in(name, true);
 
+  {
+    name = "range/A_b/min"; es.parameters.set<Real>(name) = in(name, 1.0e-12);
+    name = "range/A_b/max"; es.parameters.set<Real>(name) = in(name, 1.0e+00);
+    name = "range/Tau/min"; es.parameters.set<Real>(name) = in(name, 1.0e-12);
+    name = "range/Tau/max"; es.parameters.set<Real>(name) = in(name, 1.0e+00);
+  }
+
   // parameters for the species: PrP
   {
     name = "decay/PrP";             es.parameters.set<Real>(name) = in(name, 0.);
@@ -574,5 +581,122 @@ void check_solution (EquationSystems & es)
 
 void save_solution (std::ofstream & csv, EquationSystems & es)
 {
+  const MeshBase& mesh = es.get_mesh();
+  const unsigned int dim = mesh.mesh_dimension();
+
+  const TransientLinearImplicitSystem & system =
+    es.get_system<TransientLinearImplicitSystem>("ADPM");
+  libmesh_assert_equal_to(system.n_vars(), 3);
+
+    FEType fe_type = system.variable_type(0);
+
+    std::unique_ptr<FEBase> fe(FEBase::build(dim, fe_type));
+
+    QGauss qrule(dim, libMesh::CONSTANT);
+
+    fe->attach_quadrature_rule(&qrule);
+
+    const std::vector<Real> & JxW = fe->get_JxW();
+
+    const std::vector<std::vector<Real>> & phi = fe->get_phi();
+
+  std::vector<Number> soln;
+  system.update_global_solution(soln);
+
+  const Real A_b__min = es.parameters.get<Real>("range/A_b/min"),
+             A_b__max = es.parameters.get<Real>("range/A_b/max");
+  const Real Tau__min = es.parameters.get<Real>("range/Tau/min"),
+             Tau__max = es.parameters.get<Real>("range/Tau/max");
+
+  pm_ptr->barrier();
+
+  if (0==global_processor_id())
+    {
+      // calculate for the first time the volume of each region
+      if (0.0==system.time)
+        {
+          for (const auto & elem : mesh.active_element_ptr_range())
+            {
+              const subdomain_id_type ID = elem->subdomain_id();
+              //
+              const Real V = elem->volume();
+
+              auto iterator = region_volume.find(ID);
+              if (region_volume.end()==iterator)
+                region_volume.insert( std::make_pair(ID, V) );
+              else
+                iterator->second += V;
+            }
+          // write the header of the CSV file
+          /*
+          csv << "\"Time\"" << std::flush;
+          for (const auto & rv : region_volume)
+            {
+              const subdomain_id_type ID = rv.first;
+              const Real V = rv.second;
+              //
+              csv << ",\"A_b__" << ID << "\",\"Tau__" << ID << "\"" << std::flush;
+            }
+          csv << std::endl;
+          */
+        }
+      //
+      std::map<subdomain_id_type, Real> region_volume__A_b;
+      std::map<subdomain_id_type, Real> region_volume__Tau;
+      // initialize the map containers
+      for (const auto & rv : region_volume)
+        {
+          const subdomain_id_type ID = rv.first;
+          //
+          region_volume__A_b.insert( std::make_pair(ID, 0.0) );
+          region_volume__Tau.insert( std::make_pair(ID, 0.0) );
+        }
+      //
+      for (const auto & elem : mesh.active_element_ptr_range())
+        {
+          std::vector<dof_id_type> dof_indices;
+          system.get_dof_map().dof_indices(elem, dof_indices);
+
+          std::vector<std::vector<dof_id_type>> dof_indices_var(3);
+          for (unsigned int v=0; v<3; v++)
+            system.get_dof_map().dof_indices(elem, dof_indices_var[v], v);
+
+          const unsigned int n_dofs     = dof_indices.size();
+          const unsigned int n_var_dofs = dof_indices_var[0].size();
+
+          fe->reinit(elem);
+
+          const unsigned int qp=0;
+
+          Number A_b_(0.0), Tau_(0.0);
+          for (std::size_t l=0; l<n_var_dofs; l++)
+            {
+              A_b_ += phi[l][qp] * soln[dof_indices_var[1][l]];
+              Tau_ += phi[l][qp] * soln[dof_indices_var[2][l]];
+            }
+
+          const subdomain_id_type ID = elem->subdomain_id();
+          //
+          const Real V = elem->volume();
+
+          if (A_b_>=A_b__min && A_b_<=A_b__max)
+            region_volume__A_b[ID] += V;
+
+          if (Tau_>=Tau__min && Tau_<=Tau__max)
+            region_volume__Tau[ID] += V;
+        }
+      // save the data in the CSV file
+      csv << system.time << std::flush;
+      for (const auto & rv : region_volume)
+        {
+          const subdomain_id_type ID = rv.first;
+          const Real V = rv.second;
+          //
+          csv << ',' << (region_volume__A_b[ID]/V) << ',' << (region_volume__Tau[ID]/V) << std::flush;
+        }
+      csv << std::endl;
+    }
+
+  pm_ptr->barrier();
   // ...done
 }
