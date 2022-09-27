@@ -1,8 +1,12 @@
 #ifndef __UTILS_H__
 #define __UTILS_H__
 
+#include <ctime>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <string>
 #include <vector>
 #include <array>
 #include <map>
@@ -22,27 +26,43 @@
 #include "libmesh/vector_value.h"
 #include "libmesh/numeric_vector.h"
 #include "libmesh/mesh.h"
+#include "libmesh/node.h"
 #include "libmesh/elem.h"
 #include "libmesh/point.h"
 #include "libmesh/system.h"
 #include "libmesh/equation_systems.h"
+#include "libmesh/steady_solver.h"
+#include "libmesh/newton_solver.h"
+#include "libmesh/time_solver.h"
+#include "libmesh/diff_solver.h"
 #include "libmesh/fe.h"
+#include "libmesh/fe_base.h"
+#include "libmesh/fem_context.h"
 #include "libmesh/quadrature_gauss.h"
 #include "libmesh/dof_map.h"
 #include "libmesh/sparse_matrix.h"
-#include "libmesh/numeric_vector.h"
 #include "libmesh/dense_matrix.h"
 #include "libmesh/dense_vector.h"
 #include "libmesh/dense_submatrix.h"
 #include "libmesh/dense_subvector.h"
+#include "libmesh/boundary_info.h"
 #include "libmesh/gmsh_io.h"
 #include "libmesh/exodusII_io.h"
 #include "libmesh/enum_solver_package.h"
-#include "libmesh/getpot.h"
 #include "libmesh/linear_implicit_system.h"
 #include "libmesh/transient_system.h"
+#include "libmesh/fem_system.h"
+#include "libmesh/libmesh.h"
+#include "libmesh/libmesh_logging.h"
+#include "libmesh/string_to_enum.h"
+#include "libmesh/auto_ptr.h"
 
 using namespace libMesh;
+
+// Solaris Studio has no NAN
+#ifdef __SUNPRO_CC
+#define NAN (1.0/0.0)
+#endif
 
 //-------------------------------------------------------------------------------------------------
 inline Real pow2 (Real v) { return v*v; }

@@ -10,6 +10,8 @@ extern void adpm (LibMeshInit & );
 extern void pihna (LibMeshInit & );
 extern void ripf (LibMeshInit & );
 extern void process_mesh (LibMeshInit & );
+extern void solid (LibMeshInit & );
+
 
 int main (int argc, char* argv[])
 {
@@ -26,6 +28,10 @@ int main (int argc, char* argv[])
       else if ("pihna"==s) pihna(init);
       // radiation-induced pulmonary fibrosis model
       else if ("ripf"==s) ripf(init);
+    }
+  else if (command_line.search(1, "-s"))
+    {
+      solid(init);
     }
   else if (command_line.search(1, "-u"))
     {
