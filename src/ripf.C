@@ -260,6 +260,7 @@ void initial_radiotherapy (EquationSystems & es,
   libmesh_assert_equal_to(system_name, "RT");
 
   const MeshBase& mesh = es.get_mesh();
+  libmesh_assert_equal_to(mesh.mesh_dimension(), 3);
 
   ExplicitSystem & system =
     es.get_system<ExplicitSystem>("RT");
@@ -301,6 +302,7 @@ void initial_ripf (EquationSystems & es,
   libmesh_assert_equal_to(system_name, "RIPF");
 
   const MeshBase& mesh = es.get_mesh();
+  libmesh_assert_equal_to(mesh.mesh_dimension(), 3);
 
   TransientLinearImplicitSystem & system =
     es.get_system<TransientLinearImplicitSystem>("RIPF");
@@ -777,23 +779,11 @@ void check_solution (EquationSystems & es, std::vector<Number> & prev_soln)
 void save_solution (std::ofstream & csv, EquationSystems & es)
 {
   const MeshBase& mesh = es.get_mesh();
-  const unsigned int dim = mesh.mesh_dimension();
+  libmesh_assert_equal_to(mesh.mesh_dimension(), 3);
 
   const TransientLinearImplicitSystem & system =
     es.get_system<TransientLinearImplicitSystem>("RIPF");
   libmesh_assert_equal_to(system.n_vars(), 3);
-
-    FEType fe_type = system.variable_type(0);
-
-    std::unique_ptr<FEBase> fe(FEBase::build(dim, fe_type));
-
-    QGauss qrule(dim, libMesh::CONSTANT);
-
-    fe->attach_quadrature_rule(&qrule);
-
-    const std::vector<Real> & JxW = fe->get_JxW();
-
-    const std::vector<std::vector<Real>> & phi = fe->get_phi();
 
   std::vector<Number> soln;
   system.update_global_solution(soln);
@@ -810,6 +800,7 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
   if (0==global_processor_id())
     {
       /*
+      // write the header of the CSV file
       if (0.0==system.time)
         {
           // write the header of the CSV file
@@ -822,40 +813,52 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
 
       for (const auto & elem : mesh.active_element_ptr_range())
         {
-          std::vector<dof_id_type> dof_indices;
-          system.get_dof_map().dof_indices(elem, dof_indices);
-
           std::vector<std::vector<dof_id_type>> dof_indices_var(3);
           for (unsigned int v=0; v<3; v++)
             system.get_dof_map().dof_indices(elem, dof_indices_var[v], v);
+          libmesh_assert(elem->n_nodes() == dof_indices_var[0].size());
+          libmesh_assert(elem->n_nodes() == dof_indices_var[1].size());
+          libmesh_assert(elem->n_nodes() == dof_indices_var[2].size());
 
-          const unsigned int n_dofs     = dof_indices.size();
-          const unsigned int n_var_dofs = dof_indices_var[0].size();
-
-          fe->reinit(elem);
-
-          const unsigned int qp=0;
-
-          Number HU_(0.0), cc_(0.0), fb_(0.0);
-          for (std::size_t l=0; l<n_var_dofs; l++)
+          std::vector<Real> HU_, cc_, fb_;
+          for (unsigned int l=0; l<elem->n_nodes(); l++)
             {
-              HU_ += phi[l][qp] * soln[dof_indices_var[0][l]];
-              cc_ += phi[l][qp] * soln[dof_indices_var[1][l]];
-              fb_ += phi[l][qp] * soln[dof_indices_var[2][l]];
+              HU_.push_back( soln[dof_indices_var[0][l]] );
+              cc_.push_back( soln[dof_indices_var[1][l]] );
+              fb_.push_back( soln[dof_indices_var[2][l]] );
             }
 
-          const Real V = elem->volume();
+          {
+            bool do_include = true;
+            for (unsigned int l=0; l<elem->n_nodes() && do_include; l++)
+              {
+                if ( !(  HU_[l]>=cc__HU_min && HU_[l]<=cc__HU_max
+                      && cc_[l]>=cc__min ) )
+                  do_include = false;
+              }
+            if (do_include)
+              tumour_volume += elem->volume();
+          }
 
-          if (HU_>=cc__HU_min && HU_<=cc__HU_max)
-            if (cc_>=cc__min)
-              tumour_volume += V;
-
-          if (HU_>=fb__HU_min && HU_<=fb__HU_max)
-            if (fb_>=fb__min)
-              fibrosis_volume += V;
+          {
+            bool do_include = true;
+            for (unsigned int l=0; l<elem->n_nodes() && do_include; l++)
+              {
+                if ( !(  HU_[l]>=fb__HU_min && HU_[l]<=fb__HU_max
+                      && fb_[l]>=fb__min ) )
+                  do_include = false;
+              }
+            if (do_include)
+              fibrosis_volume += elem->volume();
+          }
+          // ...end of active finite elements loop
         }
+
       // save the data in the CSV file
-      csv << system.time << ',' << tumour_volume << ',' << fibrosis_volume << std::endl;
+      csv << system.time << std::flush;
+      csv << ',' << tumour_volume
+          << ',' << fibrosis_volume << std::flush;
+      csv << std::endl;
     }
 
   pm_ptr->barrier();
