@@ -9,7 +9,7 @@ static void save_solution (std::ofstream & , EquationSystems & );
 
 extern PerfLog plog;
 static Parallel::Communicator * pm_ptr = 0;
-static std::map<subdomain_id_type, Real> region_volume;
+static std::set<subdomain_id_type> parcellation;
 
 void adpm (LibMeshInit & init)
 {
@@ -230,6 +230,7 @@ void initial_adpm (EquationSystems & es,
   libmesh_assert_equal_to(system_name, "ADPM");
 
   const MeshBase& mesh = es.get_mesh();
+  libmesh_assert_equal_to(mesh.mesh_dimension(), 3);
 
   TransientLinearImplicitSystem & system =
     es.get_system<TransientLinearImplicitSystem>("ADPM");
@@ -260,6 +261,16 @@ void initial_adpm (EquationSystems & es,
   // close solution vector and update the system
   system.solution->close();
   system.update();
+
+  parcellation.clear();
+
+  for (const auto & elem : mesh.active_element_ptr_range())
+    {
+      const subdomain_id_type ID = elem->subdomain_id();
+      // check if this brain parcellation (region) has been listed
+      if (parcellation.end() == parcellation.find(ID))
+        parcellation.insert(ID);
+    }
   // ...done
 }
 
@@ -582,23 +593,11 @@ void check_solution (EquationSystems & es)
 void save_solution (std::ofstream & csv, EquationSystems & es)
 {
   const MeshBase& mesh = es.get_mesh();
-  const unsigned int dim = mesh.mesh_dimension();
+  libmesh_assert_equal_to(mesh.mesh_dimension(), 3);
 
   const TransientLinearImplicitSystem & system =
     es.get_system<TransientLinearImplicitSystem>("ADPM");
   libmesh_assert_equal_to(system.n_vars(), 3);
-
-    FEType fe_type = system.variable_type(0);
-
-    std::unique_ptr<FEBase> fe(FEBase::build(dim, fe_type));
-
-    QGauss qrule(dim, libMesh::CONSTANT);
-
-    fe->attach_quadrature_rule(&qrule);
-
-    const std::vector<Real> & JxW = fe->get_JxW();
-
-    const std::vector<std::vector<Real>> & phi = fe->get_phi();
 
   std::vector<Number> soln;
   system.update_global_solution(soln);
@@ -612,88 +611,73 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
 
   if (0==global_processor_id())
     {
-      // calculate for the first time the volume of each region
+      /*
+      // write the header of the CSV file
       if (0.0==system.time)
         {
-          for (const auto & elem : mesh.active_element_ptr_range())
-            {
-              const subdomain_id_type ID = elem->subdomain_id();
-              //
-              const Real V = elem->volume();
-
-              auto iterator = region_volume.find(ID);
-              if (region_volume.end()==iterator)
-                region_volume.insert( std::make_pair(ID, V) );
-              else
-                iterator->second += V;
-            }
-          // write the header of the CSV file
-          /*
           csv << "\"Time\"" << std::flush;
-          for (const auto & rv : region_volume)
-            {
-              const subdomain_id_type ID = rv.first;
-              const Real V = rv.second;
-              //
-              csv << ",\"A_b__" << ID << "\",\"Tau__" << ID << "\"" << std::flush;
-            }
+          for (const auto & ID : parcellation)
+            csv << ",\"A_b__" << ID << "\",\"Tau__" << ID << "\"" << std::flush;
           csv << std::endl;
-          */
         }
-      //
-      std::map<subdomain_id_type, Real> region_volume__A_b;
-      std::map<subdomain_id_type, Real> region_volume__Tau;
+      */
+
+      std::map<subdomain_id_type, Real> parcellation__A_b_volume;
+      std::map<subdomain_id_type, Real> parcellation__Tau_volume;
       // initialize the map containers
-      for (const auto & rv : region_volume)
+      for (const auto & ID : parcellation)
         {
-          const subdomain_id_type ID = rv.first;
-          //
-          region_volume__A_b.insert( std::make_pair(ID, 0.0) );
-          region_volume__Tau.insert( std::make_pair(ID, 0.0) );
+          parcellation__A_b_volume.insert( std::make_pair(ID, 0.0) );
+          parcellation__Tau_volume.insert( std::make_pair(ID, 0.0) );
         }
-      //
+
       for (const auto & elem : mesh.active_element_ptr_range())
         {
-          std::vector<dof_id_type> dof_indices;
-          system.get_dof_map().dof_indices(elem, dof_indices);
-
           std::vector<std::vector<dof_id_type>> dof_indices_var(3);
           for (unsigned int v=0; v<3; v++)
             system.get_dof_map().dof_indices(elem, dof_indices_var[v], v);
+          libmesh_assert(elem->n_nodes() == dof_indices_var[0].size());
+          libmesh_assert(elem->n_nodes() == dof_indices_var[1].size());
+          libmesh_assert(elem->n_nodes() == dof_indices_var[2].size());
 
-          const unsigned int n_dofs     = dof_indices.size();
-          const unsigned int n_var_dofs = dof_indices_var[0].size();
-
-          fe->reinit(elem);
-
-          const unsigned int qp=0;
-
-          Number A_b_(0.0), Tau_(0.0);
-          for (std::size_t l=0; l<n_var_dofs; l++)
+          std::vector<Real> A_b_, Tau_;
+          for (unsigned int l=0; l<elem->n_nodes(); l++)
             {
-              A_b_ += phi[l][qp] * soln[dof_indices_var[1][l]];
-              Tau_ += phi[l][qp] * soln[dof_indices_var[2][l]];
+              A_b_.push_back( soln[dof_indices_var[1][l]] );
+              Tau_.push_back( soln[dof_indices_var[2][l]] );
             }
 
           const subdomain_id_type ID = elem->subdomain_id();
-          //
-          const Real V = elem->volume();
 
-          if (A_b_>=A_b__min && A_b_<=A_b__max)
-            region_volume__A_b[ID] += V;
+          {
+            bool do_include = true;
+            for (unsigned int l=0; l<elem->n_nodes() && do_include; l++)
+              {
+                if ( !(  A_b_[l]>=A_b__min && A_b_[l]<=A_b__max ) )
+                  do_include = false;
+              }
+            if (do_include)
+              parcellation__A_b_volume[ID] += elem->volume();
+          }
 
-          if (Tau_>=Tau__min && Tau_<=Tau__max)
-            region_volume__Tau[ID] += V;
+          {
+            bool do_include = true;
+            for (unsigned int l=0; l<elem->n_nodes() && do_include; l++)
+              {
+                if ( !(  Tau_[l]>=Tau__min && Tau_[l]<=Tau__max ) )
+                  do_include = false;
+              }
+            if (do_include)
+              parcellation__Tau_volume[ID] += elem->volume();
+          }
+          // ...end of active finite elements loop
         }
+
       // save the data in the CSV file
       csv << system.time << std::flush;
-      for (const auto & rv : region_volume)
-        {
-          const subdomain_id_type ID = rv.first;
-          const Real V = rv.second;
-          //
-          csv << ',' << (region_volume__A_b[ID]/V) << ',' << (region_volume__Tau[ID]/V) << std::flush;
-        }
+      for (const auto & ID : parcellation)
+        csv << ',' << parcellation__A_b_volume[ID]
+            << ',' << parcellation__Tau_volume[ID] << std::flush;
       csv << std::endl;
     }
 
