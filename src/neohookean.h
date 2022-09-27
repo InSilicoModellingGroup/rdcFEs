@@ -29,14 +29,8 @@ class Neohookean
 {
 public:
   // Constructor
-  Neohookean (const std::vector<std::vector<RealGradient>>& dphi_in,
-              const subdomain_id_type mat_id,
-              const GetPot& args) :
-    dphi(dphi_in)
-  {
-    E = args("material/"+std::to_string(mat_id)+"/neohooke/Young", 1.0e+3);
-    nu = args("material/"+std::to_string(mat_id)+"/neohooke/Poisson", 0.3);
-  }
+  Neohookean (const std::vector<std::vector<RealGradient>>& dNdx, Real E, Real v) :
+    dphi(dNdx), Young(E), Poisson(v) {}
 
   inline
   void init_for_qp (unsigned int qp, VectorValue<Gradient>& gradX, bool calc_tangent)
@@ -115,8 +109,8 @@ private:
   void calculate_stress ()
   {
     // Lame material parameters
-    const Real mu = E / (2.0 * (1.0 + nu));
-    const Real lambda = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu));
+    const Real mu = Young / (2.0 * (1.0 + Poisson));
+    const Real lambda = Young * Poisson / ((1.0 + Poisson) * (1.0 - 2.0 * Poisson));
     // deformation gradient determinant
     const Real J = this->F.det();
 
@@ -138,8 +132,8 @@ private:
   void calculate_tangent ()
   {
     // Lame material parameters
-    const Real mu = E / (2.0 * (1.0 + nu));
-    const Real lambda = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu));
+    const Real mu = Young / (2.0 * (1.0 + Poisson));
+    const Real lambda = Young * Poisson / ((1.0 + Poisson) * (1.0 - 2.0 * Poisson));
     // deformation gradient determinant
     const Real J = this->F.det();
 
@@ -174,14 +168,13 @@ private:
   }
 
 private:
-  // Model parameters that define the material constants of a Neo-Hookean
-  // hyperelastic solid (medium)
-  Real E, nu;
-  // Deformation gradient tensor
+  // parameters (material constants) of the Neo-Hookean hyperelastic constitutive model
+  Real Young, Poisson;
+  // deformation gradient tensor
   RealTensor F;
   // Cauchy stress tensor
   RealTensor sigma;
-  // Tangent stiffness matrix - expressed in Voigt form
+  // tangent stiffness matrix - expressed in Voigt form
   DenseMatrix<Real> tangent_stiffness;
   //
   unsigned int current_qp;
