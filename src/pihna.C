@@ -173,6 +173,7 @@ void initial_structure (EquationSystems & es,
   libmesh_assert_equal_to(system_name, "uStructure");
 
   const MeshBase& mesh = es.get_mesh();
+  libmesh_assert_equal_to(mesh.mesh_dimension(), 3);
 
   ExplicitSystem & system =
     es.get_system<ExplicitSystem>("uStructure");
@@ -205,6 +206,7 @@ void initial_pihna (EquationSystems & es,
   libmesh_assert_equal_to(system_name, "PIHNA");
 
   const MeshBase& mesh = es.get_mesh();
+  libmesh_assert_equal_to(mesh.mesh_dimension(), 3);
 
   TransientLinearImplicitSystem & system =
     es.get_system<TransientLinearImplicitSystem>("PIHNA");
@@ -638,6 +640,7 @@ void assemble_pihna (EquationSystems & es,
 void check_solution (EquationSystems & es)
 {
   const MeshBase& mesh = es.get_mesh();
+  libmesh_assert_equal_to(mesh.mesh_dimension(), 3);
 
   TransientLinearImplicitSystem & system =
     es.get_system<TransientLinearImplicitSystem>("PIHNA");
