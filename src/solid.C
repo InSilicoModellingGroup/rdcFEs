@@ -17,6 +17,76 @@ void solid (LibMeshInit & init)
 
   input("input.dat", es);
 
+  // create the core (non-linear solid mechanics) system
+  SolidSystem & model = es.add_system<SolidSystem>("SolidSystem");
+  model.add_variable("x", FIRST, LAGRANGE);
+  model.add_variable("y", FIRST, LAGRANGE);
+  model.add_variable("z", FIRST, LAGRANGE);
+
+  // create an auxiliary system that stores the initial mesh
+  TransientExplicitSystem & aux_sys = es.add_system<TransientExplicitSystem>("SolidSystem::auxiliary");
+  aux_sys.add_variable("undefo_x", FIRST, LAGRANGE);
+  aux_sys.add_variable("undefo_y", FIRST, LAGRANGE);
+  aux_sys.add_variable("undefo_z", FIRST, LAGRANGE);
+
+  // create an additional system for the displacement vector field
+  ExplicitSystem & disp_sys = es.add_system<ExplicitSystem>("SolidSystem::displacement");
+  disp_sys.add_variable("U_x", FIRST, LAGRANGE);
+  disp_sys.add_variable("U_y", FIRST, LAGRANGE);
+  disp_sys.add_variable("U_z", FIRST, LAGRANGE);
+
+  // create an additional system for the hydrostatic pressure (mean solid stress)
+  ExplicitSystem & press_sys = es.add_system<ExplicitSystem>("SolidSystem::pressure");
+  press_sys.add_variable("p", CONSTANT, MONOMIAL);
+
+  GmshIO(mesh).read(es.parameters.get<std::string>("input_GMSH"));
+  mesh.prepare_for_use(es.parameters.get<bool>("mesh/skip_renumber_nodes_and_elements"));
+  mesh.print_info();
+  GmshIO(mesh).write(es.parameters.get<std::string>("output_GMSH"));
+  es.init();
+  es.print_info();
+
+  // perform important initializations to the solver and associated systems
+  model.save_initial_mesh();
+
+  const std::string ex2_filename =
+    es.parameters.get<std::string>("output_EXODUS");
+
+  const unsigned int n_t_step = 1.0 / model.deltat + 1;
+  for (unsigned int t_step=0; t_step<n_t_step; t_step++)
+    {
+      const Real progress = t_step * model.deltat;
+      es.parameters.set<Real>("time") = progress;
+      es.parameters.set<unsigned int>("step") = t_step;
+
+      out << "\n==== Time Step " << std::setw(4) << t_step;
+      out << " (" << std::fixed << std::setprecision(2) << std::setw(6) << (progress*100.) << "%)";
+      out << ", time = " << std::setw(7) << model.time;
+      out << " ====\n" << std::endl;
+
+      // solve for the solid (mechanics) equilibrium
+      model.solve();
+
+      // fill global solution vector from local ones
+      aux_sys.current_local_solution->close();
+      (*aux_sys.solution) = (*aux_sys.current_local_solution);
+      aux_sys.solution->close();
+
+      // reinitialize all systems
+      es.reinit();
+
+      // perform post-processing of the solid system
+      model.post_process();
+
+      // advance the Newmark solver of the solid system
+      model.time_solver->advance_timestep();
+
+      // specifically update the auxiliary system only
+      model.update_auxiliary();
+    }
+
+  ExodusII_IO(es.get_mesh()).write_equation_systems(ex2_filename, es);
+
   // ...done
 }
 
