@@ -31,7 +31,7 @@ class SolidSystem: public FEMSystem
 {
 public:
   // Constructor
-  SolidSystem (EquationSystems& es, const std::string& name, const unsigned int number) :
+  SolidSystem (EquationSystems& es, std::string name, unsigned int number) :
     FEMSystem(es, name, number)
   {
     // Add a time solver. We are just looking at a steady state problem here.
@@ -44,18 +44,18 @@ public:
 
   // context initialization
   virtual
-  void init_context (DiffContext&);
+  void init_context (DiffContext & );
 
   // finite element residual and jacobian calculations
   virtual
-  bool element_time_derivative (bool, DiffContext&);
+  bool element_time_derivative (bool , DiffContext & );
 
   // contributions for adding boundary conditions
   virtual
-  bool side_time_derivative (bool, DiffContext&);
+  bool side_time_derivative (bool , DiffContext & );
 
   virtual
-  bool eulerian_residual (bool, DiffContext&) { return false; }
+  bool eulerian_residual (bool , DiffContext & ) { return false; }
 
   virtual
   std::string system_type () const { return "SolidSystem"; }
@@ -73,8 +73,6 @@ public:
   void update_auxiliary ();
 
 public:
-  // Simulation parameters
-  GetPot args;
   // variable numbers of primary variables in the current system
   unsigned int var[3];
   // variable numbers of primary for an auxiliary system (used to store

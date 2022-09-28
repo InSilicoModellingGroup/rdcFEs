@@ -18,16 +18,19 @@
 
 // Source has been modified based on the original code produced by Robert Weidlich (2012)
 
+
 #include "./solid_system.h"
 
 using namespace libMesh;
 
 void SolidSystem::save_initial_mesh ()
 {
-  System& aux_sys = this->get_equation_systems().get_system("auxiliary");
+  EquationSystems & es = this->get_equation_systems();
 
-  // Loop over all nodes and copy the location from the current system to
-  // the auxiliary system.
+  System & aux_sys = es.get_system("SolidSystem::auxiliary");
+
+  // loop over all nodes and copy the location from this system to
+  // the auxiliary system
   for (const auto & node : this->get_mesh().local_node_ptr_range())
     for (unsigned int d=0; d<3; ++d)
       {
@@ -37,37 +40,29 @@ void SolidSystem::save_initial_mesh ()
         const Number value = this->current_local_solution->el(source_dof);
         aux_sys.current_local_solution->set(dest_dof, value);
       }
+  aux_sys.current_local_solution->close();
+  // fill global solution vector from local ones
+  (*aux_sys.solution) = (*aux_sys.current_local_solution);
+  aux_sys.solution->close();
 }
 
 void SolidSystem::init_data ()
 {
-  // get the default order of the used elements;
-  // assumption: just one type of elements in the mesh
-  const Order order = (*(this->get_mesh().elements_begin()))->default_order();
+  EquationSystems & es = this->get_equation_systems();
 
-  // Add the node positions as primary variables.
-  this->var[0] = this->add_variable("x", order);
-  this->var[1] = this->add_variable("y", order);
-  this->var[2] = this->add_variable("z", order);
+  // add the node positions as primary variables
+  this->var[0] = this->variable_number("x");
+  this->var[1] = this->variable_number("y");
+  this->var[2] = this->variable_number("z");
 
-  // Add variables for storing the initial mesh to an auxiliary system.
-  System & aux_sys = this->get_equation_systems().get_system("auxiliary");
-  this->undefo_var[0] = aux_sys.add_variable("undefo_x", order);
-  this->undefo_var[1] = aux_sys.add_variable("undefo_y", order);
-  this->undefo_var[2] = aux_sys.add_variable("undefo_z", order);
+  // add variables for storing the initial mesh to an auxiliary system
+  ExplicitSystem & aux_sys = es.get_system<ExplicitSystem>("SolidSystem::auxiliary");
+  this->undefo_var[0] = aux_sys.variable_number("undefo_x");
+  this->undefo_var[1] = aux_sys.variable_number("undefo_y");
+  this->undefo_var[2] = aux_sys.variable_number("undefo_z");
 
-  // Add variables for storing the initial mesh to an auxiliary system.
-  System & disp_sys = this->get_equation_systems().get_system("displacement");
-  disp_sys.add_variable("U_x", order);
-  disp_sys.add_variable("U_y", order);
-  disp_sys.add_variable("U_z", order);
-
-  // add variables for storing the initial mesh to an auxiliary system.
-  System & press_sys = this->get_equation_systems().get_system("pressure");
-  press_sys.add_variable("p", CONSTANT, MONOMIAL);
-
-  // set the time stepping options
-  this->deltat = this->args("solver/time_step", 0.1);
+  // set the time stepping for the solid solver
+  this->deltat = es.parameters.get<Real>("time_step");
 
   // so the parent's initialization after variables are defined
   FEMSystem::init_data();
@@ -86,36 +81,38 @@ void SolidSystem::init_data ()
 
   // set some options for the 'DiffSolver'
   DiffSolver & solver = *(this->time_solver->diff_solver().get());
-  solver.quiet = this->args("solver/quiet", false);
-  solver.max_nonlinear_iterations = this->args("solver/nonlinear/max_nonlinear_iterations", 100);
-  solver.relative_step_tolerance = this->args("solver/nonlinear/relative_step_tolerance", 1.e-3);
-  solver.relative_residual_tolerance = this->args("solver/nonlinear/relative_residual_tolerance", 1.e-8);
-  solver.absolute_residual_tolerance = this->args("solver/nonlinear/absolute_residual_tolerance", 1.e-8);
-  solver.verbose = ! this->args("solver/quiet", false);
+  solver.quiet = es.parameters.get<bool>("solver/quiet");
+  solver.max_nonlinear_iterations = es.parameters.get<int>("solver/nonlinear/max_nonlinear_iterations");
+  solver.relative_step_tolerance = es.parameters.get<Real>("solver/nonlinear/relative_step_tolerance");
+  solver.relative_residual_tolerance = es.parameters.get<Real>("solver/nonlinear/relative_residual_tolerance");
+  solver.absolute_residual_tolerance = es.parameters.get<Real>("solver/nonlinear/absolute_residual_tolerance");
+  solver.verbose = (! es.parameters.get<bool>("solver/quiet"));
 
-  ((NewtonSolver&) solver).require_residual_reduction = this->args("solver/nonlinear/require_reduction", false);
+  ((NewtonSolver &) solver).require_residual_reduction = es.parameters.get<bool>("solver/nonlinear/require_reduction");
 
-  // And the linear solver options
-  solver.max_linear_iterations = this->args("max_linear_iterations", 50000);
-  solver.initial_linear_tolerance = this->args("initial_linear_tolerance", 1.e-3);
+  // set the linear solver options
+  solver.max_linear_iterations = es.parameters.get<int>("solver/linear/max_linear_iterations");
+  solver.initial_linear_tolerance = es.parameters.get<Real>("solver/linear/initial_linear_tolerance");
 }
 
 void SolidSystem::update ()
 {
+  EquationSystems & es = this->get_equation_systems();
+
   System::update();
   this->mesh_position_set();
 
-  System & disp_sys = this->get_equation_systems().get_system("displacement");
-  System & aux_sys = this->get_equation_systems().get_system("auxiliary");
+  System & disp_sys = es.get_system("SolidSystem::displacement");
+  System & aux_sys = es.get_system("SolidSystem::auxiliary");
 
   disp_sys.current_local_solution->close();
   aux_sys.current_local_solution->close();
   this->current_local_solution->close();
-
+  //
   (*disp_sys.current_local_solution) = (*this->current_local_solution);
   disp_sys.current_local_solution->add(-1.0, *aux_sys.current_local_solution);
   disp_sys.current_local_solution->close();
-
+  //
   (*disp_sys.solution) = (*disp_sys.current_local_solution);
   disp_sys.solution->close();
 }
@@ -146,9 +143,10 @@ bool SolidSystem::element_time_derivative (bool request_jacobian,
 {
   // compute contribution from internal forces in elem_residual and contribution
   // from linearized internal forces (stiffness matrix) in 'elem_jacobian'
+  EquationSystems & es = this->get_equation_systems();
+
   FEMContext& c = cast_ref<FEMContext&>(context);
 
-  // Access directly the finite element
   const Elem& elem = c.get_elem();
 
   // First we get some references to cell-specific data that
@@ -156,36 +154,30 @@ bool SolidSystem::element_time_derivative (bool request_jacobian,
   FEBase* elem_fe = nullptr;
   c.get_element_fe(0, elem_fe);
 
-  // Element Jacobian * quadrature weights for interior integration
   const std::vector<Real>& JxW = elem_fe->get_JxW();
-
-  // Element basis functions
   const std::vector<std::vector<RealGradient>>& dphi = elem_fe->get_dphi();
 
-  // The number of local degrees of freedom in each variable
   const unsigned int n_u_dofs = c.n_dof_indices(this->var[0]);
   libmesh_assert(n_u_dofs == c.n_dof_indices(this->var[1]));
   libmesh_assert(n_u_dofs == c.n_dof_indices(this->var[2]));
 
   const unsigned int n_qpoints = c.get_element_qrule().n_points();
 
-  // Some matrices and vectors for storing the results of the constitutive
-  // law
   DenseMatrix<Real> stiff;
   DenseVector<Real> res;
 
-  // Instantiate the constitutive law
-  // Just calculate jacobian contribution when we need to
-  Neohookean material(dphi, elem.subdomain_id(), this->args);
+  const std::string material_ID = std::to_string(elem.subdomain_id());
+  const Real E = es.parameters.get<Real>("material/"+material_ID+"/Neohookean/Young"),
+             v = es.parameters.get<Real>("material/"+material_ID+"/Neohookean/Poisson");
+  Neohookean material(dphi, E, v);
 
-  // Get a reference to the auxiliary system
-  TransientExplicitSystem& aux_system =
-    this->get_equation_systems().get_system<TransientExplicitSystem>("auxiliary");
+  TransientExplicitSystem & aux_system =
+    es.get_system<TransientExplicitSystem>("SolidSystem::auxiliary");
 
-  // Assume symmetry of local stiffness matrices
-  const bool use_symmetry = this->args("assembly/use_symmetry", false);
+  // assume symmetry of local stiffness matrices
+  const bool use_symmetry = es.parameters.get<bool>("solver/assembly_use_symmetry");
 
-  // Now we will build the element Jacobian and residual, calculated at each
+  // build the element Jacobian and residual, calculated at each
   // quadrature point by summing the solution degree-of-freedom values by
   // the appropriate weight functions.
   // This class just takes care of the assembly. The matrix of
@@ -249,49 +241,39 @@ bool SolidSystem::element_time_derivative (bool request_jacobian,
 bool SolidSystem::side_time_derivative (bool request_jacobian,
                                         DiffContext& context)
 {
-  FEMContext& c = cast_ref<FEMContext &>(context);
+  EquationSystems & es = this->get_equation_systems();
+
+  FEMContext& c = cast_ref<FEMContext&>(context);
 
   const Elem& elem = c.get_elem();
 
-  TransientExplicitSystem& aux_system =
-    this->get_equation_systems().get_system<TransientExplicitSystem>("auxiliary");
+  TransientExplicitSystem & aux_system =
+    es.get_system<TransientExplicitSystem>("SolidSystem::auxiliary");
 
-  // The BC are stored in the simulation parameters as array containing sequences of
-  // four numbers: Id of the side for the displacements and three values describing the
-  // displacement. E.g.: bc/displacement = '5 nan nan -1.0'. This will move all nodes of
+  // BCs are stored in the simulation parameters as array containing sequences of
+  // 4 numbers: Id of the side for the displacements and three values describing the
+  // displacement, e.g.: bc/displacement = '5 nan nan -1.0'. This will move all nodes of
   // side 5 about 1.0 units down the z-axis while leaving all other directions unrestricted
 
   // get the current load step
-  const Real ratio = this->get_equation_systems().parameters.get<Real>("progress")
+  const Real ratio = es.parameters.get<Real>("time")
                    * 1.000001;
-  // get number of BCs to enforce
-  boundary_id_type num_bc =
-    cast_int<boundary_id_type>(this->args.vector_variable_size("bc/displacement"));
 
-  libmesh_error_msg_if(num_bc % 4 != 0,
-                       "ERROR, Odd number of values in displacement boundary condition.");
-  num_bc /= 4;
+  const std::set<int> BCs_set = export_integers(es.parameters.get<std::string>("BCs"));
   // apply Dirichlet (displacement) boundary conditions using the penalty method
-
-  for (boundary_id_type nbc=0; nbc<num_bc; nbc++)
+  for (auto bc : BCs_set)
     {
-      // get IDs of the side for this BC
-      boundary_id_type positive_boundary_id =
-        cast_int<boundary_id_type>(this->args("bc/displacement", 1, nbc*4));
-
-      // current side may not be on the boundary to be restricted
-      if ( ! this->get_mesh().get_boundary_info().has_boundary_id( &c.get_elem(),
-                                                                    c.get_side(),
-                                                                   positive_boundary_id ) )
+      // get ID of the side for this BC
+      const boundary_id_type ID = cast_int<boundary_id_type>(bc);
+      // check if current side of FE is on the boundary that needs being restricted
+      if ( ! es.get_mesh().get_boundary_info().has_boundary_id(&c.get_elem(), c.get_side(), ID) )
         continue;
 
-      Point diff_value;
-      for (unsigned int d=0; d<3; ++d)
-        diff_value(d) = this->args("bc/displacement", NAN, ((nbc*4+1)+d));
+      Point diff_value(es.parameters.get<Point>("BC/"+std::to_string(bc)+"/displacement"));
       // ...now scale according to current load step
       diff_value *= ratio;
 
-      const Real penalty_number = this->args("bc/displacement_penalty", 1.0e+7);
+      const Real penalty_number = es.parameters.get<Real>("BCs/displacement_penalty");
 
       FEBase* fe = nullptr;
       c.get_side_fe(0, fe);
@@ -358,22 +340,24 @@ bool SolidSystem::side_time_derivative (bool request_jacobian,
 
 void SolidSystem::post_process ()
 {
+  EquationSystems & es = this->get_equation_systems();
+
   FEType fe_type = this->get_dof_map().variable_type(0);
 
-  QGauss qrule (3, THIRD);
+  QGauss qrule(3, THIRD);
 
   std::unique_ptr<FEBase> fe(FEBase::build(3, fe_type));
   fe->attach_quadrature_rule(&qrule);
 
   ExplicitSystem& aux_system =
-    this->get_equation_systems().get_system<TransientExplicitSystem>("auxiliary");
+    es.get_system<TransientExplicitSystem>("SolidSystem::auxiliary");
   libmesh_assert_equal_to(aux_system.n_vars(), 3);
 
   ExplicitSystem& press_sys =
-    this->get_equation_systems().get_system<ExplicitSystem>("pressure");
-  libmesh_assert_equal_to(aux_system.n_vars(), 1);
+    es.get_system<ExplicitSystem>("SolidSystem::pressure");
+  libmesh_assert_equal_to(press_sys.n_vars(), 1);
 
-  // Loop over the local active FEs in the mesh.
+  // loop over the local active FEs in the mesh.
   for (const auto & elem : this->get_mesh().active_local_element_ptr_range())
     {
       std::vector<dof_id_type> dof_indices;
@@ -392,15 +376,17 @@ void SolidSystem::post_process ()
       std::vector<dof_id_type> dof_indices_P;
       press_sys.get_dof_map().dof_indices(elem, dof_indices_P);
 
-      // The number of local degrees of freedom in each variable
       const unsigned int n_u_dofs = dof_indices_x.size();
       libmesh_assert(n_u_dofs == dof_indices_y.size());
       libmesh_assert(n_u_dofs == dof_indices_z.size());
 
       const std::vector<std::vector<RealGradient>>& dphi = fe->get_dphi();
-      fe->reinit (elem);
+      fe->reinit(elem);
 
-      Neohookean material(dphi, elem->subdomain_id(), this->args);
+      const std::string material_ID = std::to_string(elem->subdomain_id());
+      const Real E = es.parameters.get<Real>("material/"+material_ID+"/Neohookean/Young"),
+                 v = es.parameters.get<Real>("material/"+material_ID+"/Neohookean/Poisson");
+      Neohookean material(dphi, E, v);
 
       // average Cauchy stress tensor calculated for the FE
       RealTensor stress_Cauchy;
@@ -443,14 +429,16 @@ void SolidSystem::post_process ()
 
 void SolidSystem::update_auxiliary ()
 {
-  TransientExplicitSystem& aux_system =
-    this->get_equation_systems().get_system<TransientExplicitSystem>("auxiliary");
+  EquationSystems & es = this->get_equation_systems();
 
+  TransientExplicitSystem & aux_system =
+    es.get_system<TransientExplicitSystem>("SolidSystem::auxiliary");
+
+  // close all solution vector containers
   aux_system.current_local_solution->close();
   aux_system.old_local_solution->close();
-
-  // Copy the 'old' to the 'older' solution vector
+  // copy the 'old' to the 'older' solution vector
   (*aux_system.older_local_solution) = (*aux_system.old_local_solution);
-  // Now copy the 'current' to the 'old' solution vector
+  // copy the 'current' to the 'old' solution vector
   (*aux_system.old_local_solution) = (*aux_system.current_local_solution);
 }
