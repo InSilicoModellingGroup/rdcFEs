@@ -52,14 +52,14 @@ void solid (LibMeshInit & init)
   const std::string ex2_filename =
     es.parameters.get<std::string>("output_EXODUS");
 
-  const unsigned int n_t_step = 1.0 / model.deltat + 1;
-  for (unsigned int t_step=0; t_step<n_t_step; t_step++)
+  const int n_t_step = es.parameters.get<int>("time_step_number");
+  for (int t=1; t<=n_t_step; t++)
     {
-      const Real progress = t_step * model.deltat;
+      const Real progress = t * model.deltat;
       es.parameters.set<Real>("time") = progress;
-      es.parameters.set<unsigned int>("step") = t_step;
+      es.parameters.set<unsigned int>("step") = t;
 
-      out << "\n==== Time Step " << std::setw(4) << t_step;
+      out << "\n==== Time Step " << std::setw(4) << t;
       out << " (" << std::fixed << std::setprecision(2) << std::setw(6) << (progress*100.) << "%)";
       out << ", time = " << std::setw(7) << model.time;
       out << " ====\n" << std::endl;
@@ -118,6 +118,8 @@ void input (const std::string & file_name, EquationSystems & es)
 
   name = "time_step";
   es.parameters.set<Real>(name) = in(name, 1.0e-9);
+  name = "time_step_number";
+  es.parameters.set<int>(name) = 1.0/es.parameters.get<Real>("time_step");
   name = "time";
   es.parameters.set<Real>(name) = 0.0;
   name = "phase";
