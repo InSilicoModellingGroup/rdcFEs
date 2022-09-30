@@ -1,6 +1,7 @@
 #include "./solid_system.h"
 
 static void input (const std::string & , EquationSystems & );
+static void initial_fibres (EquationSystems & , const std::string & );
 
 extern PerfLog plog;
 static Parallel::Communicator * pm_ptr = 0;
@@ -34,6 +35,12 @@ void solid (LibMeshInit & init)
   disp_sys.add_variable("u_x", FIRST, LAGRANGE);
   disp_sys.add_variable("u_y", FIRST, LAGRANGE);
   disp_sys.add_variable("u_z", FIRST, LAGRANGE);
+
+  ExplicitSystem & fibre_sys = es.add_system<ExplicitSystem>("SolidSystem::fibre");
+  fibre_sys.add_variable("fibre_x", CONSTANT, MONOMIAL);
+  fibre_sys.add_variable("fibre_y", CONSTANT, MONOMIAL);
+  fibre_sys.add_variable("fibre_z", CONSTANT, MONOMIAL);
+  fibre_sys.attach_init_function(initial_fibres);
 
   // create an additional system for the hydrostatic pressure (mean solid stress)
   ExplicitSystem & press_sys = es.add_system<ExplicitSystem>("SolidSystem::pressure");
@@ -135,6 +142,11 @@ void input (const std::string & file_name, EquationSystems & es)
   //
   name = "output_EXODUS";
   es.parameters.set<std::string>(name) = DIR + in(name, "output.ex2");
+  //
+  name = "input_fibres";
+  es.parameters.set<std::string>(name) = in(name, ".");
+  if (0==global_processor_id() && name!=".")
+    std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+es.parameters.get<std::string>(name)).c_str());
 
   name = "time_step";
   es.parameters.set<Real>(name) = in(name, 1.0e-9);
@@ -227,5 +239,41 @@ void input (const std::string & file_name, EquationSystems & es)
       es.parameters.set<Real>(name) = in(name, 0.3);
     }
 
+  // ...done
+}
+
+void initial_fibres (EquationSystems & es,
+                     const std::string & libmesh_dbg_var(system_name))
+{
+  libmesh_assert_equal_to(system_name, "SolidSystem::fibre");
+
+  const MeshBase& mesh = es.get_mesh();
+
+  ExplicitSystem & system = es.get_system<ExplicitSystem>("SolidSystem::fibre");
+  libmesh_assert_equal_to(system.n_vars(), 3);
+
+  const std::string name(es.parameters.get<std::string>("input_fibres"));
+  if ("."==name) return;
+
+  std::ifstream fin(name.c_str());
+
+  for (const auto & elem : mesh.active_element_ptr_range())
+    {
+      Real x_, y_, z_;
+      fin >> x_ >> y_ >> z_;
+
+      std::vector<std::vector<dof_id_type>> dof_indices_F_var(3);
+
+      system.get_dof_map().dof_indices(elem, dof_indices_F_var[0], 0);
+      system.solution->set(dof_indices_F_var[0][0], x_);
+      system.get_dof_map().dof_indices(elem, dof_indices_F_var[1], 1);
+      system.solution->set(dof_indices_F_var[1][0], y_);
+      system.get_dof_map().dof_indices(elem, dof_indices_F_var[2], 2);
+      system.solution->set(dof_indices_F_var[2][0], z_);
+    }
+
+  // close solution vector and update the system
+  system.solution->close();
+  system.update();
   // ...done
 }
