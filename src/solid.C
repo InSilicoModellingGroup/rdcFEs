@@ -100,12 +100,18 @@ void input (const std::string & file_name, EquationSystems & es)
   name = "directory";
   const std::string DIR = in(name, DIR_default) + "/";
 
+  // remove if directory to store simulation results exists already
+  if (0==global_processor_id())
+    std::system(std::string("rm -rf "+DIR).c_str());
+  pm_ptr->barrier();
   // create a directory to store simulation results
   if (0==global_processor_id())
     std::system(std::string("mkdir "+DIR).c_str());
+  pm_ptr->barrier();
   // create a copy of the input file containing all model parameters
   if (0==global_processor_id())
     std::system(std::string("cp "+file_name+" "+DIR+file_name).c_str());
+  pm_ptr->barrier();
 
   name = "input_GMSH";
   es.parameters.set<std::string>(name) = in(name, "input.msh");
