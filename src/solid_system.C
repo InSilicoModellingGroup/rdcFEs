@@ -57,9 +57,9 @@ void SolidSystem::init_data ()
 
   // add variables for storing the initial mesh to an auxiliary system
   ExplicitSystem & aux_sys = es.get_system<ExplicitSystem>("SolidSystem::auxiliary");
-  this->undefo_var[0] = aux_sys.variable_number("undefo_x");
-  this->undefo_var[1] = aux_sys.variable_number("undefo_y");
-  this->undefo_var[2] = aux_sys.variable_number("undefo_z");
+  this->undefo_var[0] = aux_sys.variable_number("undeformed_x");
+  this->undefo_var[1] = aux_sys.variable_number("undeformed_y");
+  this->undefo_var[2] = aux_sys.variable_number("undeformed_z");
 
   // set the time stepping for the solid solver
   this->deltat = es.parameters.get<Real>("time_step");

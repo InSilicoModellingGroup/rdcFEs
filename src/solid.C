@@ -25,15 +25,15 @@ void solid (LibMeshInit & init)
 
   // create an auxiliary system that stores the initial mesh
   TransientExplicitSystem & aux_sys = es.add_system<TransientExplicitSystem>("SolidSystem::auxiliary");
-  aux_sys.add_variable("undefo_x", FIRST, LAGRANGE);
-  aux_sys.add_variable("undefo_y", FIRST, LAGRANGE);
-  aux_sys.add_variable("undefo_z", FIRST, LAGRANGE);
+  aux_sys.add_variable("undeformed_x", FIRST, LAGRANGE);
+  aux_sys.add_variable("undeformed_y", FIRST, LAGRANGE);
+  aux_sys.add_variable("undeformed_z", FIRST, LAGRANGE);
 
   // create an additional system for the displacement vector field
   ExplicitSystem & disp_sys = es.add_system<ExplicitSystem>("SolidSystem::displacement");
-  disp_sys.add_variable("U_x", FIRST, LAGRANGE);
-  disp_sys.add_variable("U_y", FIRST, LAGRANGE);
-  disp_sys.add_variable("U_z", FIRST, LAGRANGE);
+  disp_sys.add_variable("u_x", FIRST, LAGRANGE);
+  disp_sys.add_variable("u_y", FIRST, LAGRANGE);
+  disp_sys.add_variable("u_z", FIRST, LAGRANGE);
 
   // create an additional system for the hydrostatic pressure (mean solid stress)
   ExplicitSystem & press_sys = es.add_system<ExplicitSystem>("SolidSystem::pressure");
