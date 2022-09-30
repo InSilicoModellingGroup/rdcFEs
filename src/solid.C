@@ -51,6 +51,14 @@ void solid (LibMeshInit & init)
 
   const std::string ex2_filename =
     es.parameters.get<std::string>("output_EXODUS");
+  const std::set<int> otp = export_integers(es.parameters.get<std::string>("output_time_points"));
+
+  // save this initial time snapshot
+  {
+    std::stringstream fn;
+    fn << ex2_filename << "." << std::setfill('0') << std::setw(6) << 0 << ".ex2";
+    ExodusII_IO(es.get_mesh()).write_equation_systems(fn.str(), es);
+  }
 
   const int n_t_step = es.parameters.get<int>("time_step_number");
   for (int t=1; t<=n_t_step; t++)
@@ -83,9 +91,15 @@ void solid (LibMeshInit & init)
 
       // specifically update the auxiliary system only
       model.update_auxiliary();
-    }
 
-  ExodusII_IO(es.get_mesh()).write_equation_systems(ex2_filename, es);
+      // save this (current) time snapshot
+      if (otp.end()!=otp.find(t))
+      {
+        std::stringstream fn;
+        fn << ex2_filename << "." << std::setfill('0') << std::setw(6) << t << ".ex2";
+        ExodusII_IO(es.get_mesh()).write_equation_systems(fn.str(), es);
+      }
+    }
 
   // ...done
 }
@@ -126,6 +140,29 @@ void input (const std::string & file_name, EquationSystems & es)
   es.parameters.set<Real>(name) = in(name, 1.0e-9);
   name = "time_step_number";
   es.parameters.set<int>(name) = 1.0/es.parameters.get<Real>("time_step");
+  name = "output_step";
+  es.parameters.set<int>(name) = in(name, 0);
+
+  std::string otp;
+  if (0==es.parameters.get<int>("output_step"))
+    {
+      name = "output_time_points";
+      otp = in(name, std::to_string(es.parameters.get<int>("time_step_number")));
+      es.parameters.set<std::string>(name) = otp;
+    }
+  else
+    {
+      int t = es.parameters.get<int>("output_step");
+      std::string otp;
+      while (t<=es.parameters.get<int>("time_step_number"))
+        {
+          otp += " " + std::to_string(t) + " ";
+          t += es.parameters.get<int>("output_step");
+        }
+      name = "output_time_points";
+      es.parameters.set<std::string>(name) = otp;
+    }
+
   name = "time";
   es.parameters.set<Real>(name) = 0.0;
   name = "phase";
