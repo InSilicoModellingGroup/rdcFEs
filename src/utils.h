@@ -261,6 +261,25 @@ Point rotate (const Point& v, const Real theta_x, const Real theta_y, const Real
     return r;
 }
 //-------------------------------------------------------------------------------------------------
+inline
+RealTensorValue tensor (const RealVectorValue& a, const RealVectorValue& b)
+{
+  RealTensorValue a_b;
+  a_b(0,0) = a(0)*b(0); a_b(0,1) = a(0)*b(1); a_b(0,2) = a(0)*b(2);
+  a_b(1,0) = a(1)*b(0); a_b(1,1) = a(1)*b(1); a_b(1,2) = a(1)*b(2);
+  a_b(2,0) = a(2)*b(0); a_b(2,1) = a(2)*b(1); a_b(2,2) = a(2)*b(2);
+  return a_b;
+}
+inline
+RealTensorValue tensor (const RealVectorValue& a)
+{
+  RealTensorValue a_a;
+  a_a(0,0) = a(0)*a(0); a_a(0,1) = a(0)*a(1); a_a(0,2) = a(0)*a(2);
+  a_a(1,0) = a_a(0,1);  a_a(1,1) = a(1)*a(1); a_a(1,2) = a(1)*a(2);
+  a_a(2,0) = a_a(0,2);  a_a(2,1) = a_a(1,2);  a_a(2,2) = a(2)*a(2);
+  return a_a;
+}
+//-------------------------------------------------------------------------------------------------
 
 #include "./ida.h"
 
