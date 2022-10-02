@@ -97,10 +97,17 @@ public:
   }
 
   inline
+  const RealTensor& get_deformation_gradient_tensor () const
+  {
+    // return the deformation gradient tensor - current configuration
+    return this->F;
+  }
+
+  inline
   const RealTensor& get_stress_tensor () const
   {
-    // return the Cauchy stress tensor for the current state
-    return sigma;
+    // return the Cauchy stress tensor - current configuration
+    return this->sigma;
   }
 
 private:
