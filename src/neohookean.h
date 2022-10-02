@@ -118,21 +118,23 @@ private:
     // Lame material parameters
     const Real mu = Young / (2.0 * (1.0 + Poisson));
     const Real lambda = Young * Poisson / ((1.0 + Poisson) * (1.0 - 2.0 * Poisson));
-    // deformation gradient determinant
+    // fibre (axial stiffness) material parameter
+    const Real koppa = FibreStiffness;
+
+    const RealTensor b = (this->F*this->F.transpose()); // Finger tensor
+    RealTensor I3; // identity tensor
+    I3(0,0) = I3(1,1) = I3(2,2) = 1.0;
+
+    // 1st invariant - trace of the left Green-Cauchy deformation tensor
+    const Real I = (b(0,0)+b(1,1)+b(2,2));
+    // 3rd invariant (square root of) - deformation gradient tensor determinant
     const Real J = this->F.det();
 
-    const RealTensor Ft = F.transpose();
-    const RealTensor C = Ft * F;
-    const RealTensor invC = C.inverse();
-    RealTensor I;
-    I(0,0) = I(1,1) = I(2,2) = 1.0;
 
-    // 2nd Piola-Kirchhoff stress tensor
-    const RealTensor S = 0.5*lambda*(J*J-1.0) * invC + mu * (I - invC);
-    // Kirchhoff stress tensor
-    const RealTensor tau = (F * S) * Ft;
     // Cauchy stress tensor
-    this->sigma = (1.0/J) * tau;
+    this->sigma = (0.5*lambda*(J-1.0/J)) * I3
+                + (mu/J) * (b - I3)
+                + (koppa*IV/J) * a_a;
   }
 
   inline
@@ -141,7 +143,7 @@ private:
     // Lame material parameters
     const Real mu = Young / (2.0 * (1.0 + Poisson));
     const Real lambda = Young * Poisson / ((1.0 + Poisson) * (1.0 - 2.0 * Poisson));
-    // deformation gradient determinant
+    // deformation gradient tensor determinant
     const Real J = this->F.det();
 
     this->tangent_stiffness.resize(6, 6);
@@ -150,10 +152,10 @@ private:
     for (unsigned int i=0; i<3; ++i) {
       for (unsigned int j=0; j<3; ++j) {
         if (i == j) {
-          this->tangent_stiffness(i+0,j+0) = 2.0 * mu + lambda;
-          this->tangent_stiffness(i+3,j+3) = mu - 0.5 * lambda * (J*J-1.0);
+          this->tangent_stiffness(i+0,j+0) = 2.0*mu + lambda;
+          this->tangent_stiffness(i+3,j+3) = mu - 0.5*lambda*(J*J-1.0);
         } else {
-          this->tangent_stiffness(i+0,j+0) = lambda * (J*J);
+          this->tangent_stiffness(i+0,j+0) = lambda*(J*J);
         }
       }
     }
