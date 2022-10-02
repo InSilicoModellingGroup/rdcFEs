@@ -166,16 +166,20 @@ bool SolidSystem::element_time_derivative (bool request_jacobian,
   DenseMatrix<Real> stiff;
   DenseVector<Real> res;
 
-  const std::string material_ID = std::to_string(elem.subdomain_id());
-  const Real E = es.parameters.get<Real>("material/"+material_ID+"/Neohookean/Young"),
-             v = es.parameters.get<Real>("material/"+material_ID+"/Neohookean/Poisson");
-  Neohookean material(dphi, E, v);
-
   TransientExplicitSystem & aux_system =
     es.get_system<TransientExplicitSystem>("SolidSystem::auxiliary");
 
+  ExplicitSystem & fibre_sys =
+    es.get_system<ExplicitSystem>("SolidSystem::fibre");
+
   // assume symmetry of local stiffness matrices
   const bool use_symmetry = es.parameters.get<bool>("solver/assembly_use_symmetry");
+
+  const std::string material_ID = std::to_string(elem.subdomain_id());
+  const Real E = es.parameters.get<Real>("material/"+material_ID+"/Neohookean/Young"),
+             v = es.parameters.get<Real>("material/"+material_ID+"/Neohookean/Poisson"),
+             K = es.parameters.get<Real>("material/"+material_ID+"/Neohookean/FibreStiffness");
+  Neohookean material(dphi, E, v, K);
 
   // build the element Jacobian and residual, calculated at each
   // quadrature point by summing the solution degree-of-freedom values by
@@ -186,7 +190,21 @@ bool SolidSystem::element_time_derivative (bool request_jacobian,
 
   std::vector<dof_id_type> undefo_dofs[3];
   for (unsigned int d=0; d<3; ++d)
-    aux_system.get_dof_map().dof_indices(&c.get_elem(), undefo_dofs[d], this->undefo_var[d]);
+    aux_system.get_dof_map().dof_indices(&elem, undefo_dofs[d], this->undefo_var[d]);
+
+  std::vector<dof_id_type> dof_indices_F_var[6];
+  for (unsigned int f=0; f<6; f++)
+    fibre_sys.get_dof_map().dof_indices(&elem, dof_indices_F_var[f], f);
+
+  // fibre direction (unit) vector - reference configuration
+  RealVectorValue eta;
+  for (unsigned int d=0; d<3; ++d)
+    {
+      Number coord;
+      fibre_sys.current_local_solution->get(dof_indices_F_var[d], &coord);
+
+      eta(d) = coord;
+    }
 
   for (unsigned int qp=0; qp!=n_qpoints; qp++)
     {
@@ -203,7 +221,7 @@ bool SolidSystem::element_time_derivative (bool request_jacobian,
 
       // Initialize the constitutive formulation with the current displacement
       // gradient
-      material.init_for_qp(qp, grad_X, request_jacobian);
+      material.init_for_qp(qp, grad_X, eta, request_jacobian);
 
       // Acquire, scale and assemble residual and stiffness
       for (unsigned int i=0; i<n_u_dofs; i++)
@@ -357,6 +375,10 @@ void SolidSystem::post_process ()
     es.get_system<ExplicitSystem>("SolidSystem::pressure");
   libmesh_assert_equal_to(press_sys.n_vars(), 1);
 
+  ExplicitSystem & fibre_sys =
+    es.get_system<ExplicitSystem>("SolidSystem::fibre");
+  libmesh_assert_equal_to(fibre_sys.n_vars(), 6);
+
   // loop over the local active FEs in the mesh.
   for (const auto & elem : this->get_mesh().active_local_element_ptr_range())
     {
@@ -385,15 +407,32 @@ void SolidSystem::post_process ()
 
       const std::string material_ID = std::to_string(elem->subdomain_id());
       const Real E = es.parameters.get<Real>("material/"+material_ID+"/Neohookean/Young"),
-                 v = es.parameters.get<Real>("material/"+material_ID+"/Neohookean/Poisson");
-      Neohookean material(dphi, E, v);
+                 v = es.parameters.get<Real>("material/"+material_ID+"/Neohookean/Poisson"),
+                 K = es.parameters.get<Real>("material/"+material_ID+"/Neohookean/FibreStiffness");
+      Neohookean material(dphi, E, v, K);
 
       // average Cauchy stress tensor calculated for the FE
       RealTensor stress_Cauchy;
+      // fibre direction (unit) vector - current configuration
+      RealVectorValue fibre_vector;
 
       std::vector<dof_id_type> undefo_dofs[3];
       for (unsigned int d=0; d<3; ++d)
         aux_system.get_dof_map().dof_indices(elem, undefo_dofs[d], this->undefo_var[d]);
+
+      std::vector<dof_id_type> dof_indices_F_var[6];
+      for (unsigned int f=0; f<6; f++)
+        fibre_sys.get_dof_map().dof_indices(elem, dof_indices_F_var[f], f);
+
+      // fibre direction (unit) vector - reference configuration
+      RealVectorValue eta;
+      for (unsigned int d=0; d<3; ++d)
+        {
+          Number coord;
+          fibre_sys.current_local_solution->get(dof_indices_F_var[d], &coord);
+
+          eta(d) = coord;
+        }
 
       for (unsigned int qp=0; qp<qrule.n_points(); qp++)
         {
@@ -410,21 +449,30 @@ void SolidSystem::post_process ()
 
           // initialize the constitutive formulation with the current displacement
           // gradient
-          material.init_for_qp(qp, grad_X, false);
+          material.init_for_qp(qp, grad_X, eta);
 
           stress_Cauchy += material.get_stress_tensor();
+
+          fibre_vector += material.get_deformation_gradient_tensor()*eta;
         }
 
-      // take the average Cauchy stress
+      // take the average Cauchy stress tensor
       stress_Cauchy /= qrule.n_points();
       // calculate the mean solid stress
       const Real mss = (stress_Cauchy(0,0)+stress_Cauchy(1,1)+stress_Cauchy(2,2))/3.0;
+      // take the average fibre direction vector
+      fibre_vector /= qrule.n_points();
 
       press_sys.solution->set(dof_indices_P[0], mss);
+
+      for (unsigned int d=0; d<3; ++d)
+        fibre_sys.solution->set(dof_indices_F_var[d+3][0], fibre_vector(d));
       // ...end this loop for active local FEs
     }
 
     press_sys.solution->close();
+
+    fibre_sys.solution->close();
 }
 
 void SolidSystem::update_auxiliary ()

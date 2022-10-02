@@ -29,11 +29,12 @@ class Neohookean
 {
 public:
   // Constructor
-  Neohookean (const std::vector<std::vector<RealGradient>>& dNdx, Real E, Real v) :
-    dphi(dNdx), Young(E), Poisson(v) {}
+  Neohookean (const std::vector<std::vector<RealGradient>>& dNdx, Real E, Real v, Real K =0.0) :
+    dphi(dNdx), Young(E), Poisson(v), FibreStiffness(K) {}
 
   inline
-  void init_for_qp (unsigned int qp, VectorValue<Gradient>& gradX, bool calc_tangent)
+  void init_for_qp (unsigned int qp, VectorValue<Gradient>& gradX, const RealVectorValue& f,
+                    bool calc_tangent =false)
   {
     // initialize the class for the given displacement gradient
     // at the specified quadrature point
@@ -46,6 +47,8 @@ public:
     libmesh_assert_greater(this->F.det(), -TOLERANCE);
 
     this->current_qp = qp;
+
+    if (this->FibreStiffness) this->A = f.unit();
 
     if (calc_tangent) this->calculate_tangent();
     this->calculate_stress();
@@ -129,7 +132,12 @@ private:
     const Real I = (b(0,0)+b(1,1)+b(2,2));
     // 3rd invariant (square root of) - deformation gradient tensor determinant
     const Real J = this->F.det();
+    // 4th invariant - transverse anisotropy due to fibre
+    const Real IV = koppa>0.0 ? (this->A*((this->F.transpose()*this->F)*this->A)) : 0.0;
 
+    const RealVectorValue a = koppa>0.0 // fibre direction (unit) vector - current configuration
+                            ? (1.0/sqrt(IV)) * (this->F*this->A) : RealVectorValue(0.0, 0.0, 0.0);
+    const RealTensor a_a = tensor(a);
 
     // Cauchy stress tensor
     this->sigma = (0.5*lambda*(J-1.0/J)) * I3
@@ -178,7 +186,9 @@ private:
 
 private:
   // parameters (material constants) of the Neo-Hookean hyperelastic constitutive model
-  Real Young, Poisson;
+  Real Young, Poisson, FibreStiffness;
+  // fibre direction (unit) vector - reference configuration
+  RealVectorValue A;
   // deformation gradient tensor
   RealTensor F;
   // Cauchy stress tensor

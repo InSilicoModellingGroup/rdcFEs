@@ -37,9 +37,12 @@ void solid (LibMeshInit & init)
   disp_sys.add_variable("u_z", FIRST, LAGRANGE);
 
   ExplicitSystem & fibre_sys = es.add_system<ExplicitSystem>("SolidSystem::fibre");
-  fibre_sys.add_variable("fibre_x", CONSTANT, MONOMIAL);
-  fibre_sys.add_variable("fibre_y", CONSTANT, MONOMIAL);
-  fibre_sys.add_variable("fibre_z", CONSTANT, MONOMIAL);
+  fibre_sys.add_variable("fibre_reference_x", CONSTANT, MONOMIAL);
+  fibre_sys.add_variable("fibre_reference_y", CONSTANT, MONOMIAL);
+  fibre_sys.add_variable("fibre_reference_z", CONSTANT, MONOMIAL);
+  fibre_sys.add_variable("fibre_current_x", CONSTANT, MONOMIAL);
+  fibre_sys.add_variable("fibre_current_y", CONSTANT, MONOMIAL);
+  fibre_sys.add_variable("fibre_current_z", CONSTANT, MONOMIAL);
   fibre_sys.attach_init_function(initial_fibres);
 
   // create an additional system for the hydrostatic pressure (mean solid stress)
@@ -237,6 +240,8 @@ void input (const std::string & file_name, EquationSystems & es)
       es.parameters.set<Real>(name) = in(name, 1.e+3);
       name = "material/"+std::to_string(m)+"/Neohookean/Poisson";
       es.parameters.set<Real>(name) = in(name, 0.3);
+      name = "material/"+std::to_string(m)+"/Neohookean/FibreStiffness";
+      es.parameters.set<Real>(name) = in(name, 0.0);
     }
 
   // ...done
@@ -249,31 +254,39 @@ void initial_fibres (EquationSystems & es,
 
   const MeshBase& mesh = es.get_mesh();
 
-  ExplicitSystem & system = es.get_system<ExplicitSystem>("SolidSystem::fibre");
-  libmesh_assert_equal_to(system.n_vars(), 3);
+  ExplicitSystem & fibre_sys = es.get_system<ExplicitSystem>("SolidSystem::fibre");
+  libmesh_assert_equal_to(fibre_sys.n_vars(), 6);
 
   const std::string name(es.parameters.get<std::string>("input_fibres"));
   if ("."==name) return;
 
   std::ifstream fin(name.c_str());
 
-  for (const auto & elem : mesh.active_element_ptr_range())
+  for (const auto & elem : mesh.active_local_element_ptr_range())
     {
       Real x_, y_, z_;
       fin >> x_ >> y_ >> z_;
+      const Real m = sqrt(x_+x_+y_*y_+z_*z_);
+      if (m<=1.0e-6) libmesh_error();
 
-      std::vector<std::vector<dof_id_type>> dof_indices_F_var(3);
+      std::vector<dof_id_type> dof_indices_F_var[6];
+      for (unsigned int f=0; f<6; f++)
+        fibre_sys.get_dof_map().dof_indices(elem, dof_indices_F_var[f], f);
 
-      system.get_dof_map().dof_indices(elem, dof_indices_F_var[0], 0);
-      system.solution->set(dof_indices_F_var[0][0], x_);
-      system.get_dof_map().dof_indices(elem, dof_indices_F_var[1], 1);
-      system.solution->set(dof_indices_F_var[1][0], y_);
-      system.get_dof_map().dof_indices(elem, dof_indices_F_var[2], 2);
-      system.solution->set(dof_indices_F_var[2][0], z_);
+      fibre_sys.current_local_solution->set(dof_indices_F_var[0][0], x_/m);
+      fibre_sys.current_local_solution->set(dof_indices_F_var[1][0], y_/m);
+      fibre_sys.current_local_solution->set(dof_indices_F_var[2][0], z_/m);
+
+      fibre_sys.current_local_solution->set(dof_indices_F_var[3][0], x_/m);
+      fibre_sys.current_local_solution->set(dof_indices_F_var[4][0], y_/m);
+      fibre_sys.current_local_solution->set(dof_indices_F_var[5][0], z_/m);
     }
 
-  // close solution vector and update the system
-  system.solution->close();
-  system.update();
+  // fill global solution vector from local ones
+  fibre_sys.current_local_solution->close();
+  (*fibre_sys.solution) = (*fibre_sys.current_local_solution);
+  fibre_sys.solution->close();
+  // update the system
+  fibre_sys.update();
   // ...done
 }
