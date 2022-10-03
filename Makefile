@@ -1,5 +1,5 @@
 ######################################################################
-LIBMESH_DIR ?= /Users/vasvav/Work/libmesh
+LIBMESH_DIR ?= /Users/vasvav/Work/libmesh-f29b2d11ea0566a17f16e3b8db08169a2004404c
 
 include $(LIBMESH_DIR)/Make.common
 
@@ -24,6 +24,7 @@ $(notdir $(target)): $(objects)
 ###############################################################################
 dust:
 	@echo "Deleting old output and runtime files"
+	@rm $(this_project)/src/*.o
 	@rm -f out*.m job_output.txt output.txt* *.gmv.* *.plt.* out*.xdr* out*.xda* PI* *.e *.ex2 *.vtk *.vtu *.pvd $(target)
 
 clean: dust
