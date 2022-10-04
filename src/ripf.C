@@ -820,37 +820,21 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
           libmesh_assert(elem->n_nodes() == dof_indices_var[1].size());
           libmesh_assert(elem->n_nodes() == dof_indices_var[2].size());
 
-          std::vector<Real> HU_, cc_, fb_;
+          Real HU_, cc_, fb_;
+          bool cc_cell=true, fb_cell=true;
           for (unsigned int l=0; l<elem->n_nodes(); l++)
             {
-              HU_.push_back( soln[dof_indices_var[0][l]] );
-              cc_.push_back( soln[dof_indices_var[1][l]] );
-              fb_.push_back( soln[dof_indices_var[2][l]] );
+              HU_ = soln[dof_indices_var[0][l]];
+              cc_ = soln[dof_indices_var[1][l]];
+              fb_ = soln[dof_indices_var[2][l]];
+	      if ( HU_ < cc__HU_min || HU_ > cc__HU_max || cc_ < cc__min ) cc_cell = false;
+	      if ( HU_ < fb__HU_min || HU_ > fb__HU_max || fb_ < fb__min ) fb_cell = false;
+	      if ( !cc_cell && !fb_cell ) break;
             }
 
-          {
-            bool do_include = true;
-            for (unsigned int l=0; l<elem->n_nodes() && do_include; l++)
-              {
-                if ( !(  HU_[l]>=cc__HU_min && HU_[l]<=cc__HU_max
-                      && cc_[l]>=cc__min ) )
-                  do_include = false;
-              }
-            if (do_include)
-              tumour_volume += elem->volume();
-          }
+	  if (cc_cell) tumour_volume += elem->volume();
+	  if (fb_cell) fibrosis_volume += elem->volume();
 
-          {
-            bool do_include = true;
-            for (unsigned int l=0; l<elem->n_nodes() && do_include; l++)
-              {
-                if ( !(  HU_[l]>=fb__HU_min && HU_[l]<=fb__HU_max
-                      && fb_[l]>=fb__min ) )
-                  do_include = false;
-              }
-            if (do_include)
-              fibrosis_volume += elem->volume();
-          }
           // ...end of active finite elements loop
         }
 
