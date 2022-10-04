@@ -488,7 +488,7 @@ void assemble_ripf (EquationSystems & es,
           const Real kappa_RT = kappa * exp(-kappa_RT_c*RT_td);
           const Real delta_RT = delta * (1.0 - exp(-delta_RT_a*RT_td-delta_RT_b*pow2(RT_td)));
           const Real lambda_RT = lambda * (RT_td/lambda_RT_r);
-          const Real omicro_RT = omicro * apply_lbound(0.0, 4.0*((RT_td/lambda_RT_r)-pow2(RT_td/lambda_RT_r)));
+          const Real omicro_RT = omicro * apply_lbound(0.0, 4.0*((RT_td/omicro_RT_r)-pow2(RT_td/omicro_RT_r)));
           //
           Real epsilon_cc = 0.0;
           if      (cc__dtime> phi_tol) epsilon_cc = phi_cc_B;
