@@ -611,16 +611,15 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
 
   if (0==global_processor_id())
     {
-      /*
       // write the header of the CSV file
       if (0.0==system.time)
         {
           csv << "\"Time\"" << std::flush;
           for (const auto & ID : parcellation)
-            csv << ",\"A_b__" << ID << "\",\"Tau__" << ID << "\"" << std::flush;
+            csv << ",\"A_b__" << ID << "\""
+                << ",\"Tau__" << ID << "\"" << std::flush;
           csv << std::endl;
         }
-      */
 
       std::map<subdomain_id_type, Real> parcellation__A_b_volume;
       std::map<subdomain_id_type, Real> parcellation__Tau_volume;
@@ -640,36 +639,36 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
           libmesh_assert(elem->n_nodes() == dof_indices_var[1].size());
           libmesh_assert(elem->n_nodes() == dof_indices_var[2].size());
 
-          std::vector<Real> A_b_, Tau_;
-          for (unsigned int l=0; l<elem->n_nodes(); l++)
-            {
-              A_b_.push_back( soln[dof_indices_var[1][l]] );
-              Tau_.push_back( soln[dof_indices_var[2][l]] );
-            }
-
           const subdomain_id_type ID = elem->subdomain_id();
+          const Real Volume = elem->volume();
 
-          {
-            bool do_include = true;
-            for (unsigned int l=0; l<elem->n_nodes() && do_include; l++)
-              {
-                if ( !(  A_b_[l]>=A_b__min && A_b_[l]<=A_b__max ) )
-                  do_include = false;
-              }
-            if (do_include)
-              parcellation__A_b_volume[ID] += elem->volume();
-          }
-
-          {
-            bool do_include = true;
-            for (unsigned int l=0; l<elem->n_nodes() && do_include; l++)
-              {
-                if ( !(  Tau_[l]>=Tau__min && Tau_[l]<=Tau__max ) )
-                  do_include = false;
-              }
-            if (do_include)
-              parcellation__Tau_volume[ID] += elem->volume();
-          }
+          bool consider;
+          //
+          consider = true;
+          for (unsigned int n=0; n<elem->n_nodes(); n++)
+            {
+              const Real A_b = soln[dof_indices_var[1][n]];
+              if ( !(  A_b>=A_b__min && A_b<=A_b__max ) )
+                {
+                  consider = false;
+                  break;
+                }
+            }
+          if (consider)
+            parcellation__A_b_volume[ID] += Volume;
+          //
+          consider = true;
+          for (unsigned int n=0; n<elem->n_nodes(); n++)
+            {
+              const Real Tau = soln[dof_indices_var[2][n]];
+              if ( !(  Tau>=Tau__min && Tau<=Tau__max ) )
+                {
+                  consider = false;
+                  break;
+                }
+            }
+          if (consider)
+            parcellation__Tau_volume[ID] += Volume;
           // ...end of active finite elements loop
         }
 
