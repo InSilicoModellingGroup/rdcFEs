@@ -10,6 +10,7 @@ static void save_solution (std::ofstream & , EquationSystems & );
 extern PerfLog plog;
 static Parallel::Communicator * pm_ptr = 0;
 static std::set<subdomain_id_type> parcellation;
+static std::map<subdomain_id_type, Real> parcellation__volume;
 
 void adpm (LibMeshInit & init)
 {
@@ -270,6 +271,16 @@ void initial_adpm (EquationSystems & es,
       // check if this brain parcellation (region) has been listed
       if (parcellation.end() == parcellation.find(ID))
         parcellation.insert(ID);
+    }
+
+  parcellation__volume.clear();
+  for (const auto & ID : parcellation)
+    parcellation__volume.insert( std::make_pair(ID, 0.0) );
+
+  for (const auto & elem : mesh.active_element_ptr_range())
+    {
+      const subdomain_id_type ID = elem->subdomain_id();
+      parcellation__volume[ID] += elem->volume();
     }
   // ...done
 }
