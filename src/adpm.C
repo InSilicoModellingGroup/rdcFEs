@@ -625,13 +625,18 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
       // write the header of the CSV file
       if (0.0==system.time)
         {
-          csv << "\"Time\"" << std::flush;
+          csv << "\"TIME\"" << std::flush;
           for (const auto & ID : parcellation)
-            csv << ",\"A_b__" << ID << "\""
-                << ",\"Tau__" << ID << "\"" << std::flush;
+            csv << ",\"CONCENTRATION__A_b__" << ID << "\""
+                << ",\"CONCENTRATION__Tau__" << ID << "\"" << std::flush;
+          for (const auto & ID : parcellation)
+            csv << ",\"VOLUME__A_b__" << ID << "\""
+                << ",\"VOLUME__Tau__" << ID << "\"" << std::flush;
           csv << std::endl;
         }
 
+      std::map<subdomain_id_type, Real> parcellation__A_b_concentration;
+      std::map<subdomain_id_type, Real> parcellation__Tau_concentration;
       std::map<subdomain_id_type, Real> parcellation__A_b_volume;
       std::map<subdomain_id_type, Real> parcellation__Tau_volume;
       // initialize the map containers
@@ -685,6 +690,9 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
 
       // save the data in the CSV file
       csv << system.time << std::flush;
+      for (const auto & ID : parcellation)
+        csv << ',' << parcellation__A_b_concentration[ID]
+            << ',' << parcellation__Tau_concentration[ID] << std::flush;
       for (const auto & ID : parcellation)
         csv << ',' << parcellation__A_b_volume[ID]
             << ',' << parcellation__Tau_volume[ID] << std::flush;
