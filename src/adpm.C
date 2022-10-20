@@ -145,9 +145,10 @@ void input (const std::string & file_name, EquationSystems & es)
 
   // parameters for the species: PrP
   {
-    name = "decay/PrP";             es.parameters.set<Real>(name) = in(name, 0.);
-    name = "decay/PrP/pulse/0";     es.parameters.set<Real>(name) = in(name,-1.0e-20);
-    name = "decay/PrP/pulse/1";     es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "decay/PrP";               es.parameters.set<Real>(name) = in(name, 0.);
+    name = "decay/PrP/pulse/0";       es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "decay/PrP/pulse/1";       es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "decay/PrP/time_exponent"; es.parameters.set<Real>(name) = in(name, 0.);
   }
 
   // parameters for the species: A_b
@@ -329,9 +330,10 @@ void assemble_adpm (EquationSystems & es,
 
   //const RealVectorValue velocity = es.parameters.get<RealVectorValue>("velocity");
 
-  const Real decay_PrP[] = { es.parameters.get<Real>("decay/PrP")         ,
-                             es.parameters.get<Real>("decay/PrP/pulse/0") ,
-                             es.parameters.get<Real>("decay/PrP/pulse/1") };
+  const Real gamma = es.parameters.get<Real>("decay/PrP/time_exponent");
+  const Real decay_PrP[] = { es.parameters.get<Real>("decay/PrP") * pow(system.time, gamma) ,
+                             es.parameters.get<Real>("decay/PrP/pulse/0")                   ,
+                             es.parameters.get<Real>("decay/PrP/pulse/1")                   };
   const Real diffuse_A_b[] = { es.parameters.get<Real>("diffuse/A_b")         ,
                                es.parameters.get<Real>("diffuse/A_b/pulse/0") ,
                                es.parameters.get<Real>("diffuse/A_b/pulse/1") };
