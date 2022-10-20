@@ -604,7 +604,7 @@ void check_solution (EquationSystems & es)
 void save_solution (std::ofstream & csv, EquationSystems & es)
 {
   const MeshBase& mesh = es.get_mesh();
-  libmesh_assert_equal_to(mesh.mesh_dimension(), 3);
+  const unsigned int dim = mesh.mesh_dimension();
 
   const TransientLinearImplicitSystem & system =
     es.get_system<TransientLinearImplicitSystem>("ADPM");
@@ -617,6 +617,18 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
              A_b__max = es.parameters.get<Real>("range/A_b/max");
   const Real Tau__min = es.parameters.get<Real>("range/Tau/min"),
              Tau__max = es.parameters.get<Real>("range/Tau/max");
+
+  FEType fe_type = system.variable_type(0);
+
+  std::unique_ptr<FEBase> fe(FEBase::build(dim, fe_type));
+
+  QGauss qrule (dim, fe_type.default_quadrature_order());
+
+  fe->attach_quadrature_rule(&qrule);
+
+  const std::vector<Real> & JxW = fe->get_JxW();
+
+  const std::vector<std::vector<Real>> & phi = fe->get_phi();
 
   pm_ptr->barrier();
 
@@ -648,9 +660,15 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
 
       for (const auto & elem : mesh.active_element_ptr_range())
         {
+          std::vector<dof_id_type> dof_indices;
+          system.get_dof_map().dof_indices(elem, dof_indices);
+
           std::vector<std::vector<dof_id_type>> dof_indices_var(3);
           for (unsigned int v=0; v<3; v++)
             system.get_dof_map().dof_indices(elem, dof_indices_var[v], v);
+
+          const unsigned int n_var_dofs = dof_indices_var[0].size();
+
           libmesh_assert(elem->n_nodes() == dof_indices_var[0].size());
           libmesh_assert(elem->n_nodes() == dof_indices_var[1].size());
           libmesh_assert(elem->n_nodes() == dof_indices_var[2].size());
@@ -658,6 +676,27 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
           const subdomain_id_type ID = elem->subdomain_id();
           const Real Volume = elem->volume();
 
+          fe->reinit(elem);
+
+          Number A_b__average(0.0), Tau__average(0.0);
+          for (unsigned int qp=0; qp<qrule.n_points(); qp++)
+            {
+              Number A_b(0.0), Tau(0.0);
+              for (std::size_t l=0; l<n_var_dofs; l++)
+                {
+                  A_b += phi[l][qp] * soln[dof_indices_var[1][l]];
+                  Tau += phi[l][qp] * soln[dof_indices_var[2][l]];
+                }
+              A_b__average += JxW[qp] * A_b;
+              Tau__average += JxW[qp] * Tau;
+            }
+
+          parcellation__A_b_concentration[ID] = A_b__average
+                                              / Volume;
+          //
+          parcellation__Tau_concentration[ID] = Tau__average
+                                              / Volume;
+          //
           bool consider;
           //
           consider = true;
