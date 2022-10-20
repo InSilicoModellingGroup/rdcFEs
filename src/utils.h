@@ -130,6 +130,22 @@ Real SG_(const Real & C, const Real * p_)
   else             return  0.0;
 }
 //-------------------------------------------------------------------------------------------------
+inline // trapezoidal function
+Real Tr_(const Real & C, const Real * p_)
+{
+  const Real & cM = p_[0];
+  if (0.0>=cM) return 0.0;
+  const Real & c0 = p_[1];
+  const Real & c1 = p_[2];
+  const Real & c2 = p_[3];
+  const Real & c3 = p_[4];
+  if      (C < c0) return  0.0;
+  else if (C < c1) return  cM*(C-c0)/(c1-c0);
+  else if (C < c2) return  cM;
+  else if (C < c3) return  cM*(c3-C)/(c3-c2);
+  else             return  0.0;
+}
+//-------------------------------------------------------------------------------------------------
 inline // Boltzmann (sigmoidal) increase function
 Real Bsi_(const Real & C, const Real * p_)
 {
