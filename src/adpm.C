@@ -432,7 +432,6 @@ void assemble_adpm (EquationSystems & es,
                                              - Pi_(A_b_old,transform_A_b) * PrP_old * phi[i][qp]
                                              - Pi_(Tau_old,transform_Tau) * PrP_old * phi[i][qp]
                                              - Pi_(PrP_old,decay_PrP) * PrP_old * phi[i][qp]
-                                             //- (GRAD_PrP_old * velocity) * phi[i][qp]
                                              )
                                       );
               // RHS contribution
@@ -469,7 +468,6 @@ void assemble_adpm (EquationSystems & es,
                                                       - Pi_(A_b_old,transform_A_b) * phi[j][qp] * phi[i][qp]
                                                       - Pi_(Tau_old,transform_Tau) * phi[j][qp] * phi[i][qp]
                                                       - Pi_(PrP_old,decay_PrP) * phi[j][qp] * phi[i][qp]
-                                                      //- (dphi[j][qp] * velocity) * phi[i][qp]
                                                       )
                                                );
                   // Matrix contribution
@@ -482,6 +480,7 @@ void assemble_adpm (EquationSystems & es,
                                                  phi[j][qp] * phi[i][qp] // capacity term
                                                - DT_2*( // transport, source, sink terms
                                                         SD_(A_b_old,produce_A_b) * phi[j][qp] * phi[i][qp]
+                                                      + deriv_SD_(A_b_old,produce_A_b) * A_b_old * phi[j][qp] * phi[i][qp]
                                                       - Pi_(A_b_old,decay_A_b) * phi[j][qp] * phi[i][qp]
                                                       - Pi_(A_b_old,diffuse_A_b) * (dphi[j][qp] * dphi[i][qp])
                                                       - Pi_(A_b_old,taxis_A_b) * (dphi[j][qp] * tracts) * (tracts * dphi[i][qp])
@@ -498,6 +497,7 @@ void assemble_adpm (EquationSystems & es,
                                                  phi[j][qp] * phi[i][qp] // capacity term
                                                - DT_2*( // transport, source, sink terms
                                                         SD_(Tau_old,produce_Tau) * phi[j][qp] * phi[i][qp]
+                                                      + deriv_SD_(Tau_old,produce_Tau) * Tau_old * phi[j][qp] * phi[i][qp]
                                                       - Pi_(Tau_old,decay_Tau) * phi[j][qp] * phi[i][qp]
                                                       - Pi_(Tau_old,diffuse_Tau) * (dphi[j][qp] * dphi[i][qp])
                                                       - Pi_(Tau_old,taxis_Tau) * (dphi[j][qp] * tracts) * (tracts * dphi[i][qp])
