@@ -149,6 +149,16 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "decay/PrP/pulse/0";       es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "decay/PrP/pulse/1";       es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "decay/PrP/time_exponent"; es.parameters.set<Real>(name) = in(name, 0.);
+    name = "transform/A_b";             es.parameters.set<Real>(name) = in(name, 0.);
+    name = "transform/A_b/trapezoid/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "transform/A_b/trapezoid/1"; es.parameters.set<Real>(name) = in(name,-0.9e-20);
+    name = "transform/A_b/trapezoid/2"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "transform/A_b/trapezoid/3"; es.parameters.set<Real>(name) = in(name,+1.1e+20);
+    name = "transform/Tau";             es.parameters.set<Real>(name) = in(name, 0.);
+    name = "transform/Tau/trapezoid/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "transform/Tau/trapezoid/1"; es.parameters.set<Real>(name) = in(name,-0.9e-20);
+    name = "transform/Tau/trapezoid/2"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "transform/Tau/trapezoid/3"; es.parameters.set<Real>(name) = in(name,+1.1e+20);
   }
 
   // parameters for the species: A_b
@@ -162,9 +172,6 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "produce/A_b";           es.parameters.set<Real>(name) = in(name, 0.);
     name = "produce/A_b/sigmoid/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "produce/A_b/sigmoid/1"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
-    name = "transform/A_b";         es.parameters.set<Real>(name) = in(name, 0.);
-    name = "transform/A_b/pulse/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
-    name = "transform/A_b/pulse/1"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "decay/A_b";             es.parameters.set<Real>(name) = in(name, 0.);
     name = "decay/A_b/pulse/0";     es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "decay/A_b/pulse/1";     es.parameters.set<Real>(name) = in(name,+1.0e+20);
@@ -181,9 +188,6 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "produce/Tau";           es.parameters.set<Real>(name) = in(name, 0.);
     name = "produce/Tau/sigmoid/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "produce/Tau/sigmoid/1"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
-    name = "transform/Tau";         es.parameters.set<Real>(name) = in(name, 0.);
-    name = "transform/Tau/pulse/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
-    name = "transform/Tau/pulse/1"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "decay/Tau";             es.parameters.set<Real>(name) = in(name, 0.);
     name = "decay/Tau/pulse/0";     es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "decay/Tau/pulse/1";     es.parameters.set<Real>(name) = in(name,+1.0e+20);
@@ -343,9 +347,11 @@ void assemble_adpm (EquationSystems & es,
   const Real produce_A_b[] = { es.parameters.get<Real>("produce/A_b")           ,
                                es.parameters.get<Real>("produce/A_b/sigmoid/0") ,
                                es.parameters.get<Real>("produce/A_b/sigmoid/1") };
-  const Real transform_A_b[] = { es.parameters.get<Real>("transform/A_b")         ,
-                                 es.parameters.get<Real>("transform/A_b/pulse/0") ,
-                                 es.parameters.get<Real>("transform/A_b/pulse/1") };
+  const Real transform_A_b[] = { es.parameters.get<Real>("transform/A_b")             ,
+                                 es.parameters.get<Real>("transform/A_b/trapezoid/0") ,
+                                 es.parameters.get<Real>("transform/A_b/trapezoid/1") ,
+                                 es.parameters.get<Real>("transform/A_b/trapezoid/2") ,
+                                 es.parameters.get<Real>("transform/A_b/trapezoid/3") };
   const Real decay_A_b[] = { es.parameters.get<Real>("decay/A_b")         ,
                              es.parameters.get<Real>("decay/A_b/pulse/0") ,
                              es.parameters.get<Real>("decay/A_b/pulse/1") };
@@ -358,9 +364,11 @@ void assemble_adpm (EquationSystems & es,
   const Real produce_Tau[] = { es.parameters.get<Real>("produce/Tau")           ,
                                es.parameters.get<Real>("produce/Tau/sigmoid/0") ,
                                es.parameters.get<Real>("produce/Tau/sigmoid/1") };
-  const Real transform_Tau[] = { es.parameters.get<Real>("transform/Tau")         ,
-                                 es.parameters.get<Real>("transform/Tau/pulse/0") ,
-                                 es.parameters.get<Real>("transform/Tau/pulse/1") };
+  const Real transform_Tau[] = { es.parameters.get<Real>("transform/Tau")             ,
+                                 es.parameters.get<Real>("transform/Tau/trapezoid/0") ,
+                                 es.parameters.get<Real>("transform/Tau/trapezoid/1") ,
+                                 es.parameters.get<Real>("transform/Tau/trapezoid/2") ,
+                                 es.parameters.get<Real>("transform/Tau/trapezoid/3") };
   const Real decay_Tau[] = { es.parameters.get<Real>("decay/Tau")         ,
                              es.parameters.get<Real>("decay/Tau/pulse/0") ,
                              es.parameters.get<Real>("decay/Tau/pulse/1") };
@@ -429,8 +437,8 @@ void assemble_adpm (EquationSystems & es,
               Fe_var[0](i) += JxW[qp]*(
                                         PrP_old * phi[i][qp] // capacity term
                                       + DT_2*( // transport, source, sink terms
-                                             - Pi_(A_b_old,transform_A_b) * PrP_old * phi[i][qp]
-                                             - Pi_(Tau_old,transform_Tau) * PrP_old * phi[i][qp]
+                                             - Tr_(A_b_old,transform_A_b) * PrP_old * phi[i][qp]
+                                             - Tr_(Tau_old,transform_Tau) * PrP_old * phi[i][qp]
                                              - Pi_(PrP_old,decay_PrP) * PrP_old * phi[i][qp]
                                              )
                                       );
@@ -439,7 +447,7 @@ void assemble_adpm (EquationSystems & es,
                                         A_b_old * phi[i][qp] // capacity term
                                       + DT_2*( // transport, source, sink terms
                                                SD_(A_b_old,produce_A_b) * A_b_old * phi[i][qp]
-                                             + Pi_(A_b_old,transform_A_b) * PrP_old * phi[i][qp]
+                                             + Tr_(A_b_old,transform_A_b) * PrP_old * phi[i][qp]
                                              - Pi_(A_b_old,decay_A_b) * A_b_old * phi[i][qp]
                                              - Pi_(A_b_old,diffuse_A_b) * (GRAD_A_b_old * dphi[i][qp])
                                              - Pi_(A_b_old,taxis_A_b) * (GRAD_A_b_old * tracts) * (tracts * dphi[i][qp])
@@ -451,7 +459,7 @@ void assemble_adpm (EquationSystems & es,
                                         Tau_old * phi[i][qp] // capacity term
                                       + DT_2*( // transport, source, sink terms
                                                SD_(Tau_old,produce_Tau) * Tau_old * phi[i][qp]
-                                             + Pi_(Tau_old,transform_Tau) * PrP_old * phi[i][qp]
+                                             + Tr_(Tau_old,transform_Tau) * PrP_old * phi[i][qp]
                                              - Pi_(Tau_old,decay_Tau) * Tau_old * phi[i][qp]
                                              - Pi_(Tau_old,diffuse_Tau) * (GRAD_Tau_old * dphi[i][qp])
                                              - Pi_(Tau_old,taxis_Tau) * (GRAD_Tau_old * tracts) * (tracts * dphi[i][qp])
@@ -465,15 +473,26 @@ void assemble_adpm (EquationSystems & es,
                   Ke_var[0][0](i,j) += JxW[qp]*(
                                                  phi[j][qp] * phi[i][qp] // capacity term
                                                - DT_2*( // transport, source, sink terms
-                                                      - Pi_(A_b_old,transform_A_b) * phi[j][qp] * phi[i][qp]
-                                                      - Pi_(Tau_old,transform_Tau) * phi[j][qp] * phi[i][qp]
+                                                      - Tr_(A_b_old,transform_A_b) * phi[j][qp] * phi[i][qp]
+                                                      - Tr_(Tau_old,transform_Tau) * phi[j][qp] * phi[i][qp]
                                                       - Pi_(PrP_old,decay_PrP) * phi[j][qp] * phi[i][qp]
+                                                      )
+                                               );
+
+                  Ke_var[0][1](i,j) += JxW[qp]*(
+                                               - DT_2*( // transport, source, sink terms
+                                                      - deriv_Tr_(A_b_old,transform_A_b) * PrP_old * phi[j][qp] * phi[i][qp]
+                                                      )
+                                               );
+                  Ke_var[0][2](i,j) += JxW[qp]*(
+                                               - DT_2*( // transport, source, sink terms
+                                                      - deriv_Tr_(Tau_old,transform_Tau) * PrP_old * phi[j][qp] * phi[i][qp]
                                                       )
                                                );
                   // Matrix contribution
                   Ke_var[1][0](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
-                                                        Pi_(A_b_old,transform_A_b) * phi[j][qp] * phi[i][qp]
+                                                      + Tr_(A_b_old,transform_A_b) * phi[j][qp] * phi[i][qp]
                                                       )
                                                );
                   Ke_var[1][1](i,j) += JxW[qp]*(
@@ -481,6 +500,7 @@ void assemble_adpm (EquationSystems & es,
                                                - DT_2*( // transport, source, sink terms
                                                         SD_(A_b_old,produce_A_b) * phi[j][qp] * phi[i][qp]
                                                       + deriv_SD_(A_b_old,produce_A_b) * A_b_old * phi[j][qp] * phi[i][qp]
+                                                      + deriv_Tr_(A_b_old,transform_A_b) * PrP_old * phi[j][qp] * phi[i][qp]
                                                       - Pi_(A_b_old,decay_A_b) * phi[j][qp] * phi[i][qp]
                                                       - Pi_(A_b_old,diffuse_A_b) * (dphi[j][qp] * dphi[i][qp])
                                                       - Pi_(A_b_old,taxis_A_b) * (dphi[j][qp] * tracts) * (tracts * dphi[i][qp])
@@ -490,7 +510,7 @@ void assemble_adpm (EquationSystems & es,
                   // Matrix contribution
                   Ke_var[2][0](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
-                                                        Pi_(Tau_old,transform_Tau) * phi[j][qp] * phi[i][qp]
+                                                      + Tr_(Tau_old,transform_Tau) * phi[j][qp] * phi[i][qp]
                                                       )
                                                );
                   Ke_var[2][2](i,j) += JxW[qp]*(
@@ -498,6 +518,7 @@ void assemble_adpm (EquationSystems & es,
                                                - DT_2*( // transport, source, sink terms
                                                         SD_(Tau_old,produce_Tau) * phi[j][qp] * phi[i][qp]
                                                       + deriv_SD_(Tau_old,produce_Tau) * Tau_old * phi[j][qp] * phi[i][qp]
+                                                      + deriv_Tr_(Tau_old,transform_Tau) * PrP_old * phi[j][qp] * phi[i][qp]
                                                       - Pi_(Tau_old,decay_Tau) * phi[j][qp] * phi[i][qp]
                                                       - Pi_(Tau_old,diffuse_Tau) * (dphi[j][qp] * dphi[i][qp])
                                                       - Pi_(Tau_old,taxis_Tau) * (dphi[j][qp] * tracts) * (tracts * dphi[i][qp])
