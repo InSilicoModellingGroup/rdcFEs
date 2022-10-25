@@ -166,6 +166,7 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "diffuse/A_b";           es.parameters.set<Real>(name) = in(name, 0.);
     name = "diffuse/A_b/pulse/0";   es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "diffuse/A_b/pulse/1";   es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "taxis/A_b/angle";       es.parameters.set<Real>(name) = degrees_to_radians(in(name,89.9));
     name = "taxis_1/A_b";           es.parameters.set<Real>(name) = in(name, 0.);
     name = "taxis_1/A_b/pulse/0";   es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "taxis_1/A_b/pulse/1";   es.parameters.set<Real>(name) = in(name,+1.0e+20);
@@ -182,6 +183,7 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "diffuse/Tau";           es.parameters.set<Real>(name) = in(name, 0.);
     name = "diffuse/Tau/pulse/0";   es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "diffuse/Tau/pulse/1";   es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "taxis/Tau/angle";       es.parameters.set<Real>(name) = degrees_to_radians(in(name,89.9));
     name = "taxis_1/Tau";           es.parameters.set<Real>(name) = in(name, 0.);
     name = "taxis_1/Tau/pulse/0";   es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "taxis_1/Tau/pulse/1";   es.parameters.set<Real>(name) = in(name,+1.0e+20);
@@ -372,7 +374,9 @@ void assemble_adpm (EquationSystems & es,
   const Real decay_Tau[] = { es.parameters.get<Real>("decay/Tau")         ,
                              es.parameters.get<Real>("decay/Tau/pulse/0") ,
                              es.parameters.get<Real>("decay/Tau/pulse/1") };
-  const Real omega = 0.001745328;// =89.9 degrees (tolerance angle to check perpendicular vectors)
+  // tolerance angle to allow fibre-oriented propagation of misfolded proteins
+  const Real omega_A_b = cos(es.parameters.get<Real>("taxis/A_b/angle"));
+  const Real omega_Tau = cos(es.parameters.get<Real>("taxis/Tau/angle"));
 
   for (const auto & elem : mesh.active_local_element_ptr_range())
     {
@@ -440,8 +444,8 @@ void assemble_adpm (EquationSystems & es,
               GRAD_A_b_unit = GRAD_A_b_old / GRAD_A_b_norm;
               //
               const Real d = GRAD_A_b_unit * tracts;
-              if      (d>+omega) DIRECT_A_b = +1.0;
-              else if (d<-omega) DIRECT_A_b = -1.0;
+              if      (d>+omega_A_b) DIRECT_A_b = +1.0;
+              else if (d<-omega_A_b) DIRECT_A_b = -1.0;
             }
           Real DIRECT_Tau(0.0);
           if (GRAD_Tau_norm)
@@ -449,8 +453,8 @@ void assemble_adpm (EquationSystems & es,
               GRAD_Tau_unit = GRAD_Tau_old / GRAD_Tau_norm;
               //
               const Real d = GRAD_Tau_unit * tracts;
-              if      (d>+omega) DIRECT_Tau = +1.0;
-              else if (d<-omega) DIRECT_Tau = -1.0;
+              if      (d>+omega_Tau) DIRECT_Tau = +1.0;
+              else if (d<-omega_Tau) DIRECT_Tau = -1.0;
             }
 
           for (std::size_t i=0; i<n_var_dofs; i++)
