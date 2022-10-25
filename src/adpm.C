@@ -170,6 +170,9 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "taxis_1/A_b";           es.parameters.set<Real>(name) = in(name, 0.);
     name = "taxis_1/A_b/pulse/0";   es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "taxis_1/A_b/pulse/1";   es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "taxis_2/A_b";           es.parameters.set<Real>(name) = in(name, 0.);
+    name = "taxis_2/A_b/pulse/0";   es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "taxis_2/A_b/pulse/1";   es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "produce/A_b";           es.parameters.set<Real>(name) = in(name, 0.);
     name = "produce/A_b/sigmoid/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "produce/A_b/sigmoid/1"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
@@ -187,6 +190,9 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "taxis_1/Tau";           es.parameters.set<Real>(name) = in(name, 0.);
     name = "taxis_1/Tau/pulse/0";   es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "taxis_1/Tau/pulse/1";   es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "taxis_2/Tau";           es.parameters.set<Real>(name) = in(name, 0.);
+    name = "taxis_2/Tau/pulse/0";   es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "taxis_2/Tau/pulse/1";   es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "produce/Tau";           es.parameters.set<Real>(name) = in(name, 0.);
     name = "produce/Tau/sigmoid/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "produce/Tau/sigmoid/1"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
@@ -346,6 +352,9 @@ void assemble_adpm (EquationSystems & es,
   const Real taxis1_A_b[]   = { es.parameters.get<Real>("taxis_1/A_b")         ,
                                 es.parameters.get<Real>("taxis_1/A_b/pulse/0") ,
                                 es.parameters.get<Real>("taxis_1/A_b/pulse/1") };
+  const Real taxis2_A_b[]   = { es.parameters.get<Real>("taxis_2/A_b")         ,
+                                es.parameters.get<Real>("taxis_2/A_b/pulse/0") ,
+                                es.parameters.get<Real>("taxis_2/A_b/pulse/1") };
   const Real produce_A_b[] = { es.parameters.get<Real>("produce/A_b")           ,
                                es.parameters.get<Real>("produce/A_b/sigmoid/0") ,
                                es.parameters.get<Real>("produce/A_b/sigmoid/1") };
@@ -363,6 +372,9 @@ void assemble_adpm (EquationSystems & es,
   const Real taxis1_Tau[]   = { es.parameters.get<Real>("taxis_1/Tau")         ,
                                 es.parameters.get<Real>("taxis_1/Tau/pulse/0") ,
                                 es.parameters.get<Real>("taxis_1/Tau/pulse/1") };
+  const Real taxis2_Tau[]   = { es.parameters.get<Real>("taxis_2/Tau")         ,
+                                es.parameters.get<Real>("taxis_2/Tau/pulse/0") ,
+                                es.parameters.get<Real>("taxis_2/Tau/pulse/1") };
   const Real produce_Tau[] = { es.parameters.get<Real>("produce/Tau")           ,
                                es.parameters.get<Real>("produce/Tau/sigmoid/0") ,
                                es.parameters.get<Real>("produce/Tau/sigmoid/1") };
@@ -476,6 +488,7 @@ void assemble_adpm (EquationSystems & es,
                                              - Pi_(A_b_old,decay_A_b) * A_b_old * phi[i][qp]
                                              - Pi_(A_b_old,diffuse_A_b) * (GRAD_A_b_old * dphi[i][qp])
                                              - Pi_(A_b_old,taxis1_A_b) * A_b_old * (tract_A_b * dphi[i][qp])
+                                             + Pi_(Tau_old,taxis2_A_b) * A_b_old * (tract_Tau * dphi[i][qp])
                                              //- (GRAD_A_b_old * velocity) * phi[i][qp]
                                              )
                                       );
@@ -488,6 +501,7 @@ void assemble_adpm (EquationSystems & es,
                                              - Pi_(Tau_old,decay_Tau) * Tau_old * phi[i][qp]
                                              - Pi_(Tau_old,diffuse_Tau) * (GRAD_Tau_old * dphi[i][qp])
                                              - Pi_(Tau_old,taxis1_Tau) * Tau_old * (tract_Tau * dphi[i][qp])
+                                             + Pi_(A_b_old,taxis2_Tau) * Tau_old * (tract_A_b * dphi[i][qp])
                                              //- (GRAD_Tau_old * velocity) * phi[i][qp]
                                              )
                                       );
@@ -529,6 +543,7 @@ void assemble_adpm (EquationSystems & es,
                                                       - Pi_(A_b_old,decay_A_b) * phi[j][qp] * phi[i][qp]
                                                       - Pi_(A_b_old,diffuse_A_b) * (dphi[j][qp] * dphi[i][qp])
                                                       - Pi_(A_b_old,taxis1_A_b) * phi[j][qp] * (tract_A_b * dphi[i][qp])
+                                                      + Pi_(Tau_old,taxis2_A_b) * phi[j][qp] * (tract_Tau * dphi[i][qp])
                                                       //- (dphi[j][qp] * velocity) * phi[i][qp]
                                                       )
                                                );
@@ -547,6 +562,7 @@ void assemble_adpm (EquationSystems & es,
                                                       - Pi_(Tau_old,decay_Tau) * phi[j][qp] * phi[i][qp]
                                                       - Pi_(Tau_old,diffuse_Tau) * (dphi[j][qp] * dphi[i][qp])
                                                       - Pi_(Tau_old,taxis1_Tau) * phi[j][qp] * (tract_Tau * dphi[i][qp])
+                                                      + Pi_(A_b_old,taxis2_Tau) * phi[j][qp] * (tract_A_b * dphi[i][qp])
                                                       //- (dphi[j][qp] * velocity) * phi[i][qp]
                                                       )
                                                );
