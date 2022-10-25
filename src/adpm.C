@@ -138,9 +138,9 @@ void input (const std::string & file_name, EquationSystems & es)
 
   {
     name = "range/A_b/min"; es.parameters.set<Real>(name) = in(name, 1.0e-12);
-    name = "range/A_b/max"; es.parameters.set<Real>(name) = in(name, 1.0e+00);
+    name = "range/A_b/max"; es.parameters.set<Real>(name) = in(name, 1.0e+12);
     name = "range/Tau/min"; es.parameters.set<Real>(name) = in(name, 1.0e-12);
-    name = "range/Tau/max"; es.parameters.set<Real>(name) = in(name, 1.0e+00);
+    name = "range/Tau/max"; es.parameters.set<Real>(name) = in(name, 1.0e+12);
   }
 
   // parameters for the species: PrP
@@ -150,13 +150,13 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "decay/PrP/pulse/1";       es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "decay/PrP/time_exponent"; es.parameters.set<Real>(name) = in(name, 0.);
     name = "transform/A_b";             es.parameters.set<Real>(name) = in(name, 0.);
-    name = "transform/A_b/trapezoid/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
-    name = "transform/A_b/trapezoid/1"; es.parameters.set<Real>(name) = in(name,-0.9e-20);
+    name = "transform/A_b/trapezoid/0"; es.parameters.set<Real>(name) = in(name,-1.1e-20);
+    name = "transform/A_b/trapezoid/1"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "transform/A_b/trapezoid/2"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "transform/A_b/trapezoid/3"; es.parameters.set<Real>(name) = in(name,+1.1e+20);
     name = "transform/Tau";             es.parameters.set<Real>(name) = in(name, 0.);
-    name = "transform/Tau/trapezoid/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
-    name = "transform/Tau/trapezoid/1"; es.parameters.set<Real>(name) = in(name,-0.9e-20);
+    name = "transform/Tau/trapezoid/0"; es.parameters.set<Real>(name) = in(name,-1.1e-20);
+    name = "transform/Tau/trapezoid/1"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "transform/Tau/trapezoid/2"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "transform/Tau/trapezoid/3"; es.parameters.set<Real>(name) = in(name,+1.1e+20);
   }
@@ -174,8 +174,8 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "taxis_2/A_b/pulse/0";   es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "taxis_2/A_b/pulse/1";   es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "produce/A_b";           es.parameters.set<Real>(name) = in(name, 0.);
-    name = "produce/A_b/sigmoid/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
-    name = "produce/A_b/sigmoid/1"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "produce/A_b/sigmoid/0"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "produce/A_b/sigmoid/1"; es.parameters.set<Real>(name) = in(name,+1.1e+20);
     name = "decay/A_b";             es.parameters.set<Real>(name) = in(name, 0.);
     name = "decay/A_b/pulse/0";     es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "decay/A_b/pulse/1";     es.parameters.set<Real>(name) = in(name,+1.0e+20);
@@ -194,8 +194,8 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "taxis_2/Tau/pulse/0";   es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "taxis_2/Tau/pulse/1";   es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "produce/Tau";           es.parameters.set<Real>(name) = in(name, 0.);
-    name = "produce/Tau/sigmoid/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
-    name = "produce/Tau/sigmoid/1"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "produce/Tau/sigmoid/0"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "produce/Tau/sigmoid/1"; es.parameters.set<Real>(name) = in(name,+1.1e+20);
     name = "decay/Tau";             es.parameters.set<Real>(name) = in(name, 0.);
     name = "decay/Tau/pulse/0";     es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "decay/Tau/pulse/1";     es.parameters.set<Real>(name) = in(name,+1.0e+20);
@@ -517,7 +517,6 @@ void assemble_adpm (EquationSystems & es,
                                                       - Pi_(PrP_old,decay_PrP) * phi[j][qp] * phi[i][qp]
                                                       )
                                                );
-
                   Ke_var[0][1](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
                                                       - deriv_Tr_(A_b_old,transform_A_b) * PrP_old * phi[j][qp] * phi[i][qp]
