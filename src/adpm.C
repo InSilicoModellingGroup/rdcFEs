@@ -437,24 +437,23 @@ void assemble_adpm (EquationSystems & es,
 
           const Real GRAD_A_b_norm(GRAD_A_b_old.norm()), GRAD_Tau_norm(GRAD_Tau_old.norm());
           Gradient GRAD_A_b_unit({0.0, 0.0, 0.0}), GRAD_Tau_unit({0.0, 0.0, 0.0});
+          Gradient tract_A_b({0.0, 0.0, 0.0}), tract_Tau({0.0, 0.0, 0.0});
 
-          Real DIRECT_A_b(0.0);
           if (GRAD_A_b_norm)
             {
               GRAD_A_b_unit = GRAD_A_b_old / GRAD_A_b_norm;
               //
               const Real d = GRAD_A_b_unit * tracts;
-              if      (d>+omega_A_b) DIRECT_A_b = +1.0;
-              else if (d<-omega_A_b) DIRECT_A_b = -1.0;
+              if      (d>+omega_A_b) tract_A_b =  tracts;
+              else if (d<-omega_A_b) tract_A_b = -tracts;
             }
-          Real DIRECT_Tau(0.0);
           if (GRAD_Tau_norm)
             {
               GRAD_Tau_unit = GRAD_Tau_old / GRAD_Tau_norm;
               //
               const Real d = GRAD_Tau_unit * tracts;
-              if      (d>+omega_Tau) DIRECT_Tau = +1.0;
-              else if (d<-omega_Tau) DIRECT_Tau = -1.0;
+              if      (d>+omega_Tau) tract_Tau =  tracts;
+              else if (d<-omega_Tau) tract_Tau = -tracts;
             }
 
           for (std::size_t i=0; i<n_var_dofs; i++)
@@ -476,7 +475,7 @@ void assemble_adpm (EquationSystems & es,
                                              + Tr_(A_b_old,transform_A_b) * PrP_old * phi[i][qp]
                                              - Pi_(A_b_old,decay_A_b) * A_b_old * phi[i][qp]
                                              - Pi_(A_b_old,diffuse_A_b) * (GRAD_A_b_old * dphi[i][qp])
-                                             - Pi_(A_b_old,taxis1_A_b) * A_b_old * DIRECT_A_b * (tracts * dphi[i][qp])
+                                             - Pi_(A_b_old,taxis1_A_b) * A_b_old * (tract_A_b * dphi[i][qp])
                                              //- (GRAD_A_b_old * velocity) * phi[i][qp]
                                              )
                                       );
@@ -488,7 +487,7 @@ void assemble_adpm (EquationSystems & es,
                                              + Tr_(Tau_old,transform_Tau) * PrP_old * phi[i][qp]
                                              - Pi_(Tau_old,decay_Tau) * Tau_old * phi[i][qp]
                                              - Pi_(Tau_old,diffuse_Tau) * (GRAD_Tau_old * dphi[i][qp])
-                                             - Pi_(Tau_old,taxis1_Tau) * Tau_old * DIRECT_Tau * (tracts * dphi[i][qp])
+                                             - Pi_(Tau_old,taxis1_Tau) * Tau_old * (tract_Tau * dphi[i][qp])
                                              //- (GRAD_Tau_old * velocity) * phi[i][qp]
                                              )
                                       );
@@ -529,7 +528,7 @@ void assemble_adpm (EquationSystems & es,
                                                       + deriv_Tr_(A_b_old,transform_A_b) * PrP_old * phi[j][qp] * phi[i][qp]
                                                       - Pi_(A_b_old,decay_A_b) * phi[j][qp] * phi[i][qp]
                                                       - Pi_(A_b_old,diffuse_A_b) * (dphi[j][qp] * dphi[i][qp])
-                                                      - Pi_(A_b_old,taxis1_A_b) * phi[j][qp] * DIRECT_A_b * (tracts * dphi[i][qp])
+                                                      - Pi_(A_b_old,taxis1_A_b) * phi[j][qp] * (tract_A_b * dphi[i][qp])
                                                       //- (dphi[j][qp] * velocity) * phi[i][qp]
                                                       )
                                                );
@@ -547,7 +546,7 @@ void assemble_adpm (EquationSystems & es,
                                                       + deriv_Tr_(Tau_old,transform_Tau) * PrP_old * phi[j][qp] * phi[i][qp]
                                                       - Pi_(Tau_old,decay_Tau) * phi[j][qp] * phi[i][qp]
                                                       - Pi_(Tau_old,diffuse_Tau) * (dphi[j][qp] * dphi[i][qp])
-                                                      - Pi_(Tau_old,taxis1_Tau) * phi[j][qp] * DIRECT_Tau * (tracts * dphi[i][qp])
+                                                      - Pi_(Tau_old,taxis1_Tau) * phi[j][qp] * (tract_Tau * dphi[i][qp])
                                                       //- (dphi[j][qp] * velocity) * phi[i][qp]
                                                       )
                                                );
