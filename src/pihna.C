@@ -1,10 +1,15 @@
 #include "./utils.h"
 
+#include "libmesh/mesh_refinement.h"
+#include "libmesh/error_vector.h"
+#include "libmesh/kelly_error_estimator.h"
+
 static void input (const std::string & , EquationSystems & );
 static void initial_structure (EquationSystems & , const std::string & );
 static void initial_pihna (EquationSystems & , const std::string & );
 static void assemble_pihna (EquationSystems & , const std::string & );
 static void check_solution (EquationSystems & );
+static void adaptive_mesh_refinement (EquationSystems & , MeshRefinement &);
 
 extern PerfLog plog;
 static Parallel::Communicator * pm_ptr = 0;
@@ -13,6 +18,7 @@ void pihna (LibMeshInit & init)
 {
   Mesh mesh(init.comm(), 3);
   EquationSystems es(mesh);
+  MeshRefinement amr(mesh);
 
   pm_ptr = & init.comm();
 
@@ -49,6 +55,7 @@ void pihna (LibMeshInit & init)
   ex2.append(true);
 
   const int output_step = es.parameters.get<int>("output_step");
+  const int refinement_step = es.parameters.get<int>("refinement_step");
   const int n_t_step = es.parameters.get<int>("time_step_number");
   for (int t=1; t<=n_t_step; t++)
     {
@@ -65,6 +72,9 @@ void pihna (LibMeshInit & init)
       model.solve();
 
       check_solution(es);
+
+      if (0 == t%refinement_step)
+        adaptive_mesh_refinement(es, amr);
 
       if (0 == t%output_step)
         ex2.write_timestep(ex2_filename, es, t, model.time);
@@ -117,9 +127,22 @@ void input (const std::string & file_name, EquationSystems & es)
   es.parameters.set<int>(name) = in(name, 1);
   name = "output_step";
   es.parameters.set<int>(name) = in(name, 1);
+  name = "refinement_step";
+  es.parameters.set<int>(name) = in(name, 1+es.parameters.get<int>("time_step_number"));
 
-  name = "mesh/skip_renumber_nodes_and_elements";
-  es.parameters.set<bool>(name) = in(name, true);
+  {
+    name = "mesh/skip_renumber_nodes_and_elements";
+    es.parameters.set<bool>(name) = in(name, true);
+    //
+    name = "mesh/AMR/max_steps";
+    es.parameters.set<int>(name) = in(name, 0);
+    name = "mesh/AMR/max_level";
+    es.parameters.set<int>(name) = in(name, 3);
+    name = "mesh/AMR/refine_percentage";
+    es.parameters.set<Real>(name) = in(name, 0.5);
+    name = "mesh/AMR/coarsen_percentage";
+    es.parameters.set<Real>(name) = in(name, 0.5);
+  }
 
   name = "cells_min_capacity";
   es.parameters.set<Real>(name) = in(name, 0.0);
@@ -680,4 +703,9 @@ void check_solution (EquationSystems & es)
   system.solution->close();
   system.update();
   // ...done
+}
+
+void adaptive_mesh_refinement (EquationSystems & es, MeshRefinement & amr)
+{
+  ;
 }
