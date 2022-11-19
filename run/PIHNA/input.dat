@@ -1,4 +1,5 @@
 #
+directory = 'PIHNA_simulation'
 input_GMSH      = 'Brain_Model.msh'
 input_nodal     = 'Brain_Model_Initial_Nodal_Field.dat'
 input_elemental = 'Brain_Model_Initial_Elemental_Field.dat'
@@ -8,15 +9,29 @@ output_EXODUS   = 'Brain_Model.ex2'
 time_step_number = 100
 time_step = 0.01
 output_step = 10
+refinement_step = 10
+#
+mesh/skip_renumber_nodes_and_elements = false
+mesh/AMR/max_steps = 1
+mesh/AMR/max_level = 3
+mesh/AMR/refine_percentage  = 0.5
+mesh/AMR/coarsen_percentage = 0.1
+#
+range/active_tumor/min = 500.0
+range/necrotic/min = 500.0
+range/vascularity/min = 7200.0
 #
 cells_min_capacity = 1.0
 cells_max_capacity = 2.39e+5
 cells_max_capacity/exponent = 3
 cytokines_max_capacity = 1.0e-8
 #
-necrosis/c = 50.0
-necrosis/h = 50.0
-necrosis/v = 10.0
+# necrosis/c = 50.0
+# necrosis/h = 50.0
+# necrosis/v = 10.0
+necrosis/c = 300.0
+necrosis/h = 200.0
+necrosis/v = 300.0
 #
 diffuse/c = 2.0
 taxis/c = 0
