@@ -707,5 +707,37 @@ void check_solution (EquationSystems & es)
 
 void adaptive_mesh_refinement (EquationSystems & es, MeshRefinement & amr)
 {
-  ;
+  TransientLinearImplicitSystem & system =
+    es.get_system<TransientLinearImplicitSystem>("PIHNA");
+  libmesh_assert_equal_to(system.n_vars(), 5);
+
+  const unsigned int varno__n = system.variable_number("n"),
+                     varno__c = system.variable_number("c"),
+                     varno__h = system.variable_number("h"),
+                     varno__v = system.variable_number("v");
+
+  const Real refine_pct  = es.parameters.get<Real>("mesh/AMR/refine_percentage"),
+             coarsen_pct = es.parameters.get<Real>("mesh/AMR/coarsen_percentage");
+
+  const int max_steps = es.parameters.get<int>("mesh/AMR/max_steps"),
+            max_level = es.parameters.get<int>("mesh/AMR/max_level");
+  if (0 == max_steps) return;
+
+  for (int r=0; r<max_steps; r++)
+    {
+      ErrorVector err_vector;
+      ErrorEstimator::ErrorMap err_map;
+      err_map.insert(std::make_pair(std::make_pair(&system, varno__c), &err_vector));
+      err_map.insert(std::make_pair(std::make_pair(&system, varno__h), &err_vector));
+      // evaluate the error for each active element using the estimator provided
+      KellyErrorEstimator err_estimator;
+      err_estimator.estimate_errors(es, err_map);
+      // flag elements for coarsening / refinement by mean and std.
+      amr.flag_elements_by_mean_stddev(err_vector, refine_pct, coarsen_pct, max_level);
+      // refine / coarsen the flagged FEs
+      amr.refine_and_coarsen_elements();
+      // reinitializes the equations system object
+      es.reinit();
+    }
+  // ...done
 }
