@@ -3,7 +3,7 @@ input_GMSH     = 'Lung_Model.msh'
 input_nodal    = 'Lung_Model_Initial_Nodal_Field.dat'
 input_nodal_RT = 'Lung_Model_Initial_Nodal_Field~RT.dat'
 output_GMSH    = 'Lung_Model~processed.msh'
-output_EXODUS  = 'Lung_Model.ex2'
+output_PARAVIEW= 'Lung_Model'
 #
 time_step_number = 70
 time_step = 0.1

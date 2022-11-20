@@ -4,7 +4,7 @@ input_GMSH      = 'Brain_Model.msh'
 input_nodal     = 'Brain_Model_Initial_Nodal_Field.dat'
 input_elemental = 'Brain_Model_Initial_Elemental_Field.dat'
 output_GMSH     = 'Brain_Model~processed.msh'
-output_EXODUS   = 'Brain_Model.ex2'
+output_PARAVIEW = 'Brain_Model'
 #
 time_step_number = 100
 time_step = 0.01
