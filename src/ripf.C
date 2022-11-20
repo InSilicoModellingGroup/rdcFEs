@@ -72,8 +72,9 @@ void ripf (LibMeshInit & init)
       es.parameters.set<Real>("time") += es.parameters.get<Real>("time_step");
       model.time = es.parameters.get<Real>("time");
 
-      libMesh::out << " Solving time increment: " << t
-                   << " (time=" << model.time <<  ") ..." << std::endl;
+      libMesh::out << " ==== Step " << std::setw(4) << t << " out of " << std::setw(4) << n_t_step
+                   << " (Time=" << std::setw(9) << model.time << ") ==== "
+                   << std::endl;
 
       // copy the previously-current solution into the old solution
       *(model.older_local_solution) = *(model.old_local_solution);

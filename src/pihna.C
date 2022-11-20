@@ -59,7 +59,8 @@ void pihna (LibMeshInit & init)
   save_solution(csv, es);
   paraview.update_pvd(es);
 
-  const int output_step = es.parameters.get<int>("output_step");
+  const std::set<int> otp = export_integers(es.parameters.get<std::string>("output_time_points"));
+
   const int refinement_step = es.parameters.get<int>("refinement_step");
   const int n_t_step = es.parameters.get<int>("time_step_number");
   for (int t=1; t<=n_t_step; t++)
@@ -68,8 +69,9 @@ void pihna (LibMeshInit & init)
       es.parameters.set<Real>("time") += es.parameters.get<Real>("time_step");
       model.time = es.parameters.get<Real>("time");
 
-      libMesh::out << " Solving time increment: " << t
-                   << " (time=" << model.time <<  ") ..." << std::endl;
+      libMesh::out << " ==== Step " << std::setw(4) << t << " out of " << std::setw(4) << n_t_step
+                   << " (Time=" << std::setw(9) << model.time << ") ==== "
+                   << std::endl;
 
       // copy the previously-current solution into the old solution
       *(model.old_local_solution) = *(model.current_local_solution);
@@ -82,7 +84,7 @@ void pihna (LibMeshInit & init)
         adaptive_mesh_refinement(es, amr);
 
       // save current solution
-      if (0 == t%output_step)
+      if (otp.end()!=otp.find(t))
         {
           save_solution(csv, es);
           paraview.update_pvd(es, t);
@@ -138,9 +140,29 @@ void input (const std::string & file_name, EquationSystems & es)
   name = "time_step_number";
   es.parameters.set<int>(name) = in(name, 1);
   name = "output_step";
-  es.parameters.set<int>(name) = in(name, 1);
+  es.parameters.set<int>(name) = in(name, 0);
   name = "refinement_step";
   es.parameters.set<int>(name) = in(name, 1+es.parameters.get<int>("time_step_number"));
+
+  std::string otp;
+  if (0==es.parameters.get<int>("output_step"))
+    {
+      name = "output_time_points";
+      otp = in(name, std::to_string(es.parameters.get<int>("time_step_number")));
+      es.parameters.set<std::string>(name) = otp;
+    }
+  else
+    {
+      int t = es.parameters.get<int>("output_step");
+      std::string otp;
+      while (t<=es.parameters.get<int>("time_step_number"))
+        {
+          otp += " " + std::to_string(t) + " ";
+          t += es.parameters.get<int>("output_step");
+        }
+      name = "output_time_points";
+      es.parameters.set<std::string>(name) = otp;
+    }
 
   {
     name = "mesh/skip_renumber_nodes_and_elements";
