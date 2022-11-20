@@ -46,6 +46,7 @@
 #include "libmesh/dense_submatrix.h"
 #include "libmesh/dense_subvector.h"
 #include "libmesh/boundary_info.h"
+#include "libmesh/enum_io_package.h"
 #include "libmesh/gmsh_io.h"
 #include "libmesh/exodusII_io.h"
 #include "libmesh/enum_solver_package.h"
@@ -335,5 +336,6 @@ RealTensorValue tensor (const RealVectorValue& a)
 //-------------------------------------------------------------------------------------------------
 
 #include "./ida.h"
+#include "./paraview.h"
 
 #endif // __UTILS_H__
