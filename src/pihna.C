@@ -73,7 +73,8 @@ void pihna (LibMeshInit & init)
                    << " (Time=" << std::setw(9) << model.time << ") ==== "
                    << std::endl;
 
-      // copy the previously-current solution into the old solution
+      // update the solution (containers) for up to 2 steps behind
+      *(model.older_local_solution) = *(model.old_local_solution);
       *(model.old_local_solution) = *(model.current_local_solution);
       // now solve the AD progression model
       model.solve();

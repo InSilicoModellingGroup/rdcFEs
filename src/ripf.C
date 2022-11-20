@@ -76,7 +76,7 @@ void ripf (LibMeshInit & init)
                    << " (Time=" << std::setw(9) << model.time << ") ==== "
                    << std::endl;
 
-      // copy the previously-current solution into the old solution
+      // update the solution (containers) for up to 2 steps behind
       *(model.older_local_solution) = *(model.old_local_solution);
       *(model.old_local_solution) = *(model.current_local_solution);
       // now solve the AD progression model
@@ -164,9 +164,6 @@ void input (const std::string & file_name, EquationSystems & es)
       name = "output_time_points";
       es.parameters.set<std::string>(name) = otp;
     }
-
-  name = "mesh/skip_renumber_nodes_and_elements";
-  es.parameters.set<bool>(name) = in(name, true);
 
   name = "mesh/skip_renumber_nodes_and_elements";
   es.parameters.set<bool>(name) = in(name, true);
