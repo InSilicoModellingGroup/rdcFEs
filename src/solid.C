@@ -59,28 +59,25 @@ void solid (LibMeshInit & init)
   // perform important initializations to the solver and associated systems
   model.save_initial_mesh();
 
-  const std::string ex2_filename =
-    es.parameters.get<std::string>("output_EXODUS");
-  const std::set<int> otp = export_integers(es.parameters.get<std::string>("output_time_points"));
+  Paraview_IO paraview(mesh);
+  paraview.open_pvd(es.parameters.get<std::string>("output_PARAVIEW"));
 
-  // save this initial time snapshot
-  {
-    std::stringstream fn;
-    fn << ex2_filename << "." << std::setfill('0') << std::setw(6) << 0 << ".ex2";
-    ExodusII_IO(es.get_mesh()).write_equation_systems(fn.str(), es);
-  }
+  // save initial solution
+  paraview.update_pvd(es);
+
+  const std::set<int> otp = export_integers(es.parameters.get<std::string>("output_time_points"));
 
   const int n_t_step = es.parameters.get<int>("time_step_number");
   for (int t=1; t<=n_t_step; t++)
     {
-      const Real progress = t * model.deltat;
-      es.parameters.set<Real>("time") = progress;
+      const Real time = t * model.deltat;
+      es.parameters.set<Real>("time") = time;
       es.parameters.set<unsigned int>("step") = t;
 
-      out << "\n==== Time Step " << std::setw(4) << t;
-      out << " (" << std::fixed << std::setprecision(2) << std::setw(6) << (progress*100.) << "%)";
-      out << ", time = " << std::setw(7) << model.time;
-      out << " ====\n" << std::endl;
+      libMesh::out << std::endl
+                   << " ==== Step " << std::setw(4) << t << " out of " << std::setw(4) << n_t_step
+                   << " (Time=" << std::setw(9) << time << ") ==== "
+                   << std::endl;
 
       // solve for the solid (mechanics) equilibrium
       model.solve();
@@ -102,13 +99,11 @@ void solid (LibMeshInit & init)
       // specifically update the auxiliary system only
       model.update_auxiliary();
 
-      // save this (current) time snapshot
+      // save current solution
       if (otp.end()!=otp.find(t))
-      {
-        std::stringstream fn;
-        fn << ex2_filename << "." << std::setfill('0') << std::setw(6) << t << ".ex2";
-        ExodusII_IO(es.get_mesh()).write_equation_systems(fn.str(), es);
-      }
+        {
+          paraview.update_pvd(es, t);
+        }
     }
 
   // ...done
@@ -143,8 +138,8 @@ void input (const std::string & file_name, EquationSystems & es)
   name = "output_GMSH";
   es.parameters.set<std::string>(name) = DIR + in(name, "output.msh");
   //
-  name = "output_EXODUS";
-  es.parameters.set<std::string>(name) = DIR + in(name, "output.ex2");
+  name = "output_PARAVIEW";
+  es.parameters.set<std::string>(name) = DIR + in(name, "output4paraview");
   //
   name = "input_fibres";
   es.parameters.set<std::string>(name) = in(name, ".");
