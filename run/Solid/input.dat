@@ -1,11 +1,10 @@
 
-directory = ./tmp
-
+directory = uniaxial_compression
 input_GMSH = cube.msh
-output_EXODUS = out
+output_PARAVIEW = out
 
 time_step = 0.1
-# output_time_points = ' 5 10 '
+output_time_points = ' 2 4 6 8 10 '
 
 solver/quiet = false
 solver/nonlinear/max_nonlinear_iterations = 10
