@@ -186,6 +186,8 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "range/necrotic/max"; es.parameters.set<Real>(name) = in(name, 1.0e+12);
     name = "range/vascularity/min"; es.parameters.set<Real>(name) = in(name, 1.0e-12);
     name = "range/vascularity/max"; es.parameters.set<Real>(name) = in(name, 1.0e+12);
+    name = "range/total_cell/min"; es.parameters.set<Real>(name) = in(name, 1.0e-12);
+    name = "range/total_cell/max"; es.parameters.set<Real>(name) = in(name, 1.0e+12);
   }
 
   name = "cells_min_capacity";
@@ -804,6 +806,9 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
              necrotic__max = es.parameters.get<Real>("range/necrotic/max");
   const Real vascularity__min = es.parameters.get<Real>("range/vascularity/min"),
              vascularity__max = es.parameters.get<Real>("range/vascularity/max");
+  const Real total_cell__min = es.parameters.get<Real>("range/total_cell/min"),
+             total_cell__max = es.parameters.get<Real>("range/total_cell/max");
+  const Real Kappa_k = es.parameters.get<Real>("cells_max_capacity");
 
   pm_ptr->barrier();
 
@@ -817,10 +822,12 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
           csv << ",\"ACTIVE_TUMOR_VOLUME\"" << std::flush;
           csv << ",\"NECROTIC_VOLUME\"" << std::flush;
           csv << ",\"VASCULARITY_VOLUME\"" << std::flush;
+          csv << ",\"TOTAL_CELL_VOLUME\"" << std::flush;
           csv << std::endl;
         }
 
       Real active_tumor_volume(0.0), necrotic_volume(0.0), vascularity_volume(0.0);
+      Real total_cell_volume(0.0);
 
       for (const auto & elem : mesh.active_element_ptr_range())
         {
@@ -883,6 +890,22 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
             }
           if (consider)
             vascularity_volume += Volume;
+          //
+          consider = true;
+          for (unsigned int n=0; n<n_var_dofs; n++)
+            {
+              const Real T_ = ( soln[dof_indices_var[0][n]]
+                              + soln[dof_indices_var[1][n]]
+                              + soln[dof_indices_var[2][n]]
+                              + soln[dof_indices_var[3][n]] ) / Kappa_k;
+              if ( !(T_>=total_cell__min && T_<=total_cell__max) )
+                {
+                  consider = false;
+                  break;
+                }
+            }
+          if (consider)
+            total_cell_volume += Volume;
 
           // ...end of active finite elements loop
         }
@@ -893,6 +916,7 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
       csv << ',' << active_tumor_volume
           << ',' << necrotic_volume
           << ',' << vascularity_volume << std::flush;
+      csv << ',' << total_cell_volume << std::flush;
       csv << std::endl;
     }
 
