@@ -445,7 +445,7 @@ void assemble_pihna (EquationSystems & es,
           Real Tau__dn(0.0), Tau__dc(0.0), Tau__dh(0.0), Tau__dv(0.0);
           {
             const Real Te_ = (n_old+c_old+h_old+v_old) / Kappa_k;
-            if (Te_<0.0)
+            if (Te_<=0.0)
               {
                 Tau = 1.0;
                 Tau__dn =
@@ -453,7 +453,7 @@ void assemble_pihna (EquationSystems & es,
                 Tau__dh =
                 Tau__dv = 0.0;
               }
-            else if (Te_>1.0)
+            else if (Te_>=1.0)
               {
                 Tau = 0.0;
                 Tau__dn =
@@ -475,14 +475,14 @@ void assemble_pihna (EquationSystems & es,
           Real Ve__dc(0.0), Ve__dh(0.0), Ve__dv(0.0);
           {
             const Real Ve_ = v_old / (c_old+h_old+v_old);
-            if (Ve_<0.0)
+            if (Ve_<=0.0)
               {
                 Ve = 0.0;
                 Ve__dc =
                 Ve__dh =
                 Ve__dv = 0.0;
               }
-            else if (Ve_>1.0)
+            else if (Ve_>=1.0)
               {
                 Ve = 1.0;
                 Ve__dc =
