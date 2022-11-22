@@ -51,6 +51,10 @@ void solid (LibMeshInit & init)
   ExplicitSystem & press_sys = es.add_system<ExplicitSystem>("SolidSystem::pressure");
   press_sys.add_variable("p", CONSTANT, MONOMIAL);
 
+  // create an additional system for the Von Mises stress
+  ExplicitSystem & von_mises_sys = es.add_system<ExplicitSystem>("SolidSystem::von_mises");
+  von_mises_sys.add_variable("VM", CONSTANT, MONOMIAL);
+
   GmshIO(mesh).read(es.parameters.get<std::string>("input_GMSH"));
   mesh.prepare_for_use(es.parameters.get<bool>("mesh/skip_renumber_nodes_and_elements"));
   mesh.print_info();

@@ -375,6 +375,10 @@ void SolidSystem::post_process ()
     es.get_system<ExplicitSystem>("SolidSystem::pressure");
   libmesh_assert_equal_to(press_sys.n_vars(), 1);
 
+  ExplicitSystem & von_mises_sys =
+    es.get_system<ExplicitSystem>("SolidSystem::von_mises");
+  libmesh_assert_equal_to(von_mises_sys.n_vars(), 1);
+
   ExplicitSystem & fibre_sys =
     es.get_system<ExplicitSystem>("SolidSystem::fibre");
   libmesh_assert_equal_to(fibre_sys.n_vars(), 6);
@@ -397,6 +401,9 @@ void SolidSystem::post_process ()
 
       std::vector<dof_id_type> dof_indices_P;
       press_sys.get_dof_map().dof_indices(elem, dof_indices_P);
+
+      std::vector<dof_id_type> dof_indices_VM;
+      von_mises_sys.get_dof_map().dof_indices(elem, dof_indices_VM);
 
       const unsigned int n_u_dofs = dof_indices_x.size();
       libmesh_assert(n_u_dofs == dof_indices_y.size());
@@ -458,12 +465,25 @@ void SolidSystem::post_process ()
 
       // take the average Cauchy stress tensor
       stress_Cauchy /= qrule.n_points();
-      // calculate the mean solid stress
-      const Real mss = (stress_Cauchy(0,0)+stress_Cauchy(1,1)+stress_Cauchy(2,2))/3.0;
+      // solve the eigen-problem for the Cauchy stress tensor
+      double Sc[3][3] = { { stress_Cauchy(0,0), stress_Cauchy(0,1), stress_Cauchy(0,2) } ,
+                          { stress_Cauchy(0,1), stress_Cauchy(1,1), stress_Cauchy(1,2) } ,
+                          { stress_Cauchy(0,2), stress_Cauchy(1,2), stress_Cauchy(2,2) } };
+      double eVec[3][3]; // principal directions - unit vectors
+      double eVal[3]; // principal stresses
+      eigen_decomposition(Sc, eVec, eVal);
+      //
+      // calculate the mean solid stress (hydrostatic pressure)
+      const Real stress_hp = (eVal[0]+eVal[1]+eVal[2]) / 3.0;
+      // calculate the Von Mises stress
+      const Real stress_vm = sqrt(pow2(eVal[0])+pow2(eVal[1])+pow2(eVal[2])
+                                 -eVal[0]*eVal[1]-eVal[0]*eVal[2]-eVal[1]*eVal[2]);
       // take the average fibre direction vector
       fibre_vector /= qrule.n_points();
 
-      press_sys.solution->set(dof_indices_P[0], mss);
+      press_sys.solution->set(dof_indices_P[0], stress_hp);
+
+      von_mises_sys.solution->set(dof_indices_VM[0], stress_vm);
 
       for (unsigned int d=0; d<3; ++d)
         fibre_sys.solution->set(dof_indices_F_var[d+3][0], fibre_vector(d));
@@ -471,6 +491,8 @@ void SolidSystem::post_process ()
     }
 
     press_sys.solution->close();
+
+    von_mises_sys.solution->close();
 
     fibre_sys.solution->close();
 }
