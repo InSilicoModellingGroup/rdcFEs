@@ -1,5 +1,9 @@
 #include "./solid_system.h"
 
+#include "libmesh/mesh_refinement.h"
+#include "libmesh/error_vector.h"
+#include "libmesh/kelly_error_estimator.h"
+
 static void input (const std::string & , EquationSystems & );
 static void initial_fibres (EquationSystems & , const std::string & );
 static void adaptive_mesh_refinement (EquationSystems & , MeshRefinement &);
@@ -311,5 +315,40 @@ void initial_fibres (EquationSystems & es,
 
 void adaptive_mesh_refinement (EquationSystems & es, MeshRefinement & amr)
 {
+  ExplicitSystem& press_sys =
+    es.get_system<ExplicitSystem>("SolidSystem::pressure");
+  libmesh_assert_equal_to(press_sys.n_vars(), 1);
+
+  const unsigned int varno__p = press_sys.variable_number("p");
+
+  ExplicitSystem & von_mises_sys =
+    es.get_system<ExplicitSystem>("SolidSystem::von_mises");
+  libmesh_assert_equal_to(von_mises_sys.n_vars(), 1);
+
+  const unsigned int varno__VM = von_mises_sys.variable_number("VM");
+
+  const Real refine_pct  = es.parameters.get<Real>("mesh/AMR/refine_percentage"),
+             coarsen_pct = es.parameters.get<Real>("mesh/AMR/coarsen_percentage");
+
+  const int max_steps = es.parameters.get<int>("mesh/AMR/max_steps"),
+            max_level = es.parameters.get<int>("mesh/AMR/max_level");
+  if (0 == max_steps) return;
+
+  for (int r=0; r<max_steps; r++)
+    {
+      ErrorVector err_vector;
+      ErrorEstimator::ErrorMap err_map;
+      err_map.insert(std::make_pair(std::make_pair(&press_sys, varno__p), &err_vector));
+      err_map.insert(std::make_pair(std::make_pair(&von_mises_sys, varno__VM), &err_vector));
+      // evaluate the error for each active element using the estimator provided
+      KellyErrorEstimator err_estimator;
+      err_estimator.estimate_errors(es, err_map);
+      // flag elements for coarsening / refinement by mean and std.
+      amr.flag_elements_by_mean_stddev(err_vector, refine_pct, coarsen_pct, max_level);
+      // refine / coarsen the flagged FEs
+      amr.refine_and_coarsen_elements();
+      // reinitializes the equations system object
+      es.reinit();
+    }
   // ...done
 }
