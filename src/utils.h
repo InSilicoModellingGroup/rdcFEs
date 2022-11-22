@@ -334,6 +334,10 @@ RealTensorValue tensor (const RealVectorValue& a)
   return a_a;
 }
 //-------------------------------------------------------------------------------------------------
+// Symmetric matrix "A":
+// eigenvectors in columns of "eVec" that correspond to eigenvalues in vector "eVal"
+void eigen_decomposition(double A[3][3], double eVec[3][3], double eVal[3]);
+//-------------------------------------------------------------------------------------------------
 
 #include "./ida.h"
 #include "./paraview.h"
