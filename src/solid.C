@@ -2,6 +2,7 @@
 
 static void input (const std::string & , EquationSystems & );
 static void initial_fibres (EquationSystems & , const std::string & );
+static void adaptive_mesh_refinement (EquationSystems & , MeshRefinement &);
 
 extern PerfLog plog;
 static Parallel::Communicator * pm_ptr = 0;
@@ -10,6 +11,7 @@ void solid (LibMeshInit & init)
 {
   Mesh mesh(init.comm(), 3);
   EquationSystems es(mesh);
+  MeshRefinement amr(mesh);
 
   pm_ptr = & init.comm();
 
@@ -67,6 +69,7 @@ void solid (LibMeshInit & init)
 
   const std::set<int> otp = export_integers(es.parameters.get<std::string>("output_time_points"));
 
+  const int refinement_step = es.parameters.get<int>("refinement_step");
   const int n_t_step = es.parameters.get<int>("time_step_number");
   for (int t=1; t<=n_t_step; t++)
     {
@@ -98,6 +101,9 @@ void solid (LibMeshInit & init)
 
       // specifically update the auxiliary system only
       model.update_auxiliary();
+
+      if (0 == t%refinement_step)
+        adaptive_mesh_refinement(es, amr);
 
       // save current solution
       if (otp.end()!=otp.find(t))
@@ -152,6 +158,8 @@ void input (const std::string & file_name, EquationSystems & es)
   es.parameters.set<int>(name) = 1.0/es.parameters.get<Real>("time_step");
   name = "output_step";
   es.parameters.set<int>(name) = in(name, 0);
+  name = "refinement_step";
+  es.parameters.set<int>(name) = in(name, 1+es.parameters.get<int>("time_step_number"));
 
   std::string otp;
   if (0==es.parameters.get<int>("output_step"))
@@ -178,8 +186,19 @@ void input (const std::string & file_name, EquationSystems & es)
   name = "phase";
   es.parameters.set<unsigned int>(name) = 0;
 
-  name = "mesh/skip_renumber_nodes_and_elements";
-  es.parameters.set<bool>(name) = in(name, true);
+  {
+    name = "mesh/skip_renumber_nodes_and_elements";
+    es.parameters.set<bool>(name) = in(name, true);
+    //
+    name = "mesh/AMR/max_steps";
+    es.parameters.set<int>(name) = in(name, 0);
+    name = "mesh/AMR/max_level";
+    es.parameters.set<int>(name) = in(name, 3);
+    name = "mesh/AMR/refine_percentage";
+    es.parameters.set<Real>(name) = in(name, 0.5);
+    name = "mesh/AMR/coarsen_percentage";
+    es.parameters.set<Real>(name) = in(name, 0.5);
+  }
 
   name = "solver/quiet";
   es.parameters.set<bool>(name) = in(name, false);
@@ -283,5 +302,10 @@ void initial_fibres (EquationSystems & es,
   fibre_sys.solution->close();
   // update the system
   fibre_sys.update();
+  // ...done
+}
+
+void adaptive_mesh_refinement (EquationSystems & es, MeshRefinement & amr)
+{
   // ...done
 }
