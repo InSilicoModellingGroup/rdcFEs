@@ -441,11 +441,62 @@ void assemble_pihna (EquationSystems & es,
               GRAD_a_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[4][l]));
             }
 
-          const Real Tau = pow(1.0-apply_bounds(0.0, (n_old+c_old+h_old+v_old)/Kappa_k, 1.0), ek),
-                     Tau__dn = -(ek*pow(1.0-apply_bounds(0.0, (n_old+c_old+h_old+v_old)/Kappa_k, 1.0), ek-1.0))/Kappa_k, Tau__dc = Tau__dn, Tau__dh = Tau__dn, Tau__dv = Tau__dn;
-
-          const Real Ve = apply_bounds(0.0, v_old/(c_old+h_old+v_old), 1.0),
-                     Ve__dc = -Ve/(c_old+h_old+v_old), Ve__dh = Ve__dc, Ve__dv = Ve/v_old+Ve__dc;
+          Real Tau(0.0);
+          Real Tau__dn(0.0), Tau__dc(0.0), Tau__dh(0.0), Tau__dv(0.0);
+          {
+            const Real Te_ = (n_old+c_old+h_old+v_old) / Kappa_k;
+            if (Te_<0.0)
+              {
+                Tau = 1.0;
+                Tau__dn =
+                Tau__dc =
+                Tau__dh =
+                Tau__dv = 0.0;
+              }
+            else if (Te_>1.0)
+              {
+                Tau = 0.0;
+                Tau__dn =
+                Tau__dc =
+                Tau__dh =
+                Tau__dv = 0.0;
+              }
+            else
+              {
+                Tau = pow(1.0-Te_, ek);
+                Tau__dn =
+                Tau__dc =
+                Tau__dh =
+                Tau__dv = (-ek/Kappa_k) * pow(1.0-Te_, ek-1.0);
+              }
+          }
+          //
+          Real Ve(0.0);
+          Real Ve__dc(0.0), Ve__dh(0.0), Ve__dv(0.0);
+          {
+            const Real Ve_ = v_old / (c_old+h_old+v_old);
+            if (Ve_<0.0)
+              {
+                Ve = 0.0;
+                Ve__dc =
+                Ve__dh =
+                Ve__dv = 0.0;
+              }
+            else if (Ve_>1.0)
+              {
+                Ve = 1.0;
+                Ve__dc =
+                Ve__dh =
+                Ve__dv = 0.0;
+              }
+            else
+              {
+                Ve = Ve_;
+                Ve__dc =
+                Ve__dh = -Ve_ / (c_old+h_old+v_old);
+                Ve__dv = (1.0-Ve_) / (c_old+h_old+v_old);
+              }
+          }
 
           const Real Ua = a_old/(a_old+Kappa_a),
                      Ua__da = 1.0/(a_old+Kappa_a)-Ua/(a_old+Kappa_a);
