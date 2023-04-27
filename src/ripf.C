@@ -270,7 +270,7 @@ void initial_radiotherapy (EquationSystems & es,
              RT_focus_frac = es.parameters.get<int>("RT_dose/focus/fractions"),
              RT_total_frac = RT_broad_frac + RT_focus_frac;
   // simulation time is expressed in "days"
-  const int day = std::floor( 0.0 );
+  //const int day = std::floor( 0.0 );
 
   for (const auto & node : mesh.node_ptr_range())
     {
@@ -458,12 +458,12 @@ void assemble_ripf (EquationSystems & es,
               GRAD_HU_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[0][l]));
               GRAD_fb_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[2][l]));
             }
-          Number cc_older(0.0), fb_older(0.0);
-          for (std::size_t l=0; l<n_var_dofs; l++)
-            {
-              cc_older += phi[l][qp] * system.older_solution(dof_indices_var[1][l]);
-              fb_older += phi[l][qp] * system.older_solution(dof_indices_var[2][l]);
-            }
+          //Number cc_older(0.0), fb_older(0.0);
+          //for (std::size_t l=0; l<n_var_dofs; l++)
+          //  {
+          //    cc_older += phi[l][qp] * system.older_solution(dof_indices_var[1][l]);
+          //    fb_older += phi[l][qp] * system.older_solution(dof_indices_var[2][l]);
+          //  }
           Number cc__dtime(0.0), fb__dtime(0.0);
           for (std::size_t l=0; l<n_var_dofs; l++)
             {

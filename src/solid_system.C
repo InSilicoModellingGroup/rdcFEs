@@ -263,7 +263,7 @@ bool SolidSystem::side_time_derivative (bool request_jacobian,
 
   FEMContext& c = cast_ref<FEMContext&>(context);
 
-  const Elem& elem = c.get_elem();
+  //const Elem& elem = c.get_elem();
 
   TransientExplicitSystem & aux_system =
     es.get_system<TransientExplicitSystem>("SolidSystem::auxiliary");
@@ -388,9 +388,6 @@ void SolidSystem::post_process ()
     {
       std::vector<dof_id_type> dof_indices;
       this->get_dof_map().dof_indices(elem, dof_indices);
-
-      const unsigned int n_dofs =
-        cast_int<unsigned int>(dof_indices.size());
 
       std::vector<dof_id_type> dof_indices_x;
       this->get_dof_map().dof_indices(elem, dof_indices_x, this->var[0]);

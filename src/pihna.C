@@ -842,7 +842,7 @@ void adaptive_mesh_refinement (EquationSystems & es, MeshRefinement & amr)
 void save_solution (std::ofstream & csv, EquationSystems & es)
 {
   const MeshBase& mesh = es.get_mesh();
-  const unsigned int dim = mesh.mesh_dimension();
+  libmesh_assert_equal_to(mesh.mesh_dimension(), 3);
 
   const TransientLinearImplicitSystem & system =
     es.get_system<TransientLinearImplicitSystem>("PIHNA");
@@ -897,7 +897,7 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
           libmesh_assert(elem->n_nodes() == dof_indices_var[3].size());
           libmesh_assert(elem->n_nodes() == dof_indices_var[4].size());
 
-          const subdomain_id_type ID = elem->subdomain_id();
+          //const subdomain_id_type ID = elem->subdomain_id();
           const Real Volume = elem->volume();
 
           bool consider;

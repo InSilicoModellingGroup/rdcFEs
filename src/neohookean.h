@@ -125,12 +125,15 @@ private:
     const Real koppa = FibreStiffness;
 
     const RealTensor b = (this->F*this->F.transpose()); // Finger tensor
+    //const Real b_b = (pow2(b(0,0))+b(0,1)*b(1,0)+b(0,2)*b(2,0)
+    //                 +b(1,0)*b(0,1)+pow2(b(1,1))+b(1,2)*b(2,1)
+    //                 +b(2,0)*b(0,2)+b(2,1)*b(1,2)+pow2(b(2,2))); // inner product of Finger tensor
     RealTensor I3; // identity tensor
     I3(0,0) = I3(1,1) = I3(2,2) = 1.0;
 
-    // 1st invariant - trace of the left Green-Cauchy deformation tensor
-    const Real I = (b(0,0)+b(1,1)+b(2,2));
-    // 3rd invariant (square root of) - deformation gradient tensor determinant
+    // invariants of the left Green-Cauchy deformation tensor
+    //const Real I = (b(0,0)+b(1,1)+b(2,2));
+    //const Real II = 0.5*(pow2(I)-b_b);
     const Real J = this->F.det();
     // 4th invariant - transverse anisotropy due to fibre
     const Real IV = koppa>0.0 ? (this->A*((this->F.transpose()*this->F)*this->A)) : 0.0;

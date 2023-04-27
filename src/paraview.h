@@ -148,9 +148,9 @@ public:
     }
   //
   virtual
-  void read  (const std::string& name) { libmesh_error(); }
+  void read  (const std::string& ) { libmesh_error(); }
   virtual
-  void write (const std::string& name) { libmesh_error(); }
+  void write (const std::string& ) { libmesh_error(); }
   //
   inline
   void open_pvd (std::string fn)
