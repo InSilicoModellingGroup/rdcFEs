@@ -8,6 +8,7 @@ PerfLog plog("rdcFEs");
 
 extern void adpm (LibMeshInit & );
 extern void pihna (LibMeshInit & );
+extern void proteas (LibMeshInit & );
 extern void ripf (LibMeshInit & );
 extern void process_mesh (LibMeshInit & );
 extern void solid (LibMeshInit & );
@@ -25,6 +26,8 @@ int main (int argc, char* argv[])
       if ("adpm"==s) adpm(init);
       // PIHNA cancer model
       else if ("pihna"==s) pihna(init);
+      // PROTEAS project cancer model
+      else if ("proteas"==s) proteas(init);
       // radiation-induced pulmonary fibrosis model
       else if ("ripf"==s) ripf(init);
     }
