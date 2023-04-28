@@ -8,6 +8,7 @@ static void input (const std::string & , EquationSystems & );
 static void initial_radiotherapy_dosage (EquationSystems & , const std::string & );
 static void initial_hounsfield_unit (EquationSystems & , const std::string & );
 static void initial_proteas_model (EquationSystems & , const std::string & );
+static void assemble_proteas_model (EquationSystems & , const std::string & );
 static void check_solution (EquationSystems & );
 static void adaptive_mesh_refinement (EquationSystems & , MeshRefinement & );
 
@@ -33,6 +34,7 @@ void proteas (LibMeshInit & init)
   model.add_variable("gmt", FIRST, LAGRANGE); // grey matter cells
   model.add_variable("wmt", FIRST, LAGRANGE); // white matter cells
   model.attach_init_function(initial_proteas_model);
+  model.attach_assemble_function(assemble_proteas_model);
 
   ExplicitSystem & RTD =
     es.add_system<ExplicitSystem>("RTD");
@@ -294,6 +296,14 @@ void initial_proteas_model (EquationSystems & es,
   // close solution vector and update the system
   system.solution->close();
   system.update();
+  // ...done
+}
+
+void assemble_proteas_model (EquationSystems & es,
+                             const std::string & libmesh_dbg_var(system_name))
+{
+  libmesh_assert_equal_to(system_name, "PROTEAS_model");
+
   // ...done
 }
 
