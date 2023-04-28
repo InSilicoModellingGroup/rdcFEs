@@ -26,12 +26,12 @@ void proteas (LibMeshInit & init)
 
   TransientLinearImplicitSystem & model =
     es.add_system<TransientLinearImplicitSystem>("PROTEAS_model");
-  model.add_variable("nec", FIRST, LAGRANGE);
-  model.add_variable("ter", FIRST, LAGRANGE);
-  model.add_variable("oed", FIRST, LAGRANGE);
-  model.add_variable("vsc", FIRST, LAGRANGE);
-  model.add_variable("gmt", FIRST, LAGRANGE);
-  model.add_variable("wmt", FIRST, LAGRANGE);
+  model.add_variable("nec", FIRST, LAGRANGE); // necrotic cells
+  model.add_variable("ter", FIRST, LAGRANGE); // tumour enhancing region cells
+  model.add_variable("oed", FIRST, LAGRANGE); // oedema
+  model.add_variable("vsc", FIRST, LAGRANGE); // vascular cells
+  model.add_variable("gmt", FIRST, LAGRANGE); // grey matter cells
+  model.add_variable("wmt", FIRST, LAGRANGE); // white matter cells
   model.attach_init_function(initial_proteas_model);
 
   ExplicitSystem & RTD =
