@@ -1,5 +1,5 @@
 ######################################################################
-LIBMESH_DIR ?= /Users/vasvav/Work/libmesh-f29b2d11ea0566a17f16e3b8db08169a2004404c
+LIBMESH_DIR = /Users/vasvav/Public/libmesh-d3bda6c7009c6b3241ef2e6c999eff577116dc68
 
 include $(LIBMESH_DIR)/Make.common
 
