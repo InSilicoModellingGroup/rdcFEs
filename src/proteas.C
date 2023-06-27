@@ -728,14 +728,12 @@ void check_solution (EquationSystems & es)
                                    node->dof_number(system.number(), 1, 0) ,
                                    node->dof_number(system.number(), 2, 0) ,
                                    node->dof_number(system.number(), 3, 0) ,
-                                   node->dof_number(system.number(), 4, 0) ,
-                                   node->dof_number(system.number(), 5, 0) };
+                                   node->dof_number(system.number(), 4, 0) };
       libmesh_assert( node->n_comp(system.number(), 0) == 1 );
       libmesh_assert( node->n_comp(system.number(), 1) == 1 );
       libmesh_assert( node->n_comp(system.number(), 2) == 1 );
       libmesh_assert( node->n_comp(system.number(), 3) == 1 );
       libmesh_assert( node->n_comp(system.number(), 4) == 1 );
-      libmesh_assert( node->n_comp(system.number(), 5) == 1 );
 
       Real hos_, tum_, nec_, vsc_, oed_;
       hos_ = soln[idof[0]]; if (hos_<0.0) hos_ = 0.0;
