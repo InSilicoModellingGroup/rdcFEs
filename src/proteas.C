@@ -5,8 +5,7 @@
 #include "libmesh/kelly_error_estimator.h"
 
 static void input (const std::string & , EquationSystems & );
-static void initial_radiotherapy_dosage (EquationSystems & , const std::string & );
-static void initial_hounsfield_unit (EquationSystems & , const std::string & );
+static void initial_aux_data (EquationSystems & , const std::string & );
 static void initial_proteas_model (EquationSystems & , const std::string & );
 static void assemble_proteas_model (EquationSystems & , const std::string & );
 static void check_solution (EquationSystems & );
@@ -35,15 +34,11 @@ void proteas (LibMeshInit & init)
   model.attach_init_function(initial_proteas_model);
   model.attach_assemble_function(assemble_proteas_model);
 
-  ExplicitSystem & RTD =
-    es.add_system<ExplicitSystem>("RTD");
-  RTD.add_variable("RTD", FIRST, LAGRANGE);
-  RTD.attach_init_function(initial_radiotherapy_dosage);
-
-  ExplicitSystem & HU =
-    es.add_system<ExplicitSystem>("HU");
-  HU.add_variable("HU", FIRST, LAGRANGE);
-  HU.attach_init_function(initial_hounsfield_unit);
+  ExplicitSystem & AUX =
+    es.add_system<ExplicitSystem>("AUX");
+  AUX.add_variable("HU", FIRST, LAGRANGE);
+  AUX.add_variable("RTD", FIRST, LAGRANGE);
+  AUX.attach_init_function(initial_aux_data);
 
   GmshIO(mesh).read(es.parameters.get<std::string>("input_GMSH"));
   mesh.prepare_for_use(es.parameters.get<bool>("mesh/skip_renumber_nodes_and_elements"));
@@ -53,7 +48,7 @@ void proteas (LibMeshInit & init)
   es.print_info();
 
   Paraview_IO paraview(mesh);
-  paraview.open_pvd(es.parameters.get<std::string>("output_PARAVIEW"));
+  paraview.open_pvd(es.parameters.get<std::string>("output_Paraview"));
 
   std::ofstream csv;
   if (0==global_processor_id())
@@ -118,18 +113,13 @@ void input (const std::string & file_name, EquationSystems & es)
   name = "output_GMSH";
   es.parameters.set<std::string>(name) = DIR + in(name, "output.msh");
   //
-  name = "input_NodalData";
+  name = "input_nodal";
   es.parameters.set<std::string>(name) = in(name, "input.nd");
   if (0==global_processor_id())
     std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+es.parameters.get<std::string>(name)).c_str());
   //
-  name = "input_RTDosage";
-  es.parameters.set<std::string>(name) = in(name, "input.rtd");
-  if (0==global_processor_id())
-    std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+es.parameters.get<std::string>(name)).c_str());
-  //
-  name = "input_HU";
-  es.parameters.set<std::string>(name) = in(name, "input.hu");
+  name = "input_nodal_aux";
+  es.parameters.set<std::string>(name) = in(name, "input_aux.nd");
   if (0==global_processor_id())
     std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+es.parameters.get<std::string>(name)).c_str());
   //
@@ -184,65 +174,91 @@ void input (const std::string & file_name, EquationSystems & es)
     es.parameters.set<Real>(name) = in(name, 0.5);
   }
 
+  {
+    // Model parameters set
+    name = "cells/total_capacity"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "radiotherapy/max_dosage"; es.parameters.set<Real>(name) = in(name, 1.0);
+
+    name = "host/proliferation"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "host/vsc_threshold"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "host/RT_death_rate"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "host/RT_exp_a"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "host/RT_exp_b"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "host/necrosis_rate"; es.parameters.set<Real>(name) = in(name, 1.0);
+
+    name = "tumour/diffusion"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "tumour/diffusion_host"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "tumour/proliferation"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "tumour/vsc_threshold"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "tumour/RT_death_rate"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "tumour/RT_exp_a"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "tumour/RT_exp_b"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "tumour/necrosis_rate"; es.parameters.set<Real>(name) = in(name, 1.0);
+
+    name = "necrosis/clearance"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "necrosis/slope"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "necrosis/vsc_threshold"; es.parameters.set<Real>(name) = in(name, 1.0);
+
+    name = "vascular/proliferation"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "vascular/necrosis_rate"; es.parameters.set<Real>(name) = in(name, 1.0);
+
+    name = "oedema/diffusion"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "oedema/proliferation"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "oedema/vsc_threshold"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "oedema/oedema_threshold"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "oedema/RT_coeff"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "oedema/RT_exp"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "oedema/reabsorption_rate"; es.parameters.set<Real>(name) = in(name, 1.0);
+  }
+
   // ...done
 }
 
-void initial_radiotherapy_dosage (EquationSystems & es,
+void initial_aux_data (EquationSystems & es,
                                   const std::string & libmesh_dbg_var(system_name))
 {
-  libmesh_assert_equal_to(system_name, "RTD");
+  libmesh_assert_equal_to(system_name, "AUX");
 
   const MeshBase& mesh = es.get_mesh();
-  libmesh_assert_equal_to(mesh.mesh_dimension(), 3);
+  libmesh_assert_equal_to(mesh.mesh_dimension(), 2);
 
   ExplicitSystem & system =
-    es.get_system<ExplicitSystem>("RTD");
-  libmesh_assert_equal_to(system.n_vars(), 1);
+    es.get_system<ExplicitSystem>("AUX");
+  libmesh_assert_equal_to(system.n_vars(), 2);
 
-  std::ifstream fin(es.parameters.get<std::string>("input_nodal_RTDosage"));
-
-  const Real RT_sessions = es.parameters.get<int>("RT/sessions");
-    
-  for (const auto & node : mesh.node_ptr_range())
+  std::ifstream fin(es.parameters.get<std::string>("input_nodal_aux"));
+  if ( !fin.is_open() )
     {
-      Real RTD_;
-      fin >> RTD_;
-
-      const dof_id_type idof[] = { node->dof_number(system.number(), 0, 0) };
-      libmesh_assert( node->n_comp(system.number(), 0) == 1 );
-
-      system.solution->set(idof[0], RTD_);
+      std::cout << "ERROR: Failed to open nodal aux input file " << es.parameters.get<std::string>("input_nodal_aux") << std::endl;
+      exit(1);
     }
 
-  // close solution vector and update the system
-  system.solution->close();
-  system.update();
-  // ...done
-}
-
-void initial_hounsfield_unit (EquationSystems & es,
-                              const std::string & libmesh_dbg_var(system_name))
-{
-  libmesh_assert_equal_to(system_name, "HU");
-
-  const MeshBase& mesh = es.get_mesh();
-  libmesh_assert_equal_to(mesh.mesh_dimension(), 3);
-
-  ExplicitSystem & system =
-    es.get_system<ExplicitSystem>("HU");
-  libmesh_assert_equal_to(system.n_vars(), 1);
-
-  std::ifstream fin(es.parameters.get<std::string>("input_nodal_HU"));
-
   for (const auto & node : mesh.node_ptr_range())
     {
-      Real HU_;
-      fin >> HU_;
+      Real HU_, RTD_;
+      std::string line;
+      while ( std::getline(fin,line) ) {
+	if (line.empty() || line[0] == '#') {
+	  continue;  // Ignore empty lines and lines starting with '#'
+        }
 
-      const dof_id_type idof[] = { node->dof_number(system.number(), 0, 0) };
+	std::istringstream iss(line);
+        if ( iss >> HU_ >> RTD_) {
+	  break;
+        }
+	else {
+	  std::cout << "ERROR: Nodal input aux file failed to read line: " << line << std::endl;
+	  exit(1);
+	}
+      }
+
+      const dof_id_type idof[] = { node->dof_number(system.number(), 0, 0),
+				   node->dof_number(system.number(), 1, 0) };
       libmesh_assert( node->n_comp(system.number(), 0) == 1 );
+      libmesh_assert( node->n_comp(system.number(), 01) == 1 );
 
       system.solution->set(idof[0], HU_);
+      system.solution->set(idof[1], RTD_);
     }
 
   // close solution vector and update the system
@@ -266,12 +282,31 @@ void initial_proteas_model (EquationSystems & es,
   es.parameters.set<Real> ("time") =
     system.time = 0.0;
 
-  std::ifstream fin(es.parameters.get<std::string>("input_NodalData"));
+  std::ifstream fin(es.parameters.get<std::string>("input_nodal"));
+  if ( !fin.is_open() )
+    {
+      std::cout << "ERROR: Failed to open nodal input file " << es.parameters.get<std::string>("input_nodal") << std::endl;
+      exit(1);
+    }
 
   for (const auto & node : mesh.node_ptr_range())
     {
       Real hos_, tum_, nec_, vsc_, oed_;
-      fin >> hos_ >> tum_ >> nec_ >> vsc_ >> oed_;
+      std::string line;
+      while ( std::getline(fin,line) ) {
+	if (line.empty() || line[0] == '#') {
+	  continue;  // Ignore empty lines and lines starting with '#'
+        }
+
+	std::istringstream iss(line);
+        if ( iss >> hos_ >> tum_ >> nec_ >> vsc_ >> oed_) {
+	  break;
+        }
+	else {
+	  std::cout << "ERROR: Nodal input file failed to read line: " << line << std::endl;
+	  exit(1);
+	}
+      }
 
       const dof_id_type idof[] = { node->dof_number(system.number(), 0, 0) ,
                                    node->dof_number(system.number(), 1, 0) ,
@@ -292,6 +327,7 @@ void initial_proteas_model (EquationSystems & es,
       system.solution->set(idof[4], oed_);
     }
 
+  fin.close();
   // close solution vector and update the system
   system.solution->close();
   system.update();
@@ -307,44 +343,34 @@ void assemble_proteas_model (EquationSystems & es,
   const unsigned int dim = mesh.mesh_dimension();
 
   const int proteas_model_vars = 5;
-  const int RTD_vars =1;
-  const int HU_vars = 1;
+  const int AUX_vars =2;
   
   TransientLinearImplicitSystem & system =
     es.get_system<TransientLinearImplicitSystem>("PROTEAS_model");
   libmesh_assert_equal_to(system.n_vars(), proteas_model_vars);
 
-  const ExplicitSystem & RTD_system =
-    es.get_system<ExplicitSystem>("RTD");
-  libmesh_assert_equal_to(RTD_system.n_vars(), RTD_vars);
-
-  const ExplicitSystem & HU_system =
-    es.get_system<ExplicitSystem>("HU");
-  libmesh_assert_equal_to(RTD_system.n_vars(), HU_vars);
+  const ExplicitSystem & AUX_system =
+    es.get_system<ExplicitSystem>("AUX");
+  libmesh_assert_equal_to(AUX_system.n_vars(), AUX_vars);
 
   FEType fe_type = system.variable_type(0);
-  FEType fe_type_RTD = RTD_system.variable_type(0);
-  FEType fe_type_HU = HU_system.variable_type(0);
+  FEType fe_type_AUX = AUX_system.variable_type(0);
 
   std::unique_ptr<FEBase> fe(FEBase::build(dim, fe_type));
-  std::unique_ptr<FEBase> fe_RTD(FEBase::build(dim, fe_type_RTD));
-  std::unique_ptr<FEBase> fe_HU(FEBase::build(dim, fe_type_HU));
+  std::unique_ptr<FEBase> fe_AUX(FEBase::build(dim, fe_type_AUX));
 
   QGauss qrule(dim, fe_type.default_quadrature_order());
 
   fe->attach_quadrature_rule(&qrule);
-  fe_RTD->attach_quadrature_rule(&qrule);
-  fe_HU->attach_quadrature_rule(&qrule);
+  fe_AUX->attach_quadrature_rule(&qrule);
 
   const std::vector<Real> & JxW = fe->get_JxW();
 
   const std::vector<std::vector<Real>> & phi = fe->get_phi();
-  const std::vector<std::vector<Real>> & phi_RTD = fe_RTD->get_phi();
-  const std::vector<std::vector<Real>> & phi_HU = fe_HU->get_phi();
+  const std::vector<std::vector<Real>> & phi_AUX = fe_AUX->get_phi();
 
   const std::vector<std::vector<RealGradient>> & dphi = fe->get_dphi();
-  const std::vector<std::vector<RealGradient>> & dphi_RTD = fe_RTD->get_dphi();
-  const std::vector<std::vector<RealGradient>> & dphi_HU = fe_HU->get_dphi();
+  const std::vector<std::vector<RealGradient>> & dphi_AUX = fe_AUX->get_dphi();
 
   const Real DT_2 = es.parameters.get<Real>("time_step") / 2.0;
 
@@ -392,18 +418,13 @@ void assemble_proteas_model (EquationSystems & es,
       for (unsigned int v=0; v<proteas_model_vars; v++)
         system.get_dof_map().dof_indices(elem, dof_indices_var[v], v);
 
-      std::vector<std::vector<dof_id_type>> dof_indices_RTD_var(RTD_vars);
-      for (unsigned int l=0; l<HU_vars; l++)
-        RTD_system.get_dof_map().dof_indices(elem, dof_indices_RTD_var[l], l);
-
-      std::vector<std::vector<dof_id_type>> dof_indices_HU_var(HU_vars);
-      for (unsigned int l=0; l<HU_vars; l++)
-        HU_system.get_dof_map().dof_indices(elem, dof_indices_HU_var[l], l);
+      std::vector<std::vector<dof_id_type>> dof_indices_AUX_var(AUX_vars);
+      for (unsigned int l=0; l<AUX_vars; l++)
+        AUX_system.get_dof_map().dof_indices(elem, dof_indices_AUX_var[l], l);
 
       const unsigned int n_dofs     = dof_indices.size();
       const unsigned int n_var_dofs = dof_indices_var[0].size();
-      const unsigned int n_RTD_var_dofs = dof_indices_RTD_var[0].size();
-      const unsigned int n_HU_var_dofs = dof_indices_HU_var[0].size();
+      const unsigned int n_AUX_var_dofs = dof_indices_AUX_var[0].size();
 
       DenseMatrix<Number> Ke(n_dofs, n_dofs);
       DenseSubMatrix<Number> Ke_var[proteas_model_vars][proteas_model_vars] =
@@ -428,7 +449,7 @@ void assemble_proteas_model (EquationSystems & es,
         Fe_var[i].reposition(i*n_var_dofs, n_var_dofs);
 
       fe->reinit(elem);
-      fe_RTD->reinit(elem);
+      fe_AUX->reinit(elem);
 
       for (unsigned int qp=0; qp<qrule.n_points(); qp++)
         {
@@ -446,31 +467,23 @@ void assemble_proteas_model (EquationSystems & es,
               GRAD_oed_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[4][l]));
             }
 
-          Number RTD(0.0);
-          Gradient GRAD_RTD({0.0, 0.0, 0.0});
-          for (std::size_t l=0; l<n_RTD_var_dofs; l++)
-            {
-              RTD += phi_RTD[l][qp] * RTD_system.current_solution(dof_indices_RTD_var[0][l]);
-              GRAD_RTD.add_scaled(dphi_RTD[l][qp], RTD_system.current_solution(dof_indices_RTD_var[0][l]));
-            }
-          // normalize the gradient vector
-          {
-            const Real l2norm = GRAD_RTD.norm();
-            GRAD_RTD = l2norm ? GRAD_RTD.unit() : Gradient(0.0,0.0,0.0);
-          }
-
           Number HU(0.0);
           Gradient GRAD_HU({0.0, 0.0, 0.0});
-          for (std::size_t l=0; l<n_HU_var_dofs; l++)
-            {
-              HU += phi_HU[l][qp] * HU_system.current_solution(dof_indices_HU_var[0][l]);
-              GRAD_HU.add_scaled(dphi_HU[l][qp], HU_system.current_solution(dof_indices_HU_var[0][l]));
-            }
-          // normalize the gradient vector
-          {
-            const Real l2norm = GRAD_HU.norm();
-            GRAD_HU = l2norm ? GRAD_HU.unit() : Gradient(0.0,0.0,0.0);
-          }
+	  HU += phi_AUX[0][qp] * AUX_system.current_solution(dof_indices_AUX_var[0][0]);
+	  GRAD_HU.add_scaled(dphi_AUX[0][qp], AUX_system.current_solution(dof_indices_AUX_var[0][0]));
+	  {
+	    const Real l2norm = GRAD_HU.norm();
+	    GRAD_HU = l2norm ? GRAD_HU.unit() : Gradient(0.0,0.0,0.0);
+	  }
+
+          Number RTD(0.0);
+          Gradient GRAD_RTD({0.0, 0.0, 0.0});
+	  RTD += phi_AUX[1][qp] * AUX_system.current_solution(dof_indices_AUX_var[0][1]);
+	  GRAD_RTD.add_scaled(dphi_AUX[1][qp], AUX_system.current_solution(dof_indices_AUX_var[0][1]));
+	  {
+	    const Real l2norm = GRAD_RTD.norm();
+	    GRAD_RTD = l2norm ? GRAD_RTD.unit() : Gradient(0.0,0.0,0.0);
+	  }
 
           const Real T = hos_old + tum_old + nec_old + vsc_old;
           const Real Kappa = 1.0 - T/T_max;
