@@ -14,7 +14,7 @@ static void adaptive_mesh_refinement (EquationSystems & , MeshRefinement & );
 extern PerfLog plog;
 static Parallel::Communicator * pm_ptr = 0;
 
-void proteas (LibMeshInit & init)
+void proteas (LibMeshInit & init, const std::string &inputFile)
 {
   Mesh mesh(init.comm(), 3);
   EquationSystems es(mesh);
@@ -22,7 +22,7 @@ void proteas (LibMeshInit & init)
 
   pm_ptr = & init.comm();
 
-  input("input.dat", es);
+  input(inputFile, es);
 
   TransientLinearImplicitSystem & model =
     es.add_system<TransientLinearImplicitSystem>("PROTEAS_model");
@@ -43,7 +43,7 @@ void proteas (LibMeshInit & init)
   GmshIO(mesh).read(es.parameters.get<std::string>("input_GMSH"));
   mesh.prepare_for_use(es.parameters.get<bool>("mesh/skip_renumber_nodes_and_elements"));
   mesh.print_info();
-  GmshIO(mesh).write(es.parameters.get<std::string>("output_GMSH"));
+  //  GmshIO(mesh).write(es.parameters.get<std::string>("output_GMSH"));
   es.init();
   es.print_info();
 
@@ -102,7 +102,7 @@ void input (const std::string & file_name, EquationSystems & es)
 
   // create a directory to store simulation results
   if (0==global_processor_id())
-    std::system(std::string("mkdir "+DIR).c_str());
+    std::system(std::string("mkdir -p "+DIR).c_str());
   // create a copy of the input file containing all model parameters
   if (0==global_processor_id())
     std::system(std::string("cp "+file_name+" "+DIR+file_name).c_str());
@@ -115,13 +115,13 @@ void input (const std::string & file_name, EquationSystems & es)
   //
   name = "input_nodal";
   es.parameters.set<std::string>(name) = in(name, "input.nd");
-  if (0==global_processor_id())
-    std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+es.parameters.get<std::string>(name)).c_str());
+  // if (0==global_processor_id())
+  //   std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+es.parameters.get<std::string>(name)).c_str());
   //
   name = "input_nodal_aux";
   es.parameters.set<std::string>(name) = in(name, "input_aux.nd");
-  if (0==global_processor_id())
-    std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+es.parameters.get<std::string>(name)).c_str());
+  // if (0==global_processor_id())
+  //   std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+es.parameters.get<std::string>(name)).c_str());
   //
   name = "output_Paraview";
   es.parameters.set<std::string>(name) = DIR + in(name, "output4paraview");
@@ -342,8 +342,8 @@ void assemble_proteas_model (EquationSystems & es,
   const MeshBase & mesh = es.get_mesh();
   const unsigned int dim = mesh.mesh_dimension();
 
-  const int proteas_model_vars = 5;
-  const int AUX_vars =2;
+  const int proteas_model_vars=5;
+  const int AUX_vars=2;
   
   TransientLinearImplicitSystem & system =
     es.get_system<TransientLinearImplicitSystem>("PROTEAS_model");
@@ -512,11 +512,9 @@ void assemble_proteas_model (EquationSystems & es,
           const Real oed_RT = xi_e * std::pow(RTD / RT_max,p_RT_e);
           const Real oed_clearance = a_e * (1.0 - heaviside(vsc_old - u_e));
 
-          // source terms
+          // RHS contribution
           for (std::size_t i=0; i<n_var_dofs; i++)
             {
-              // RHS contribution
-
               // Host (healthy) cells
               Fe_var[0](i) += JxW[qp]*(
                                         hos_old * phi[i][qp] // capacity term
