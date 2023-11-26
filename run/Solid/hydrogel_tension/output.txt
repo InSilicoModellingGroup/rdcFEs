@@ -1,0 +1,320 @@
+cp: . is a directory (not copied).
+0 (x,y,z)=(       0,      nan,      nan)
+1 (x,y,z)=(     nan,        0,      nan)
+2 (x,y,z)=(     nan,      nan,        0)
+10 (x,y,z)=(  -0.001,        0,        0)
+*** Warning, This code is deprecated, and likely to be removed in future library versions! src/mesh/mesh_base.C, line 456, compiled Nov 21 2023 at 23:11:32 ***
+ Mesh Information:
+  elem_dimensions()={3}
+  spatial_dimension()=3
+  n_nodes()=1569
+    n_local_nodes()=442
+  n_elem()=5504
+    n_local_elem()=1376
+    n_active_elem()=5504
+  n_subdomains()=1
+  n_partitions()=4
+  n_processors()=4
+  n_threads()=1
+  processor_id()=0
+  is_prepared()=true
+  is_replicated()=true
+
+*** Warning, This code is untested, experimental, or likely to see future API changes: /Users/vasvav/Public/libmesh-d3bda6c7009c6b3241ef2e6c999eff577116dc68/include/libmesh/diff_physics.h, line 569, compiled Nov 26 2023 at 23:39:28 ***
+ EquationSystems
+  n_systems()=6
+   System #0, "SolidSystem"
+    Type "SolidSystem"
+    Variables={ "x" "y" "z" } 
+    Finite Element Types="LAGRANGE" 
+    Approximation Orders="FIRST" 
+    n_dofs()=4707
+    n_local_dofs()=1326
+    n_constrained_dofs()=0
+    n_local_constrained_dofs()=0
+    n_vectors()=1
+    n_matrices()=1
+    DofMap Sparsity
+      Average  On-Processor Bandwidth <= 34.195
+      Average Off-Processor Bandwidth <= 1.96176
+      Maximum  On-Processor Bandwidth <= 105
+      Maximum Off-Processor Bandwidth <= 39
+    DofMap Constraints
+      Number of DoF Constraints = 0
+   System #1, "SolidSystem::auxiliary"
+    Type "TransientExplicit"
+    Variables={ "undeformed_x" "undeformed_y" "undeformed_z" } 
+    Finite Element Types="LAGRANGE" 
+    Approximation Orders="FIRST" 
+    n_dofs()=4707
+    n_local_dofs()=1326
+    n_constrained_dofs()=0
+    n_local_constrained_dofs()=0
+    n_vectors()=3
+    n_matrices()=0
+    DofMap Sparsity
+      Average  On-Processor Bandwidth <= 0
+      Average Off-Processor Bandwidth <= 0
+      Maximum  On-Processor Bandwidth <= 0
+      Maximum Off-Processor Bandwidth <= 0
+    DofMap Constraints
+      Number of DoF Constraints = 0
+   System #2, "SolidSystem::displacement"
+    Type "Explicit"
+    Variables={ "u_x" "u_y" "u_z" } 
+    Finite Element Types="LAGRANGE" 
+    Approximation Orders="FIRST" 
+    n_dofs()=4707
+    n_local_dofs()=1326
+    n_constrained_dofs()=0
+    n_local_constrained_dofs()=0
+    n_vectors()=1
+    n_matrices()=0
+    DofMap Sparsity
+      Average  On-Processor Bandwidth <= 0
+      Average Off-Processor Bandwidth <= 0
+      Maximum  On-Processor Bandwidth <= 0
+      Maximum Off-Processor Bandwidth <= 0
+    DofMap Constraints
+      Number of DoF Constraints = 0
+   System #3, "SolidSystem::fibre"
+    Type "Explicit"
+    Variables={ "fibre_reference_x" "fibre_reference_y" "fibre_reference_z" "fibre_current_x" "fibre_current_y" "fibre_current_z" } 
+    Finite Element Types="MONOMIAL" 
+    Approximation Orders="CONSTANT" 
+    n_dofs()=33024
+    n_local_dofs()=8256
+    n_constrained_dofs()=0
+    n_local_constrained_dofs()=0
+    n_vectors()=1
+    n_matrices()=0
+    DofMap Sparsity
+      Average  On-Processor Bandwidth <= 0
+      Average Off-Processor Bandwidth <= 0
+      Maximum  On-Processor Bandwidth <= 0
+      Maximum Off-Processor Bandwidth <= 0
+    DofMap Constraints
+      Number of DoF Constraints = 0
+   System #4, "SolidSystem::pressure"
+    Type "Explicit"
+    Variables="p" 
+    Finite Element Types="MONOMIAL" 
+    Approximation Orders="CONSTANT" 
+    n_dofs()=5504
+    n_local_dofs()=1376
+    n_constrained_dofs()=0
+    n_local_constrained_dofs()=0
+    n_vectors()=1
+    n_matrices()=0
+    DofMap Sparsity
+      Average  On-Processor Bandwidth <= 0
+      Average Off-Processor Bandwidth <= 0
+      Maximum  On-Processor Bandwidth <= 0
+      Maximum Off-Processor Bandwidth <= 0
+    DofMap Constraints
+      Number of DoF Constraints = 0
+   System #5, "SolidSystem::von_mises"
+    Type "Explicit"
+    Variables="VM" 
+    Finite Element Types="MONOMIAL" 
+    Approximation Orders="CONSTANT" 
+    n_dofs()=5504
+    n_local_dofs()=1376
+    n_constrained_dofs()=0
+    n_local_constrained_dofs()=0
+    n_vectors()=1
+    n_matrices()=0
+    DofMap Sparsity
+      Average  On-Processor Bandwidth <= 0
+      Average Off-Processor Bandwidth <= 0
+      Maximum  On-Processor Bandwidth <= 0
+      Maximum Off-Processor Bandwidth <= 0
+    DofMap Constraints
+      Number of DoF Constraints = 0
+
+
+ ==== Step    1 out of   10 (Time=      0.1) ==== 
+Assembling the System
+Nonlinear Residual: 0.000348991
+Linear solve starting, tolerance 2.86541e-06
+Linear solve finished, step 61, residual 3.21306e-09
+Trying full Newton step
+  Current Residual: 1.86694e-07
+  Nonlinear step: |du|/|u| = 0.0399541, |du| = 0.00246792
+Assembling the System
+Nonlinear Residual: 1.86694e-07
+Linear solve starting, tolerance 0.00535635
+Linear solve finished, step 22, residual 1.82658e-08
+Trying full Newton step
+  Current Residual: 3.80616e-09
+  Nonlinear solver converged, step 1, residual 3.80616e-09
+  Nonlinear solver relative residual 1.09062e-05 > 1e-08
+  Nonlinear solver converged, step 1, relative step size 0.00025884 < 0.001
+
+ ==== Step    2 out of   10 (Time=      0.2) ==== 
+Assembling the System
+Nonlinear Residual: 0.000350543
+Linear solve starting, tolerance 2.85271e-06
+Linear solve finished, step 62, residual 2.81688e-09
+Trying full Newton step
+  Current Residual: 1.96584e-07
+  Nonlinear step: |du|/|u| = 0.040304, |du| = 0.00245481
+Assembling the System
+Nonlinear Residual: 1.96584e-07
+Linear solve starting, tolerance 0.00508688
+Linear solve finished, step 23, residual 1.45781e-08
+Trying full Newton step
+  Current Residual: 7.40016e-09
+  Nonlinear solver converged, step 1, residual 7.40016e-09
+  Nonlinear solver relative residual 2.11105e-05 > 1e-08
+  Nonlinear solver converged, step 1, relative step size 0.00022498 < 0.001
+
+ ==== Step    3 out of   10 (Time=      0.3) ==== 
+Assembling the System
+Nonlinear Residual: 0.000351946
+Linear solve starting, tolerance 2.84135e-06
+Linear solve finished, step 62, residual 2.94452e-09
+Trying full Newton step
+  Current Residual: 2.10622e-07
+  Nonlinear step: |du|/|u| = 0.0406245, |du| = 0.00244336
+Assembling the System
+Nonlinear Residual: 2.10622e-07
+Linear solve starting, tolerance 0.00474784
+Linear solve finished, step 23, residual 1.23718e-08
+Trying full Newton step
+  Current Residual: 1.04914e-08
+  Nonlinear solver current_residual 1.04914e-08 > 1e-08
+  Nonlinear solver relative residual 2.98098e-05 > 1e-08
+  Nonlinear solver converged, step 1, relative step size 0.000189807 < 0.001
+
+ ==== Step    4 out of   10 (Time=      0.4) ==== 
+Assembling the System
+Nonlinear Residual: 0.000353223
+Linear solve starting, tolerance 2.83107e-06
+Linear solve finished, step 62, residual 3.08147e-09
+Trying full Newton step
+  Current Residual: 2.24712e-07
+  Nonlinear step: |du|/|u| = 0.040921, |du| = 0.00243407
+Assembling the System
+Nonlinear Residual: 2.24712e-07
+Linear solve starting, tolerance 0.00445013
+Linear solve finished, step 23, residual 9.47894e-09
+Trying full Newton step
+  Current Residual: 1.28991e-08
+  Nonlinear solver current_residual 1.28991e-08 > 1e-08
+  Nonlinear solver relative residual 3.65184e-05 > 1e-08
+  Nonlinear solver converged, step 1, relative step size 0.000157779 < 0.001
+
+ ==== Step    5 out of   10 (Time=      0.5) ==== 
+Assembling the System
+Nonlinear Residual: 0.000354398
+Linear solve starting, tolerance 2.82169e-06
+Linear solve finished, step 63, residual 2.55704e-09
+Trying full Newton step
+  Current Residual: 2.37236e-07
+  Nonlinear step: |du|/|u| = 0.0412002, |du| = 0.00242749
+Assembling the System
+Nonlinear Residual: 2.37236e-07
+Linear solve starting, tolerance 0.00421522
+Linear solve finished, step 21, residual 8.70439e-09
+Trying full Newton step
+  Current Residual: 1.47723e-08
+  Nonlinear solver current_residual 1.47723e-08 > 1e-08
+  Nonlinear solver relative residual 4.16829e-05 > 1e-08
+  Nonlinear solver converged, step 1, relative step size 0.000132243 < 0.001
+
+ ==== Step    6 out of   10 (Time=      0.6) ==== 
+Assembling the System
+Nonlinear Residual: 0.00035549
+Linear solve starting, tolerance 2.81302e-06
+Linear solve finished, step 63, residual 2.69423e-09
+Trying full Newton step
+  Current Residual: 2.47655e-07
+  Nonlinear step: |du|/|u| = 0.0414587, |du| = 0.00242356
+Assembling the System
+Nonlinear Residual: 2.47655e-07
+Linear solve starting, tolerance 0.00403788
+Linear solve finished, step 20, residual 7.70332e-09
+Trying full Newton step
+  Current Residual: 1.6299e-08
+  Nonlinear solver current_residual 1.6299e-08 > 1e-08
+  Nonlinear solver relative residual 4.58493e-05 > 1e-08
+  Nonlinear solver converged, step 1, relative step size 0.000117111 < 0.001
+
+ ==== Step    7 out of   10 (Time=      0.7) ==== 
+Assembling the System
+Nonlinear Residual: 0.000356513
+Linear solve starting, tolerance 2.80495e-06
+Linear solve finished, step 63, residual 2.76094e-09
+Trying full Newton step
+  Current Residual: 2.56068e-07
+  Nonlinear step: |du|/|u| = 0.0416912, |du| = 0.00242209
+Assembling the System
+Nonlinear Residual: 2.56068e-07
+Linear solve starting, tolerance 0.00390521
+Linear solve finished, step 21, residual 6.34606e-09
+Trying full Newton step
+  Current Residual: 1.76839e-08
+  Nonlinear solver current_residual 1.76839e-08 > 1e-08
+  Nonlinear solver relative residual 4.96025e-05 > 1e-08
+  Nonlinear solver converged, step 1, relative step size 0.000111554 < 0.001
+
+ ==== Step    8 out of   10 (Time=      0.8) ==== 
+Assembling the System
+Nonlinear Residual: 0.00035748
+Linear solve starting, tolerance 2.79736e-06
+Linear solve finished, step 63, residual 2.85697e-09
+Trying full Newton step
+  Current Residual: 2.62973e-07
+  Nonlinear step: |du|/|u| = 0.0418854, |du| = 0.00242251
+Assembling the System
+Nonlinear Residual: 2.62973e-07
+Linear solve starting, tolerance 0.00380267
+Linear solve finished, step 23, residual 6.28966e-09
+Trying full Newton step
+  Current Residual: 1.90973e-08
+  Nonlinear solver current_residual 1.90973e-08 > 1e-08
+  Nonlinear solver relative residual 5.3422e-05 > 1e-08
+  Nonlinear solver converged, step 1, relative step size 0.000112288 < 0.001
+
+ ==== Step    9 out of   10 (Time=      0.9) ==== 
+Assembling the System
+Nonlinear Residual: 0.0003584
+Linear solve starting, tolerance 2.79018e-06
+Linear solve finished, step 63, residual 2.8992e-09
+Trying full Newton step
+  Current Residual: 2.68942e-07
+  Nonlinear step: |du|/|u| = 0.0420293, |du| = 0.00242426
+Assembling the System
+Nonlinear Residual: 2.68942e-07
+Linear solve starting, tolerance 0.00371828
+Linear solve finished, step 25, residual 6.0107e-09
+Trying full Newton step
+  Current Residual: 2.05749e-08
+  Nonlinear solver current_residual 2.05749e-08 > 1e-08
+  Nonlinear solver relative residual 5.74076e-05 > 1e-08
+  Nonlinear solver converged, step 1, relative step size 0.000116771 < 0.001
+
+ ==== Step   10 out of   10 (Time=        1) ==== 
+Assembling the System
+Nonlinear Residual: 0.000359281
+Linear solve starting, tolerance 2.78334e-06
+Linear solve finished, step 63, residual 3.04806e-09
+Trying full Newton step
+  Current Residual: 2.74399e-07
+  Nonlinear step: |du|/|u| = 0.0421147, |du| = 0.00242694
+Assembling the System
+Nonlinear Residual: 2.74399e-07
+Linear solve starting, tolerance 0.00364433
+Linear solve finished, step 26, residual 5.79214e-09
+Trying full Newton step
+  Current Residual: 2.21859e-08
+  Nonlinear solver current_residual 2.21859e-08 > 1e-08
+  Nonlinear solver relative residual 6.17509e-05 > 1e-08
+  Nonlinear solver converged, step 1, relative step size 0.000121998 < 0.001
+
+
+WARNING! There are options you set that were not used!
+WARNING! could be spelling mistake, etc!
+There is one unused database option. It is:
+Option left: name:-s (no value)

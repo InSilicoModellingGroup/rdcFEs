@@ -1,10 +1,10 @@
 
-directory = uniaxial_compression
-input_GMSH = cube.msh
+directory = simulation
+input_GMSH = hydrogel_model.msh
 output_PARAVIEW = out
 
 time_step = 0.1
-output_time_points = ' 2 4 6 8 10 '
+output_step = 1
 refinement_step = 100
 
 solver/quiet = false
@@ -19,20 +19,26 @@ solver/use_symmetry = true
 
 mesh/skip_renumber_nodes_and_elements = false
 mesh/AMR/max_steps = 1
-mesh/AMR/max_level = 2
-mesh/AMR/refine_percentage  = 0.2
-mesh/AMR/coarsen_percentage = 0.2
+mesh/AMR/max_level = 3
+mesh/AMR/refine_percentage  = 1.
+mesh/AMR/coarsen_percentage = 0.99
 
-BCs = ' 0 5 '
+BCs = ' 0 1 2 10 '
 BC/0/displacement/0 = +0.000
-BC/0/displacement/1 = +0.000
-BC/0/displacement/2 = +0.000
-BC/5/displacement/0 = NAN
-BC/5/displacement/1 = NAN
-BC/5/displacement/2 = -0.750
+BC/0/displacement/1 = NAN
+BC/0/displacement/2 = NAN
+BC/1/displacement/0 = NAN
+BC/1/displacement/1 = +0.000
+BC/1/displacement/2 = NAN
+BC/2/displacement/0 = NAN
+BC/2/displacement/1 = NAN
+BC/2/displacement/2 = +0.000
+BC/10/displacement/0 = -0.001
+BC/10/displacement/1 = 0.0
+BC/10/displacement/2 = 0.0
 BCs/displacement_penalty = 1.e+8
 
 materials = ' 0 '
-material/0/Neohookean/Young   = 1.0e+4
+material/0/Neohookean/Young   = 500.0e+0
 material/0/Neohookean/Poisson = 0.3
 material/0/Neohookean/FibreStiffness = 0.0e+0

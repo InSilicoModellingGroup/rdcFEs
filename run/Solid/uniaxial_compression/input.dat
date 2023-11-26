@@ -1,0 +1,38 @@
+
+directory = simulation
+input_GMSH = cube.msh
+output_PARAVIEW = out
+
+time_step = 0.1
+output_time_points = ' 2 4 6 8 10 '
+refinement_step = 100
+
+solver/quiet = false
+solver/nonlinear/max_nonlinear_iterations = 10
+solver/nonlinear/relative_step_tolerance = 1.e-3
+solver/nonlinear/relative_residual_tolerance = 1.e-8
+solver/nonlinear/absolute_residual_tolerance = 1.e-8
+solver/nonlinear/require_reduction = false
+solver/linear/max_linear_iterations = 50000
+solver/linear/initial_linear_tolerance = 1.e-3
+solver/use_symmetry = true
+
+mesh/skip_renumber_nodes_and_elements = false
+mesh/AMR/max_steps = 1
+mesh/AMR/max_level = 2
+mesh/AMR/refine_percentage  = 0.2
+mesh/AMR/coarsen_percentage = 0.2
+
+BCs = ' 0 5 '
+BC/0/displacement/0 = +0.000
+BC/0/displacement/1 = +0.000
+BC/0/displacement/2 = +0.000
+BC/5/displacement/0 = NAN
+BC/5/displacement/1 = NAN
+BC/5/displacement/2 = -0.750
+BCs/displacement_penalty = 1.e+8
+
+materials = ' 0 '
+material/0/Neohookean/Young   = 1.0e+4
+material/0/Neohookean/Poisson = 0.3
+material/0/Neohookean/FibreStiffness = 0.0e+0
