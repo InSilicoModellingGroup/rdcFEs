@@ -48,9 +48,10 @@ public:
 
     this->current_qp = qp;
 
-    if (this->FibreStiffness) this->A = f.unit();
+    this->A = FibreStiffness>0.0 ? f.unit() : RealVectorValue(0.0, 0.0, 0.0);
 
-    if (calc_tangent) this->calculate_tangent();
+    if (calc_tangent)
+      this->calculate_tangent();
     this->calculate_stress();
   }
 
@@ -64,10 +65,9 @@ public:
     DenseVector<Real> SV(6);
     SV = { this->sigma(0,0), this->sigma(1,1), this->sigma(2,2),
            this->sigma(0,1), this->sigma(1,2), this->sigma(0,2) };
-
+    // shape functions derivatives matrix
     DenseMatrix<Real> B_L;
     this->build_b_0_mat(i, B_L);
-
     B_L.vector_mult(R, SV);
   }
 
@@ -77,25 +77,20 @@ public:
     // return the tangent stiffness matrix for the current state
     D.resize(3, 3);
 
-    // deformation gradient determinant
-    const Real J = this->F.det();
-
     // geometric non-linearity contribution
-    Real G_IK = (this->sigma * dphi[i][current_qp]) * dphi[j][current_qp];
-
+    const Real G_IK = dphi[i][current_qp] * this->sigma * dphi[j][current_qp];
     D(0,0) += G_IK;
     D(1,1) += G_IK;
     D(2,2) += G_IK;
-
-    // material non-linearity contribution
+    // shape functions derivatives matrix
     DenseMatrix<Real> B_L;
     this->build_b_0_mat(i, B_L);
+    // shape functions derivatives matrix
     DenseMatrix<Real> B_K;
     this->build_b_0_mat(j, B_K);
     B_L.right_multiply(this->tangent_stiffness);
     B_L.right_multiply_transpose(B_K);
-    B_L *= (1.0/J);
-
+    // material non-linearity contribution
     D += B_L;
   }
 
@@ -122,30 +117,32 @@ private:
     const Real mu = Young / (2.0 * (1.0 + Poisson));
     const Real lambda = Young * Poisson / ((1.0 + Poisson) * (1.0 - 2.0 * Poisson));
     // fibre (axial stiffness) material parameter
-    const Real koppa = FibreStiffness;
+    //const Real koppa = FibreStiffness / 2.0;
 
-    const RealTensor b = (this->F*this->F.transpose()); // Finger tensor
-    //const Real b_b = (pow2(b(0,0))+b(0,1)*b(1,0)+b(0,2)*b(2,0)
-    //                 +b(1,0)*b(0,1)+pow2(b(1,1))+b(1,2)*b(2,1)
-    //                 +b(2,0)*b(0,2)+b(2,1)*b(1,2)+pow2(b(2,2))); // inner product of Finger tensor
-    RealTensor I3; // identity tensor
+    // Finger tensor (left Green-Cauchy deformation tensor)
+    const RealTensor b = (this->F*this->F.transpose());
+    // Finger tensor squared
+    const RealTensor b2 = (b*b);
+
+    // identity tensor
+    RealTensor I3;
     I3(0,0) = I3(1,1) = I3(2,2) = 1.0;
 
-    // invariants of the left Green-Cauchy deformation tensor
-    //const Real I = (b(0,0)+b(1,1)+b(2,2));
-    //const Real II = 0.5*(pow2(I)-b_b);
     const Real J = this->F.det();
-    // 4th invariant - transverse anisotropy due to fibre
-    const Real IV = koppa>0.0 ? (this->A*((this->F.transpose()*this->F)*this->A)) : 0.0;
+    // invariants of the left Green-Cauchy deformation tensor
+    //const Real I   = trace(b);
+    //const Real II  = 0.5*(pow2(I)-trace(b2));
+    //const Real III = (J*J);
+    // invariant related to transverse anisotropy
+    //const Real IV = koppa>0.0 ? (this->A*C*this->A) : 0.0;
 
-    const RealVectorValue a = koppa>0.0 // fibre direction (unit) vector - current configuration
-                            ? (1.0/sqrt(IV)) * (this->F*this->A) : RealVectorValue(0.0, 0.0, 0.0);
-    const RealTensor a_a = tensor(a);
+    // fibre direction (unit) vector - current configuration
+    //RealVectorValue a;
+    //a = FibreStiffness>0.0 ? ((1.0/sqrt(IV))*(this->F*this->A)) : RealVectorValue(0.0, 0.0, 0.0);
 
     // Cauchy stress tensor
     this->sigma = (0.5*lambda*(J-1.0/J)) * I3
-                + (mu/J) * (b - I3)
-                + (koppa*IV/J) * a_a;
+                + (mu/J) * (b - I3);
   }
 
   inline
@@ -154,6 +151,7 @@ private:
     // Lame material parameters
     const Real mu = Young / (2.0 * (1.0 + Poisson));
     const Real lambda = Young * Poisson / ((1.0 + Poisson) * (1.0 - 2.0 * Poisson));
+
     // deformation gradient tensor determinant
     const Real J = this->F.det();
 
@@ -163,10 +161,10 @@ private:
     for (unsigned int i=0; i<3; ++i) {
       for (unsigned int j=0; j<3; ++j) {
         if (i == j) {
-          this->tangent_stiffness(i+0,j+0) = 2.0*mu + lambda;
-          this->tangent_stiffness(i+3,j+3) = mu - 0.5*lambda*(J*J-1.0);
+          this->tangent_stiffness(i+0,j+0) = 2.0*mu/J + lambda/J;
+          this->tangent_stiffness(i+3,j+3) = mu/J - 0.5*lambda*(J-1.0/J);
         } else {
-          this->tangent_stiffness(i+0,j+0) = lambda*(J*J);
+          this->tangent_stiffness(i+0,j+0) = lambda*J;
         }
       }
     }

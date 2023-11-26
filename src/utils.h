@@ -316,6 +316,11 @@ Point rotate (const Point& v, const Real theta_x, const Real theta_y, const Real
 }
 //-------------------------------------------------------------------------------------------------
 inline
+Real trace (const RealTensorValue& m)
+{
+  return (m(0,0)+m(1,1)+m(2,2));
+}
+inline
 RealTensorValue tensor (const RealVectorValue& a, const RealVectorValue& b)
 {
   RealTensorValue a_b;
