@@ -88,7 +88,7 @@ public:
     // shape functions derivatives matrix
     DenseMatrix<Real> B_K;
     this->build_b_0_mat(j, B_K);
-    B_L.right_multiply(this->tangent_stiffness);
+    B_L.right_multiply(this->tangent);
     B_L.right_multiply_transpose(B_K);
     // material non-linearity contribution
     D += B_L;
@@ -110,65 +110,9 @@ public:
 
 private:
 
-  inline
-  void calculate_stress ()
-  {
-    // Lame material parameters
-    const Real mu = Young / (2.0 * (1.0 + Poisson));
-    const Real lambda = Young * Poisson / ((1.0 + Poisson) * (1.0 - 2.0 * Poisson));
-    // fibre (axial stiffness) material parameter
-    //const Real koppa = FibreStiffness / 2.0;
+  void calculate_stress ();
 
-    // Finger tensor (left Green-Cauchy deformation tensor)
-    const RealTensor b = (this->F*this->F.transpose());
-    // Finger tensor squared
-    const RealTensor b2 = (b*b);
-
-    // identity tensor
-    RealTensor I3;
-    I3(0,0) = I3(1,1) = I3(2,2) = 1.0;
-
-    const Real J = this->F.det();
-    // invariants of the left Green-Cauchy deformation tensor
-    //const Real I   = trace(b);
-    //const Real II  = 0.5*(pow2(I)-trace(b2));
-    //const Real III = (J*J);
-    // invariant related to transverse anisotropy
-    //const Real IV = koppa>0.0 ? (this->A*C*this->A) : 0.0;
-
-    // fibre direction (unit) vector - current configuration
-    //RealVectorValue a;
-    //a = FibreStiffness>0.0 ? ((1.0/sqrt(IV))*(this->F*this->A)) : RealVectorValue(0.0, 0.0, 0.0);
-
-    // Cauchy stress tensor
-    this->sigma = (0.5*lambda*(J-1.0/J)) * I3
-                + (mu/J) * (b - I3);
-  }
-
-  inline
-  void calculate_tangent ()
-  {
-    // Lame material parameters
-    const Real mu = Young / (2.0 * (1.0 + Poisson));
-    const Real lambda = Young * Poisson / ((1.0 + Poisson) * (1.0 - 2.0 * Poisson));
-
-    // deformation gradient tensor determinant
-    const Real J = this->F.det();
-
-    this->tangent_stiffness.resize(6, 6);
-    // tangent stiffness matrix expressed in the current
-    // (deformed) configuration of the hyperelastic body
-    for (unsigned int i=0; i<3; ++i) {
-      for (unsigned int j=0; j<3; ++j) {
-        if (i == j) {
-          this->tangent_stiffness(i+0,j+0) = 2.0*mu/J + lambda/J;
-          this->tangent_stiffness(i+3,j+3) = mu/J - 0.5*lambda*(J-1.0/J);
-        } else {
-          this->tangent_stiffness(i+0,j+0) = lambda*J;
-        }
-      }
-    }
-  }
+  void calculate_tangent ();
 
   inline
   void build_b_0_mat (unsigned int i, DenseMatrix<Real>& B)
@@ -192,14 +136,19 @@ private:
   RealVectorValue A;
   // deformation gradient tensor
   RealTensor F;
+  // elastic & plastic deformation gradient tensor
+  RealTensor Fe, Fp;
   // Cauchy stress tensor
   RealTensor sigma;
-  // tangent stiffness matrix - expressed in Voigt form
-  DenseMatrix<Real> tangent_stiffness;
+  // tangent stiffness tensor - expressed in Voigt form
+  DenseMatrix<Real> tangent;
   //
   unsigned int current_qp;
   const std::vector< std::vector<RealGradient> >& dphi;
 };
 //-------------------------------------------------------------------------------------------------
+
+#include "./neohookean_stress.h"
+#include "./neohookean_tangent.h"
 
 #endif // __NEOHOOKEAN_H__
