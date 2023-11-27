@@ -321,6 +321,29 @@ Real trace (const RealTensorValue& m)
   return (m(0,0)+m(1,1)+m(2,2));
 }
 inline
+Real determinant (const RealTensorValue& m)
+{
+  return (m(0,0)*m(1,1)*m(2,2)-m(0,0)*m(1,2)*m(2,1)
+         -m(0,1)*m(1,0)*m(2,2)+m(0,1)*m(1,2)*m(2,0)
+         +m(0,2)*m(1,0)*m(2,1)-m(0,2)*m(1,1)*m(2,0));
+}
+inline
+RealTensorValue inverse (const RealTensorValue& m)
+{
+  const Real s = 1.0/determinant(m);
+  RealTensorValue n;
+  n(0,0)=  s*(m(1,1)*m(2,2)-m(1,2)*m(2,1));
+  n(0,1)= -s*(m(0,1)*m(2,2)-m(0,2)*m(2,1));
+  n(0,2)=  s*(m(0,1)*m(1,2)-m(0,2)*m(1,1));
+  n(1,0)= -s*(m(1,0)*m(2,2)-m(1,2)*m(2,0));
+  n(1,1)=  s*(m(0,0)*m(2,2)-m(0,2)*m(2,0));
+  n(1,2)= -s*(m(0,0)*m(1,2)-m(0,2)*m(1,0));
+  n(2,0)=  s*(m(1,0)*m(2,1)-m(1,1)*m(2,0));
+  n(2,1)= -s*(m(0,0)*m(2,1)-m(0,1)*m(2,0));
+  n(2,2)=  s*(m(0,0)*m(1,1)-m(0,1)*m(1,0));
+  return n;
+}
+inline
 RealTensorValue tensor (const RealVectorValue& a, const RealVectorValue& b)
 {
   RealTensorValue a_b;
