@@ -1,8 +1,21 @@
-#ifndef __NEOHOOKEAN_TANGENT_H__
-#define __NEOHOOKEAN_TANGENT_H__
 
 inline
-void Hyperelastic::calculate_tangent ()
+void Hyperelastic::build_B_matrix (unsigned int i, DenseMatrix<Real>& B)
+{
+  B.resize(3, 6);
+  B(0,0) = this->dphi[i][this->current_qp](0);
+  B(1,1) = this->dphi[i][this->current_qp](1);
+  B(2,2) = this->dphi[i][this->current_qp](2);
+  B(0,3) = this->dphi[i][this->current_qp](1);
+  B(1,3) = this->dphi[i][this->current_qp](0);
+  B(1,4) = this->dphi[i][this->current_qp](2);
+  B(2,4) = this->dphi[i][this->current_qp](1);
+  B(0,5) = this->dphi[i][this->current_qp](2);
+  B(2,5) = this->dphi[i][this->current_qp](0);
+}
+
+inline
+void Hyperelastic::calculate_stress (bool calculate_tangent)
 {
   // Lame material parameters
   const Real mu = 0.5*Young/(1.0+Poisson);
@@ -27,7 +40,7 @@ void Hyperelastic::calculate_tangent ()
   const Real dWdI1 = (mu/2.0);
   const Real dWdI2 = 0.0;
   const Real dWdJe = (-mu/Je) + (lambda/2.0*Je-lambda/2.0/Je);
-  const Real dWdI4 = 0.0;
+  const Real dWdI4 = (-koppa);
   //
   const Real d2WdI1dI1 = 0.0;
   const Real d2WdI2dI2 = 0.0;
@@ -48,12 +61,41 @@ void Hyperelastic::calculate_tangent ()
       dI4dCe[i][j] = A(i)*A(j);
       for (int k=0; k<3; k++) {
         for (int l=0; l<3; l++) {
-          d2I2dCe2[i][j][k][l] = delta(i,j)*delta(k,l)-0.5*delta(i,k)*delta(j,l)-0.5*delta(i,l)*delta(j,k);
-          d2JedCe2[i][j][k][l] = 0.25*Je*CeINV(i,j)*CeINV(k,l)-0.25*Je*CeINV(i,k)*CeINV(j,l)-0.25*Je*CeINV(i,l)*CeINV(j,k);
+          d2I2dCe2[i][j][k][l] =
+            delta(i,j)*delta(k,l)-0.5*delta(i,k)*delta(j,l)-0.5*delta(i,l)*delta(j,k);
+          d2JedCe2[i][j][k][l] =
+            0.25*Je*CeINV(i,j)*CeINV(k,l)-0.25*Je*CeINV(i,k)*CeINV(j,l)-0.25*Je*CeINV(i,l)*CeINV(j,k);
         }
       }
     }
   }
+  //
+  Real S2pk[3][3];
+  for (int i=0; i<3; i++) {
+    for (int j=0; j<3; j++) {
+      S2pk[i][j] = 2.0*dWdI1*dI1dCe[i][j]
+                  +2.0*dWdI2*dI2dCe[i][j]
+                  +2.0*dWdJe*dJedCe[i][j]
+                  +2.0*dWdI4*dI4dCe[i][j];
+    }
+  }
+  //
+  Real Sc[3][3];
+  for (int i=0; i<3; i++) {
+    for (int j=0; j<3; j++) {
+      Real F_F_S2pk(0.0);
+      for (int I=0; I<3; I++)
+        for (int J=0; J<3; J++)
+          F_F_S2pk += F(i,I)*F(j,J)*S2pk[I][J];
+      Sc[i][j] = F_F_S2pk*J_recip;
+    }
+  }
+  //
+  for (int I=0; I<3; I++)
+    for (int J=0; J<3; J++)
+      this->sigma(I,J) = Sc[I][J];
+  //
+  if (!calculate_tangent) return;
   //
   Real dSdCe[3][3][3][3];
   Real dCedC[3][3][3][3];
@@ -76,20 +118,12 @@ void Hyperelastic::calculate_tangent ()
   Real dSdC[3][3][3][3];
   for (int i=0; i<3; i++) {
     for (int j=0; j<3; j++) {
-      const RealTensor dSdCe_ijmn =
-        RealTensor(dSdCe[i][j][0][0], dSdCe[i][j][0][1], dSdCe[i][j][0][2],
-                   dSdCe[i][j][1][0], dSdCe[i][j][1][1], dSdCe[i][j][1][2],
-                   dSdCe[i][j][2][0], dSdCe[i][j][2][1], dSdCe[i][j][2][2]);
       for (int k=0; k<3; k++) {
         for (int l=0; l<3; l++) {
-          const RealTensor dCedC_mnkl =
-            RealTensor( dCedC[0][0][k][l], dCedC[0][1][k][l], dCedC[0][2][k][l],
-                        dCedC[1][0][k][l], dCedC[1][1][k][l], dCedC[1][2][k][l],
-                        dCedC[2][0][k][l], dCedC[2][1][k][l], dCedC[2][2][k][l] );
           Real dSdCe__dCedC(0.0);
           for (int m=0; m<3; m++)
             for (int n=0; n<3; n++)
-              dSdCe__dCedC += dSdCe_ijmn(m,n)*dCedC_mnkl(m,n);
+              dSdCe__dCedC += dSdCe[i][j][m][n]*dCedC[m][n][k][l];
           dSdC[i][j][k][l] = dSdCe__dCedC;
         }
       }
@@ -153,4 +187,3 @@ void Hyperelastic::calculate_tangent ()
   this->tangent(5,4) = tsm[0][2][1][2];
   this->tangent(5,5) = tsm[0][2][0][2];
 }
-#endif // __NEOHOOKEAN_TANGENT_H__

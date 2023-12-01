@@ -22,8 +22,8 @@ public:
   }
 
   inline
-  void init_for_qp (unsigned int qp, VectorValue<Gradient>& gradX, const Real* lambda,
-                    const RealVectorValue& f, bool calc_tangent =false)
+  void initialize (unsigned int qp, VectorValue<Gradient>& gradX, const Real* lambda,
+                   const RealVectorValue& f, bool calculate_tangent =false)
   {
     this->current_qp = qp;
     // initialize the class for the given displacement gradient
@@ -45,9 +45,7 @@ public:
 
     this->A = FibreStiffness>0.0 ? f.unit() : RealVectorValue(0.0, 0.0, 0.0);
 
-    if (calc_tangent)
-      this->calculate_tangent();
-    this->calculate_stress();
+    this->calculate_stress(calculate_tangent);
   }
 
   inline
@@ -62,7 +60,7 @@ public:
            this->sigma(0,1), this->sigma(1,2), this->sigma(0,2) };
     // shape functions derivatives matrix
     DenseMatrix<Real> B_L;
-    this->build_b_0_mat(i, B_L);
+    this->build_B_matrix(i, B_L);
     B_L.vector_mult(R, SV);
   }
 
@@ -73,16 +71,15 @@ public:
     D.resize(3, 3);
 
     // geometric non-linearity contribution
-    const Real G_IK = dphi[i][current_qp] * this->sigma * dphi[j][current_qp];
-    D(0,0) += G_IK;
-    D(1,1) += G_IK;
-    D(2,2) += G_IK;
+    const Real G_NN = dphi[i][current_qp] * this->sigma * dphi[j][current_qp];
+    for (unsigned int n=0; n<3; n++)
+      D(n,n) += G_NN;
     // shape functions derivatives matrix
     DenseMatrix<Real> B_L;
-    this->build_b_0_mat(i, B_L);
+    this->build_B_matrix(i, B_L);
     // shape functions derivatives matrix
     DenseMatrix<Real> B_K;
-    this->build_b_0_mat(j, B_K);
+    this->build_B_matrix(j, B_K);
     B_L.right_multiply(this->tangent);
     B_L.right_multiply_transpose(B_K);
     // material non-linearity contribution
@@ -105,24 +102,9 @@ public:
 
 private:
 
-  void calculate_stress ();
+  void build_B_matrix (unsigned int i, DenseMatrix<Real>& B);
 
-  void calculate_tangent ();
-
-  inline
-  void build_b_0_mat (unsigned int i, DenseMatrix<Real>& B)
-  {
-    B.resize(3, 6);
-    B(0,0) = this->dphi[i][this->current_qp](0);
-    B(1,1) = this->dphi[i][this->current_qp](1);
-    B(2,2) = this->dphi[i][this->current_qp](2);
-    B(0,3) = this->dphi[i][this->current_qp](1);
-    B(1,3) = this->dphi[i][this->current_qp](0);
-    B(1,4) = this->dphi[i][this->current_qp](2);
-    B(2,4) = this->dphi[i][this->current_qp](1);
-    B(0,5) = this->dphi[i][this->current_qp](2);
-    B(2,5) = this->dphi[i][this->current_qp](0);
-  }
+  void calculate_stress (bool calculate_tangent);
 
 private:
   // parameters (material constants) of the Neo-Hookean hyperelastic constitutive model
@@ -145,7 +127,6 @@ private:
 };
 //-------------------------------------------------------------------------------------------------
 
-#include "./hyperlastic_stress.h"
-#include "./hyperelastic_tangent.h"
+#include "./hyperlastic_inline.h"
 
 #endif // __NEOHOOKEAN_H__
