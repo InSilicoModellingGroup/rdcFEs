@@ -219,9 +219,11 @@ bool SolidSystem::element_time_derivative (bool request_jacobian,
             grad_X(d).add_scaled(dphi[l][qp], XYZ_undefo[l]);
         }
 
+      Real lambda[] = {1.0, 1.0, 1.0};
+
       // Initialize the constitutive formulation with the current displacement
       // gradient
-      material.init_for_qp(qp, grad_X, eta, request_jacobian);
+      material.init_for_qp(qp, grad_X, lambda, eta, request_jacobian);
 
       // Acquire, scale and assemble residual and stiffness
       for (unsigned int i=0; i<n_u_dofs; i++)
@@ -451,9 +453,11 @@ void SolidSystem::post_process ()
                 grad_X(d).add_scaled(dphi[l][qp], XYZ_undefo[l]);
             }
 
+          Real lambda[] = {1.0, 1.0, 1.0};
+
           // initialize the constitutive formulation with the current displacement
           // gradient
-          material.init_for_qp(qp, grad_X, eta);
+          material.init_for_qp(qp, grad_X, lambda, eta);
 
           stress_Cauchy += material.get_stress_tensor();
 

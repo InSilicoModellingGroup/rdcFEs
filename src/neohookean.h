@@ -33,9 +33,10 @@ public:
     dphi(dNdx), Young(E), Poisson(v), FibreStiffness(K) {}
 
   inline
-  void init_for_qp (unsigned int qp, VectorValue<Gradient>& gradX, const RealVectorValue& f,
-                    bool calc_tangent =false)
+  void init_for_qp (unsigned int qp, VectorValue<Gradient>& gradX, const Real* lambda,
+                    const RealVectorValue& f, bool calc_tangent =false)
   {
+    this->current_qp = qp;
     // initialize the class for the given displacement gradient
     // at the specified quadrature point
     RealTensor dX_dy;
@@ -46,7 +47,12 @@ public:
     this->F = dX_dy.inverse();
     libmesh_assert_greater(this->F.det(), -TOLERANCE);
 
-    this->current_qp = qp;
+    // plastic (inelastic) deformation gradient tensor
+    this->Fp.zero();
+    for (unsigned int l=0; l<3; l++)
+      this->Fp(l,l) = lambda[l];
+    // elastic deformation gradient tensor
+    this->Fe = this->F*this->Fp.inverse();
 
     this->A = FibreStiffness>0.0 ? f.unit() : RealVectorValue(0.0, 0.0, 0.0);
 
