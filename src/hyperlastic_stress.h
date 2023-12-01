@@ -2,7 +2,7 @@
 #define __NEOHOOKEAN_STRESS_H__
 
 inline
-void Neohookean::calculate_stress ()
+void Hyperelastic::calculate_stress ()
 {
   // Lame material parameters
   const Real mu = 0.5*Young/(1.0+Poisson);

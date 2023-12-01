@@ -176,10 +176,10 @@ bool SolidSystem::element_time_derivative (bool request_jacobian,
   const bool use_symmetry = es.parameters.get<bool>("solver/assembly_use_symmetry");
 
   const std::string material_ID = std::to_string(elem.subdomain_id());
-  const Real E = es.parameters.get<Real>("material/"+material_ID+"/Neohookean/Young"),
-             v = es.parameters.get<Real>("material/"+material_ID+"/Neohookean/Poisson"),
-             K = es.parameters.get<Real>("material/"+material_ID+"/Neohookean/FibreStiffness");
-  Neohookean material(dphi, E, v, K);
+  const Real E = es.parameters.get<Real>("material/"+material_ID+"/Hyperelastic/Young"),
+             v = es.parameters.get<Real>("material/"+material_ID+"/Hyperelastic/Poisson"),
+             K = es.parameters.get<Real>("material/"+material_ID+"/Hyperelastic/FibreStiffness");
+  Hyperelastic material(dphi, E, v, K);
 
   // build the element Jacobian and residual, calculated at each
   // quadrature point by summing the solution degree-of-freedom values by
@@ -412,10 +412,10 @@ void SolidSystem::post_process ()
       fe->reinit(elem);
 
       const std::string material_ID = std::to_string(elem->subdomain_id());
-      const Real E = es.parameters.get<Real>("material/"+material_ID+"/Neohookean/Young"),
-                 v = es.parameters.get<Real>("material/"+material_ID+"/Neohookean/Poisson"),
-                 K = es.parameters.get<Real>("material/"+material_ID+"/Neohookean/FibreStiffness");
-      Neohookean material(dphi, E, v, K);
+      const Real E = es.parameters.get<Real>("material/"+material_ID+"/Hyperelastic/Young"),
+                 v = es.parameters.get<Real>("material/"+material_ID+"/Hyperelastic/Poisson"),
+                 K = es.parameters.get<Real>("material/"+material_ID+"/Hyperelastic/FibreStiffness");
+      Hyperelastic material(dphi, E, v, K);
 
       // average Cauchy stress tensor calculated for the FE
       RealTensor stress_Cauchy;

@@ -1,36 +1,25 @@
-// The libMesh Finite Element Library.
-// Copyright (C) 2002-2021 Benjamin S. Kirk, John W. Peterson, Roy H. Stogner
-
-// This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-
-// This library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-// Lesser General Public License for more details.
-
-// You should have received a copy of the GNU Lesser General Public
-// License along with this library; if not, write to the Free Software
-// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-
-
-// Source has been modified based on the original code produced by Robert Weidlich (2012)
-
-
 #ifndef __NEOHOOKEAN_H__
 #define __NEOHOOKEAN_H__
 
 #include "./utils.h"
 
 //-------------------------------------------------------------------------------------------------
-class Neohookean
+class Hyperelastic
 {
 public:
   // Constructor
-  Neohookean (const std::vector<std::vector<RealGradient>>& dNdx, Real E, Real v, Real K =0.0) :
-    dphi(dNdx), Young(E), Poisson(v), FibreStiffness(K) {}
+  Hyperelastic (const std::vector<std::vector<RealGradient>>& dNdx, Real E, Real v, Real K =0.0) :
+    dphi(dNdx), Young(E), Poisson(v), FibreStiffness(K)
+  {
+    this->Voigt_map.resize(6, 2);
+    //
+    this->Voigt_map(0,0) = 0; this->Voigt_map(0,1) = 0;
+    this->Voigt_map(1,0) = 1; this->Voigt_map(1,1) = 1;
+    this->Voigt_map(2,0) = 2; this->Voigt_map(2,1) = 2;
+    this->Voigt_map(3,0) = 0; this->Voigt_map(3,1) = 1;
+    this->Voigt_map(4,0) = 1; this->Voigt_map(4,1) = 2;
+    this->Voigt_map(5,0) = 0; this->Voigt_map(5,1) = 2;
+  }
 
   inline
   void init_for_qp (unsigned int qp, VectorValue<Gradient>& gradX, const Real* lambda,
@@ -148,13 +137,15 @@ private:
   RealTensor sigma;
   // tangent stiffness tensor - expressed in Voigt form
   DenseMatrix<Real> tangent;
+  // map of indices into Voigt form
+  DenseMatrix<Real> Voigt_map;
   //
   unsigned int current_qp;
   const std::vector< std::vector<RealGradient> >& dphi;
 };
 //-------------------------------------------------------------------------------------------------
 
-#include "./neohookean_stress.h"
-#include "./neohookean_tangent.h"
+#include "./hyperlastic_stress.h"
+#include "./hyperelastic_tangent.h"
 
 #endif // __NEOHOOKEAN_H__

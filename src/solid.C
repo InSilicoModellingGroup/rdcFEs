@@ -258,11 +258,11 @@ void input (const std::string & file_name, EquationSystems & es)
   // read the materials (subdomain regions)
   for (auto m : materials)
     {
-      name = "material/"+std::to_string(m)+"/Neohookean/Young";
+      name = "material/"+std::to_string(m)+"/Hyperelastic/Young";
       es.parameters.set<Real>(name) = in(name, 1.e+3);
-      name = "material/"+std::to_string(m)+"/Neohookean/Poisson";
+      name = "material/"+std::to_string(m)+"/Hyperelastic/Poisson";
       es.parameters.set<Real>(name) = in(name, 0.3);
-      name = "material/"+std::to_string(m)+"/Neohookean/FibreStiffness";
+      name = "material/"+std::to_string(m)+"/Hyperelastic/FibreStiffness";
       es.parameters.set<Real>(name) = in(name, 0.0);
     }
 

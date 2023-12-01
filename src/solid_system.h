@@ -22,7 +22,7 @@
 #ifndef __SOLID_SYSTEM_H__
 #define __SOLID_SYSTEM_H__
 
-#include "./neohookean.h"
+#include "./hyperelastic.h"
 
 using namespace libMesh;
 
