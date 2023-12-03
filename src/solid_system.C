@@ -179,6 +179,10 @@ bool SolidSystem::element_time_derivative (bool request_jacobian,
   const Real E = es.parameters.get<Real>("material/"+material_ID+"/Hyperelastic/Young"),
              v = es.parameters.get<Real>("material/"+material_ID+"/Hyperelastic/Poisson"),
              K = es.parameters.get<Real>("material/"+material_ID+"/Hyperelastic/FibreStiffness");
+  const Real DlDt[] =
+    { es.parameters.get<Real>("material/"+material_ID+"/Hyperelastic/VolumetricStretchRatio/rate_0") ,
+      es.parameters.get<Real>("material/"+material_ID+"/Hyperelastic/VolumetricStretchRatio/rate_1") ,
+      es.parameters.get<Real>("material/"+material_ID+"/Hyperelastic/VolumetricStretchRatio/rate_2") };
   Hyperelastic material(dphi, E, v, K);
 
   // build the element Jacobian and residual, calculated at each
@@ -219,7 +223,10 @@ bool SolidSystem::element_time_derivative (bool request_jacobian,
             grad_X(d).add_scaled(dphi[l][qp], XYZ_undefo[l]);
         }
 
-      Real lambda[] = {1.0, 1.0, 1.0};
+      // volumetric stretch ratio
+      Real lambda[3];
+      for (unsigned int d=0; d<3; ++d)
+        lambda[d] = 1.0+es.parameters.get<Real>("time")*DlDt[d];
 
       // Initialize the constitutive formulation with the current displacement
       // gradient
@@ -415,6 +422,10 @@ void SolidSystem::post_process ()
       const Real E = es.parameters.get<Real>("material/"+material_ID+"/Hyperelastic/Young"),
                  v = es.parameters.get<Real>("material/"+material_ID+"/Hyperelastic/Poisson"),
                  K = es.parameters.get<Real>("material/"+material_ID+"/Hyperelastic/FibreStiffness");
+    const Real DlDt[] =
+      { es.parameters.get<Real>("material/"+material_ID+"/Hyperelastic/VolumetricStretchRatio/rate_0") ,
+        es.parameters.get<Real>("material/"+material_ID+"/Hyperelastic/VolumetricStretchRatio/rate_1") ,
+        es.parameters.get<Real>("material/"+material_ID+"/Hyperelastic/VolumetricStretchRatio/rate_2") };
       Hyperelastic material(dphi, E, v, K);
 
       // average Cauchy stress tensor calculated for the FE
@@ -453,7 +464,9 @@ void SolidSystem::post_process ()
                 grad_X(d).add_scaled(dphi[l][qp], XYZ_undefo[l]);
             }
 
-          Real lambda[] = {1.0, 1.0, 1.0};
+          Real lambda[3];
+          for (unsigned int d=0; d<3; ++d)
+            lambda[d] = 1.0+es.parameters.get<Real>("time")*DlDt[d];
 
           // initialize the constitutive formulation with the current displacement
           // gradient

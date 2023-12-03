@@ -264,6 +264,12 @@ void input (const std::string & file_name, EquationSystems & es)
       es.parameters.set<Real>(name) = in(name, 0.3);
       name = "material/"+std::to_string(m)+"/Hyperelastic/FibreStiffness";
       es.parameters.set<Real>(name) = in(name, 0.0);
+      name = "material/"+std::to_string(m)+"/Hyperelastic/VolumetricStretchRatio/rate_0";
+      es.parameters.set<Real>(name) = in(name, 0.0);
+      name = "material/"+std::to_string(m)+"/Hyperelastic/VolumetricStretchRatio/rate_1";
+      es.parameters.set<Real>(name) = in(name, 0.0);
+      name = "material/"+std::to_string(m)+"/Hyperelastic/VolumetricStretchRatio/rate_2";
+      es.parameters.set<Real>(name) = in(name, 0.0);
     }
 
   // ...done
