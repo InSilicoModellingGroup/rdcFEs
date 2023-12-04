@@ -11,6 +11,7 @@ extern void pihna (LibMeshInit & );
 extern void ripf (LibMeshInit & );
 extern void process_mesh (LibMeshInit & );
 extern void solid (LibMeshInit & );
+extern void coupled_hcc (LibMeshInit & );
 
 int main (int argc, char* argv[])
 {
@@ -31,6 +32,13 @@ int main (int argc, char* argv[])
   else if (command_line.search(1, "-s"))
     {
       solid(init);
+    }
+  else if (command_line.search(1, "-c"))
+    {
+      s = command_line.next(s);
+      // hepato-cellular carcinoma model
+      if ("liver"==s) coupled_hcc(init);
+      else return 1;
     }
   else if (command_line.search(1, "-u"))
     {
