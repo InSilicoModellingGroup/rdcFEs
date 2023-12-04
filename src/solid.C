@@ -294,7 +294,7 @@ void initial_fibres (EquationSystems & es,
     {
       Real x_, y_, z_;
       fin >> x_ >> y_ >> z_;
-      const Real m = sqrt(x_+x_+y_*y_+z_*z_);
+      const Real m = sqrt(pow2(x_)+pow2(y_)+pow2(z_));
       if (m<=1.0e-6) libmesh_error();
 
       std::vector<dof_id_type> dof_indices_F_var[6];
