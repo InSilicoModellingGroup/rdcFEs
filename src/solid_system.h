@@ -72,8 +72,8 @@ public:
   // calculate gradient fields after system solution
   void post_process ();
 
-  // update the auxiliary system data after system solution
-  void update_auxiliary ();
+  // update the time and auxiliary solvers' data
+  void update_data ();
 
 public:
   // variable numbers of primary variables in the current system

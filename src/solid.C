@@ -96,11 +96,9 @@ void solid (LibMeshInit & init)
       // perform post-processing of the solid system
       model.post_process();
 
-      // advance the Newmark solver of the solid system
-      model.time_solver->advance_timestep();
-
-      // specifically update the auxiliary system only
-      model.update_auxiliary();
+      // advance the Newmark time solver and then
+      // update the auxiliary system only
+      model.update_data();
 
       if (0 == t%refinement_step)
         adaptive_mesh_refinement(es, amr);

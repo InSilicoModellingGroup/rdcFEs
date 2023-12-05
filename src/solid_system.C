@@ -532,12 +532,15 @@ void SolidSystem::post_process ()
     fibre_sys.solution->close();
 }
 
-void SolidSystem::update_auxiliary ()
+void SolidSystem::update_data ()
 {
   EquationSystems & es = this->get_equation_systems();
 
   TransientExplicitSystem & aux_sys =
     es.get_system<TransientExplicitSystem>("SolidSystem::auxiliary");
+
+  // advance the Newmark solver of the solid system
+  this->time_solver->advance_timestep();
 
   // close all solution vector containers
   aux_sys.current_local_solution->close();
