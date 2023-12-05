@@ -323,6 +323,7 @@ void initial_fibres (EquationSystems & es,
   fibre_sys.solution->close();
   // update the system
   fibre_sys.update();
+
   // ...done
 }
 
@@ -363,5 +364,6 @@ void adaptive_remeshing (EquationSystems & es, MeshRefinement & amr)
       // reinitializes the equations system object
       es.reinit();
     }
+
   // ...done
 }

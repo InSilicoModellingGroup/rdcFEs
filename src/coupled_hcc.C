@@ -9,7 +9,7 @@ static void initial_hcc (EquationSystems & , const std::string & );
 static void assemble_hcc (EquationSystems & , const std::string & );
 static void initial_fibres (EquationSystems & , const std::string & );
 static void check_solution (EquationSystems & );
-static void adaptive_mesh_refinement (EquationSystems & , MeshRefinement &);
+static void adaptive_remeshing (EquationSystems & , MeshRefinement &);
 
 extern PerfLog plog;
 static Parallel::Communicator * pm_ptr = 0;
@@ -87,20 +87,25 @@ void coupled_hcc (LibMeshInit & init)
   // save initial solution
   paraview.update_pvd(es);
 
+  const std::set<int> ltp = export_integers(es.parameters.get<std::string>("loading_time_points"));
   const std::set<int> otp = export_integers(es.parameters.get<std::string>("output_time_points"));
+  const std::set<int> rtp = export_integers(es.parameters.get<std::string>("remeshing_time_points"));
 
-  const int refinement_step = es.parameters.get<int>("refinement_step");
-  const int n_t_step = es.parameters.get<int>("time_step_number");
-  for (int t=1; t<=n_t_step; t++)
+  es.parameters.set<Real> ("time") = 0.0;
+  es.parameters.set<Real>("pseudo_time") = 0.0;
+
+  const int n_time_step = es.parameters.get<int>("number_of_time_steps");
+  for (int t=1; t<=n_time_step; t++)
     {
-      const Real time = t * model_sb.deltat;
-      es.parameters.set<Real>("time") = time;
-      es.parameters.set<unsigned int>("step") = t;
+      // update the simulation time
+      es.parameters.set<Real>("time") += es.parameters.get<Real>("time_step");
       model_rds.time = es.parameters.get<Real>("time");
+      if (ltp.end()!=ltp.find(t))
+        es.parameters.set<Real>("pseudo_time") += model_sb.deltat;
 
       libMesh::out << std::endl
-                   << " ==== Step " << std::setw(4) << t << " out of " << std::setw(4) << n_t_step
-                   << " (Time=" << std::setw(9) << time << ") ==== "
+                   << " ==== Step " << std::setw(4) << t << " out of " << std::setw(4) << n_time_step
+                   << " (time=" << es.parameters.get<Real>("time") << ") ==== "
                    << std::endl;
 
       // update the solution (containers) for up to 2 steps behind
@@ -113,23 +118,25 @@ void coupled_hcc (LibMeshInit & init)
       check_solution(es);
 
       // solve for the solid (mechanics) equilibrium
-      model_sb.run_solver();
+      if (ltp.end()!=ltp.find(t))
+        model_sb.run_solver();
 
       // perform post-processing of the solid system
-      model_sb.post_process();
+      if (ltp.end()!=ltp.find(t))
+        model_sb.post_process();
 
       // advance the Newmark time solver and then
       // update the auxiliary system only
-      model_sb.update_data();
+      if (ltp.end()!=ltp.find(t))
+        model_sb.update_data();
 
-      if (0 == t%refinement_step)
-        adaptive_mesh_refinement(es, amr);
+      // check if to perform any adaptive mesh refinement/coarsening
+      if (rtp.end()!=rtp.find(t))
+        adaptive_remeshing(es, amr);
 
       // save current solution
       if (otp.end()!=otp.find(t))
-        {
-          paraview.update_pvd(es, t);
-        }
+        paraview.update_pvd(es, t);
     }
 
   // ...done
@@ -178,39 +185,88 @@ void input (const std::string & file_name, EquationSystems & es)
     std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+es.parameters.get<std::string>(name)).c_str());
 
   name = "time_step";
-  es.parameters.set<Real>(name) = in(name, 1.0e-9);
-  name = "time_step_number";
-  es.parameters.set<int>(name) = 1.0/es.parameters.get<Real>("time_step");
+  es.parameters.set<Real>(name) = in(name, 1.0);
+  name = "number_of_time_steps";
+  es.parameters.set<int>(name) = in(name, 1);
+  name = "number_of_loading_steps";
+  es.parameters.set<int>(name) = in(name, 1);
+  name = "loading_step";
+  es.parameters.set<Real>(name) =
+    ( es.parameters.get<Real>("time_step") * es.parameters.get<int>("number_of_time_steps") )
+    / es.parameters.get<int>("number_of_loading_steps");
+  // verification checks
+  libmesh_assert(es.parameters.get<int>("number_of_time_steps")>=
+                 es.parameters.get<int>("number_of_loading_steps"));
+  libmesh_assert(es.parameters.get<Real>("loading_step")>=
+                 es.parameters.get<Real>("time_step"));
+
+  if ( es.parameters.get<int>("number_of_time_steps") %
+       es.parameters.get<int>("number_of_loading_steps") )
+    {
+      libmesh_error();
+    }
+  else
+    {
+      const int time2loading_step =
+        es.parameters.get<int>("number_of_time_steps") /
+        es.parameters.get<int>("number_of_loading_steps");
+      //
+      int t = time2loading_step;
+      std::string s;
+      while (t<=es.parameters.get<int>("number_of_time_steps"))
+        {
+          s += " " + std::to_string(t) + " ";
+          t += time2loading_step;
+        }
+      //
+      es.parameters.set<std::string>("loading_time_points") = s;
+    }
 
   name = "output_step";
   es.parameters.set<int>(name) = in(name, 0);
-  name = "refinement_step";
-  es.parameters.set<int>(name) = in(name, 1+es.parameters.get<int>("time_step_number"));
-
-  std::string otp;
+  //
   if (0==es.parameters.get<int>("output_step"))
     {
-      name = "output_time_points";
-      otp = in(name, std::to_string(es.parameters.get<int>("time_step_number")));
-      es.parameters.set<std::string>(name) = otp;
+      std::string s;
+      s += " " + std::to_string(es.parameters.get<int>("number_of_time_steps")) + " ";
+      //
+      es.parameters.set<std::string>("output_time_points") = s;
     }
   else
     {
       int t = es.parameters.get<int>("output_step");
-      std::string otp;
-      while (t<=es.parameters.get<int>("time_step_number"))
+      std::string s;
+      while (t<=es.parameters.get<int>("number_of_time_steps"))
         {
-          otp += " " + std::to_string(t) + " ";
+          s += " " + std::to_string(t) + " ";
           t += es.parameters.get<int>("output_step");
         }
-      name = "output_time_points";
-      es.parameters.set<std::string>(name) = otp;
+      //
+      es.parameters.set<std::string>("output_time_points") = s;
     }
 
-  name = "time";
-  es.parameters.set<Real>(name) = 0.0;
-  name = "phase";
-  es.parameters.set<unsigned int>(name) = 0;
+  name = "remeshing_step";
+  es.parameters.set<int>(name) = in(name, 0);
+  //
+  if (0==es.parameters.get<int>("remeshing_step"))
+    {
+      std::string s;
+      s += " " + std::to_string(1+es.parameters.get<int>("number_of_time_steps")) + " ";
+      //
+      es.parameters.set<std::string>("remeshing_time_points") = s;
+    }
+  else
+    {
+      int t = es.parameters.get<int>("remeshing_step");
+      std::string s;
+      while (t<=es.parameters.get<int>("number_of_time_steps"))
+        {
+          s += " " + std::to_string(t) + " ";
+          t += es.parameters.get<int>("remeshing_step");
+        }
+      //
+      es.parameters.set<std::string>("remeshing_time_points") = s;
+    }
 
   {
     name = "mesh/skip_renumber_nodes_and_elements";
@@ -226,27 +282,29 @@ void input (const std::string & file_name, EquationSystems & es)
     es.parameters.set<Real>(name) = in(name, 0.5);
   }
 
-  name = "solver/quiet";
-  es.parameters.set<bool>(name) = in(name, false);
-  //
-  name = "solver/nonlinear/max_nonlinear_iterations";
-  es.parameters.set<int>(name) = in(name, 100);
-  name = "solver/nonlinear/relative_step_tolerance";
-  es.parameters.set<Real>(name) = in(name, 1.e-3);
-  name = "solver/nonlinear/relative_residual_tolerance";
-  es.parameters.set<Real>(name) = in(name, 1.e-8);
-  name = "solver/nonlinear/absolute_residual_tolerance";
-  es.parameters.set<Real>(name) = in(name, 1.e-8);
-  name = "solver/nonlinear/require_reduction";
-  es.parameters.set<bool>(name) = in(name, false);
-  //
-  name = "solver/linear/max_linear_iterations";
-  es.parameters.set<int>(name) = in(name, 50000);
-  name = "solver/linear/initial_linear_tolerance";
-  es.parameters.set<Real>(name) = in(name, 1.e-3);
-  //
-  name = "solver/assembly_use_symmetry";
-  es.parameters.set<bool>(name) = in(name, false);
+  {
+    name = "solver/quiet";
+    es.parameters.set<bool>(name) = in(name, false);
+    //
+    name = "solver/nonlinear/max_nonlinear_iterations";
+    es.parameters.set<int>(name) = in(name, 100);
+    name = "solver/nonlinear/relative_step_tolerance";
+    es.parameters.set<Real>(name) = in(name, 1.e-3);
+    name = "solver/nonlinear/relative_residual_tolerance";
+    es.parameters.set<Real>(name) = in(name, 1.e-8);
+    name = "solver/nonlinear/absolute_residual_tolerance";
+    es.parameters.set<Real>(name) = in(name, 1.e-8);
+    name = "solver/nonlinear/require_reduction";
+    es.parameters.set<bool>(name) = in(name, false);
+    //
+    name = "solver/linear/max_linear_iterations";
+    es.parameters.set<int>(name) = in(name, 50000);
+    name = "solver/linear/initial_linear_tolerance";
+    es.parameters.set<Real>(name) = in(name, 1.e-3);
+    //
+    name = "solver/assembly_use_symmetry";
+    es.parameters.set<bool>(name) = in(name, false);
+  }
 
   name = "BCs";
   es.parameters.set<std::string>(name) = in(name, " 0 ");
@@ -334,7 +392,6 @@ void initial_hcc (EquationSystems & es,
     es.get_system<TransientLinearImplicitSystem>("HCC");
   libmesh_assert_equal_to(hcc_sys.n_vars(), 3);
 
-  es.parameters.set<Real> ("time") =
   hcc_sys.time = 0.0;
 
   std::ifstream fin(es.parameters.get<std::string>("input_nodal"));
@@ -595,6 +652,7 @@ void assemble_hcc (EquationSystems & es,
       hcc_sys.get_system_matrix().add_matrix(Ke, dof_indices);
       hcc_sys.rhs->add_vector(Fe, dof_indices);
     }
+
   // ...done
 }
 
@@ -676,10 +734,11 @@ void check_solution (EquationSystems & es)
   // close solution vector and update the system
   hcc_sys.solution->close();
   hcc_sys.update();
+
   // ...done
 }
 
-void adaptive_mesh_refinement (EquationSystems & es, MeshRefinement & amr)
+void adaptive_remeshing (EquationSystems & es, MeshRefinement & amr)
 {
   ExplicitSystem& press_sys =
     es.get_system<ExplicitSystem>("SolidSystem::pressure");
@@ -724,5 +783,6 @@ void adaptive_mesh_refinement (EquationSystems & es, MeshRefinement & amr)
       // reinitializes the equations system object
       es.reinit();
     }
+
   // ...done
 }
