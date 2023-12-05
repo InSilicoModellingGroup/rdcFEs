@@ -113,24 +113,14 @@ void coupled_hcc (LibMeshInit & init)
       check_solution(es);
 
       // solve for the solid (mechanics) equilibrium
-      model_sb.solve();
-
-      // fill global solution vector from local ones
-      aux_sys.current_local_solution->close();
-      (*aux_sys.solution) = (*aux_sys.current_local_solution);
-      aux_sys.solution->close();
-
-      // reinitialize all systems
-      es.reinit();
+      model_sb.run_solver();
 
       // perform post-processing of the solid system
       model_sb.post_process();
 
-      // advance the Newmark solver of the solid system
-      model_sb.time_solver->advance_timestep();
-
-      // specifically update the auxiliary system only
-      model_sb.update_auxiliary();
+      // advance the Newmark time solver and then
+      // update the auxiliary system only
+      model_sb.update_data();
 
       if (0 == t%refinement_step)
         adaptive_mesh_refinement(es, amr);
