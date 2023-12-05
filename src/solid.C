@@ -6,7 +6,7 @@
 
 static void input (const std::string & , EquationSystems & );
 static void initial_fibres (EquationSystems & , const std::string & );
-static void adaptive_mesh_refinement (EquationSystems & , MeshRefinement &);
+static void adaptive_remeshing (EquationSystems & , MeshRefinement &);
 
 extern PerfLog plog;
 static Parallel::Communicator * pm_ptr = 0;
@@ -76,18 +76,17 @@ void solid (LibMeshInit & init)
   paraview.update_pvd(es);
 
   const std::set<int> otp = export_integers(es.parameters.get<std::string>("output_time_points"));
+  const std::set<int> rtp = export_integers(es.parameters.get<std::string>("remeshing_time_points"));
 
-  const int refinement_step = es.parameters.get<int>("refinement_step");
-  const int n_t_step = es.parameters.get<int>("time_step_number");
-  for (int t=1; t<=n_t_step; t++)
+  es.parameters.set<Real>("pseudo_time") = 0.0;
+  const int n_load_step = es.parameters.get<int>("number_of_loading_steps");
+  for (int l=1; l<=n_load_step; l++)
     {
-      const Real time = t * model.deltat;
-      es.parameters.set<Real>("time") = time;
-      es.parameters.set<unsigned int>("step") = t;
+      es.parameters.set<Real>("pseudo_time") += model.deltat;
 
       libMesh::out << std::endl
-                   << " ==== Step " << std::setw(4) << t << " out of " << std::setw(4) << n_t_step
-                   << " (Time=" << std::setw(9) << time << ") ==== "
+                   << " ==== Step " << std::setw(4) << l << " out of " << std::setw(4) << n_load_step
+                   << " (pseudo-time=" << es.parameters.get<Real>("pseudo_time") << ") ==== "
                    << std::endl;
 
       // solve for the solid (mechanics) equilibrium
@@ -100,14 +99,13 @@ void solid (LibMeshInit & init)
       // update the auxiliary system only
       model.update_data();
 
-      if (0 == t%refinement_step)
-        adaptive_mesh_refinement(es, amr);
+      // check if to perform any adaptive mesh refinement/coarsening
+      if (rtp.end()!=rtp.find(l))
+        adaptive_remeshing(es, amr);
 
       // save current solution
-      if (otp.end()!=otp.find(t))
-        {
-          paraview.update_pvd(es, t);
-        }
+      if (otp.end()!=otp.find(l))
+        paraview.update_pvd(es, l);
     }
 
   // ...done
@@ -150,38 +148,56 @@ void input (const std::string & file_name, EquationSystems & es)
   if (0==global_processor_id() && name!=".")
     std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+es.parameters.get<std::string>(name)).c_str());
 
-  name = "time_step";
-  es.parameters.set<Real>(name) = in(name, 1.0e-9);
-  name = "time_step_number";
-  es.parameters.set<int>(name) = 1.0/es.parameters.get<Real>("time_step");
+  name = "loading_step";
+  es.parameters.set<Real>(name) = in(name, 1.0);
+  name = "number_of_loading_steps";
+  es.parameters.set<int>(name) = 1.0/es.parameters.get<Real>("loading_step");
 
   name = "output_step";
   es.parameters.set<int>(name) = in(name, 0);
-  name = "refinement_step";
-  es.parameters.set<int>(name) = in(name, 1+es.parameters.get<int>("time_step_number"));
-
-  std::string otp;
+  //
   if (0==es.parameters.get<int>("output_step"))
     {
-      name = "output_time_points";
-      otp = in(name, std::to_string(es.parameters.get<int>("time_step_number")));
-      es.parameters.set<std::string>(name) = otp;
+      std::string s;
+      s += " " + std::to_string(es.parameters.get<int>("number_of_loading_steps")) + " ";
+      //
+      es.parameters.set<std::string>("output_time_points") = s;
     }
   else
     {
-      int t = es.parameters.get<int>("output_step");
-      std::string otp;
-      while (t<=es.parameters.get<int>("time_step_number"))
+      int l = es.parameters.get<int>("output_step");
+      std::string s;
+      while (l<=es.parameters.get<int>("number_of_loading_steps"))
         {
-          otp += " " + std::to_string(t) + " ";
-          t += es.parameters.get<int>("output_step");
+          s += " " + std::to_string(l) + " ";
+          l += es.parameters.get<int>("output_step");
         }
-      name = "output_time_points";
-      es.parameters.set<std::string>(name) = otp;
+      //
+      es.parameters.set<std::string>("output_time_points") = s;
     }
 
-  name = "time";
-  es.parameters.set<Real>(name) = 0.0;
+  name = "remeshing_step";
+  es.parameters.set<int>(name) = in(name, 0);
+  //
+  if (0==es.parameters.get<int>("remeshing_step"))
+    {
+      std::string s;
+      s += " " + std::to_string(1+es.parameters.get<int>("number_of_loading_steps")) + " ";
+      //
+      es.parameters.set<std::string>("remeshing_time_points") = s;
+    }
+  else
+  {
+      int l = es.parameters.get<int>("remeshing_step");
+      std::string s;
+      while (l<=es.parameters.get<int>("number_of_loading_steps"))
+        {
+          s += " " + std::to_string(l) + " ";
+          l += es.parameters.get<int>("remeshing_step");
+        }
+      //
+      es.parameters.set<std::string>("remeshing_time_points") = s;
+  }
 
   {
     name = "mesh/skip_renumber_nodes_and_elements";
@@ -310,7 +326,7 @@ void initial_fibres (EquationSystems & es,
   // ...done
 }
 
-void adaptive_mesh_refinement (EquationSystems & es, MeshRefinement & amr)
+void adaptive_remeshing (EquationSystems & es, MeshRefinement & amr)
 {
   ExplicitSystem& press_sys =
     es.get_system<ExplicitSystem>("SolidSystem::pressure");

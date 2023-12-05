@@ -61,8 +61,8 @@ void SolidSystem::init_data ()
   this->undefo_var[1] = aux_sys.variable_number("undeformed_y");
   this->undefo_var[2] = aux_sys.variable_number("undeformed_z");
 
-  // set the time stepping for the solid solver
-  this->deltat = es.parameters.get<Real>("time_step");
+  // set the loading (pseudo-time) step for the solid solver
+  this->deltat = es.parameters.get<Real>("loading_step");
 
   // so the parent's initialization after variables are defined
   FEMSystem::init_data();
@@ -226,7 +226,7 @@ bool SolidSystem::element_time_derivative (bool request_jacobian,
       // volumetric stretch ratio
       Real lambda[3];
       for (unsigned int d=0; d<3; ++d)
-        lambda[d] = 1.0+es.parameters.get<Real>("time")*DlDt[d];
+        lambda[d] = 1.0+es.parameters.get<Real>("pseudo_time")*DlDt[d];
 
       // Initialize the constitutive formulation with the current displacement
       // gradient
@@ -283,7 +283,7 @@ bool SolidSystem::side_time_derivative (bool request_jacobian,
   // side 5 about 1.0 units down the z-axis while leaving all other directions unrestricted
 
   // get the current load step
-  const Real ratio = es.parameters.get<Real>("time")
+  const Real ratio = es.parameters.get<Real>("pseudo_time")
                    * 1.000001;
 
   const std::set<int> BCs_set = export_integers(es.parameters.get<std::string>("BCs"));
@@ -487,7 +487,7 @@ void SolidSystem::post_process ()
 
           Real lambda[3];
           for (unsigned int d=0; d<3; ++d)
-            lambda[d] = 1.0+es.parameters.get<Real>("time")*DlDt[d];
+            lambda[d] = 1.0+es.parameters.get<Real>("pseudo_time")*DlDt[d];
 
           // initialize the constitutive formulation with the current displacement
           // gradient
