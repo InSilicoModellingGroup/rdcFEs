@@ -3,9 +3,9 @@ directory = simulation
 input_GMSH = Brain_Model.msh
 output_PARAVIEW = out
 
-time_step = 0.01
+loading_step = 0.01
 output_step = 10
-refinement_step = 10000
+remeshing_step = 10000
 
 solver/quiet = false
 solver/nonlinear/max_nonlinear_iterations = 30

@@ -3,9 +3,9 @@ directory = simulation
 input_GMSH = cube.msh
 output_PARAVIEW = out
 
-time_step = 0.1
+loading_step = 0.1
 output_time_points = ' 2 4 6 8 10 '
-refinement_step = 100
+remeshing_step = 100
 
 solver/quiet = false
 solver/nonlinear/max_nonlinear_iterations = 10

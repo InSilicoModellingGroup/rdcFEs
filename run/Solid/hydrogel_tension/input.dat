@@ -3,9 +3,9 @@ directory = simulation
 input_GMSH = hydrogel_model.msh
 output_PARAVIEW = out
 
-time_step = 0.1
-output_step = 1
-refinement_step = 100
+loading_step = 0.1
+#output_step = 0
+remeshing_step = 100
 
 solver/quiet = false
 solver/nonlinear/max_nonlinear_iterations = 10
