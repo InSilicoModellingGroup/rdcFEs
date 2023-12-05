@@ -182,8 +182,6 @@ void input (const std::string & file_name, EquationSystems & es)
 
   name = "time";
   es.parameters.set<Real>(name) = 0.0;
-  name = "phase";
-  es.parameters.set<unsigned int>(name) = 0;
 
   {
     name = "mesh/skip_renumber_nodes_and_elements";
@@ -199,27 +197,29 @@ void input (const std::string & file_name, EquationSystems & es)
     es.parameters.set<Real>(name) = in(name, 0.5);
   }
 
-  name = "solver/quiet";
-  es.parameters.set<bool>(name) = in(name, false);
-  //
-  name = "solver/nonlinear/max_nonlinear_iterations";
-  es.parameters.set<int>(name) = in(name, 100);
-  name = "solver/nonlinear/relative_step_tolerance";
-  es.parameters.set<Real>(name) = in(name, 1.e-3);
-  name = "solver/nonlinear/relative_residual_tolerance";
-  es.parameters.set<Real>(name) = in(name, 1.e-8);
-  name = "solver/nonlinear/absolute_residual_tolerance";
-  es.parameters.set<Real>(name) = in(name, 1.e-8);
-  name = "solver/nonlinear/require_reduction";
-  es.parameters.set<bool>(name) = in(name, false);
-  //
-  name = "solver/linear/max_linear_iterations";
-  es.parameters.set<int>(name) = in(name, 50000);
-  name = "solver/linear/initial_linear_tolerance";
-  es.parameters.set<Real>(name) = in(name, 1.e-3);
-  //
-  name = "solver/assembly_use_symmetry";
-  es.parameters.set<bool>(name) = in(name, false);
+  {
+    name = "solver/quiet";
+    es.parameters.set<bool>(name) = in(name, false);
+    //
+    name = "solver/nonlinear/max_nonlinear_iterations";
+    es.parameters.set<int>(name) = in(name, 100);
+    name = "solver/nonlinear/relative_step_tolerance";
+    es.parameters.set<Real>(name) = in(name, 1.e-3);
+    name = "solver/nonlinear/relative_residual_tolerance";
+    es.parameters.set<Real>(name) = in(name, 1.e-8);
+    name = "solver/nonlinear/absolute_residual_tolerance";
+    es.parameters.set<Real>(name) = in(name, 1.e-8);
+    name = "solver/nonlinear/require_reduction";
+    es.parameters.set<bool>(name) = in(name, false);
+    //
+    name = "solver/linear/max_linear_iterations";
+    es.parameters.set<int>(name) = in(name, 50000);
+    name = "solver/linear/initial_linear_tolerance";
+    es.parameters.set<Real>(name) = in(name, 1.e-3);
+    //
+    name = "solver/assembly_use_symmetry";
+    es.parameters.set<bool>(name) = in(name, false);
+  }
 
   name = "BCs";
   es.parameters.set<std::string>(name) = in(name, " 0 ");
