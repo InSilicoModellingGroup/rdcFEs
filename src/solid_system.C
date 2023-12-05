@@ -64,6 +64,9 @@ void SolidSystem::init_data ()
   // set the loading (pseudo-time) step for the solid solver
   this->deltat = es.parameters.get<Real>("loading_step");
 
+  if (!es.parameters.have_parameter<Real>("BCs/displacement_penalty"))
+    es.parameters.set<Real>("BCs/displacement_penalty") = 1.0e+5;
+
   // so the parent's initialization after variables are defined
   FEMSystem::init_data();
 
@@ -87,6 +90,8 @@ void SolidSystem::init_data ()
   solver.relative_residual_tolerance = es.parameters.get<Real>("solver/nonlinear/relative_residual_tolerance");
   solver.absolute_residual_tolerance = es.parameters.get<Real>("solver/nonlinear/absolute_residual_tolerance");
   solver.verbose = (! es.parameters.get<bool>("solver/quiet"));
+  if (!es.parameters.have_parameter<bool>("solver/assembly_use_symmetry"))
+    es.parameters.set<bool>("solver/assembly_use_symmetry") = false;
 
   ((NewtonSolver &) solver).require_residual_reduction = es.parameters.get<bool>("solver/nonlinear/require_reduction");
 
