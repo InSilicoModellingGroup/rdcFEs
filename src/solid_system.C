@@ -365,6 +365,27 @@ bool SolidSystem::side_time_derivative (bool request_jacobian,
   return request_jacobian;
 }
 
+void SolidSystem::run_solver ()
+{
+  EquationSystems & es = this->get_equation_systems();
+
+  TransientExplicitSystem & aux_sys =
+    es.get_system<TransientExplicitSystem>("SolidSystem::auxiliary");
+
+  // execute the nonlinear solver
+  this->solve();
+
+  // close solution vector container
+  aux_sys.current_local_solution->close();
+  // fill global solution vector from local ones
+  (*aux_sys.solution) = (*aux_sys.current_local_solution);
+  // close solution vector container
+  aux_sys.solution->close();
+
+  // reinitialize all systems
+  es.reinit();
+}
+
 void SolidSystem::post_process ()
 {
   EquationSystems & es = this->get_equation_systems();
@@ -376,9 +397,9 @@ void SolidSystem::post_process ()
   std::unique_ptr<FEBase> fe(FEBase::build(3, fe_type));
   fe->attach_quadrature_rule(&qrule);
 
-  ExplicitSystem& aux_system =
+  ExplicitSystem& aux_sys =
     es.get_system<TransientExplicitSystem>("SolidSystem::auxiliary");
-  libmesh_assert_equal_to(aux_system.n_vars(), 3);
+  libmesh_assert_equal_to(aux_sys.n_vars(), 3);
 
   ExplicitSystem& press_sys =
     es.get_system<ExplicitSystem>("SolidSystem::pressure");
@@ -435,7 +456,7 @@ void SolidSystem::post_process ()
 
       std::vector<dof_id_type> undefo_dofs[3];
       for (unsigned int d=0; d<3; ++d)
-        aux_system.get_dof_map().dof_indices(elem, undefo_dofs[d], this->undefo_var[d]);
+        aux_sys.get_dof_map().dof_indices(elem, undefo_dofs[d], this->undefo_var[d]);
 
       std::vector<dof_id_type> dof_indices_F_var[6];
       for (unsigned int f=0; f<6; f++)
@@ -458,7 +479,7 @@ void SolidSystem::post_process ()
           for (unsigned int d=0; d<3; ++d)
             {
               std::vector<Number> XYZ_undefo;
-              aux_system.current_local_solution->get(undefo_dofs[d], XYZ_undefo);
+              aux_sys.current_local_solution->get(undefo_dofs[d], XYZ_undefo);
 
               for (unsigned int l=0; l!=n_u_dofs; l++)
                 grad_X(d).add_scaled(dphi[l][qp], XYZ_undefo[l]);
@@ -515,14 +536,14 @@ void SolidSystem::update_auxiliary ()
 {
   EquationSystems & es = this->get_equation_systems();
 
-  TransientExplicitSystem & aux_system =
+  TransientExplicitSystem & aux_sys =
     es.get_system<TransientExplicitSystem>("SolidSystem::auxiliary");
 
   // close all solution vector containers
-  aux_system.current_local_solution->close();
-  aux_system.old_local_solution->close();
+  aux_sys.current_local_solution->close();
+  aux_sys.old_local_solution->close();
   // copy the 'old' to the 'older' solution vector
-  (*aux_system.older_local_solution) = (*aux_system.old_local_solution);
+  (*aux_sys.older_local_solution) = (*aux_sys.old_local_solution);
   // copy the 'current' to the 'old' solution vector
-  (*aux_system.old_local_solution) = (*aux_system.current_local_solution);
+  (*aux_sys.old_local_solution) = (*aux_sys.current_local_solution);
 }

@@ -27,7 +27,7 @@
 using namespace libMesh;
 
 //-------------------------------------------------------------------------------------------------
-class SolidSystem: public FEMSystem
+class SolidSystem : public FEMSystem
 {
 public:
   // Constructor
@@ -65,6 +65,9 @@ public:
 
   // save the undeformed mesh to an auxiliary system
   void save_initial_mesh ();
+
+  // run the solid solver
+  void run_solver ();
 
   // calculate gradient fields after system solution
   void post_process ();

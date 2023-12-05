@@ -91,15 +91,7 @@ void solid (LibMeshInit & init)
                    << std::endl;
 
       // solve for the solid (mechanics) equilibrium
-      model.solve();
-
-      // fill global solution vector from local ones
-      aux_sys.current_local_solution->close();
-      (*aux_sys.solution) = (*aux_sys.current_local_solution);
-      aux_sys.solution->close();
-
-      // reinitialize all systems
-      es.reinit();
+      model.run_solver();
 
       // perform post-processing of the solid system
       model.post_process();
@@ -164,6 +156,7 @@ void input (const std::string & file_name, EquationSystems & es)
   es.parameters.set<Real>(name) = in(name, 1.0e-9);
   name = "time_step_number";
   es.parameters.set<int>(name) = 1.0/es.parameters.get<Real>("time_step");
+
   name = "output_step";
   es.parameters.set<int>(name) = in(name, 0);
   name = "refinement_step";
