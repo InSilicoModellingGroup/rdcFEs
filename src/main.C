@@ -37,7 +37,7 @@ int main (int argc, char* argv[])
     {
       s = command_line.next(s);
       // hepato-cellular carcinoma model
-      if ("liver"==s) coupled_hcc(init);
+      if ("hcc"==s) coupled_hcc(init);
       else return 1;
     }
   else if (command_line.search(1, "-u"))

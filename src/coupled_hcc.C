@@ -91,7 +91,7 @@ void coupled_hcc (LibMeshInit & init)
   const std::set<int> otp = export_integers(es.parameters.get<std::string>("output_time_points"));
   const std::set<int> rtp = export_integers(es.parameters.get<std::string>("remeshing_time_points"));
 
-  es.parameters.set<Real> ("time") = 0.0;
+  es.parameters.set<Real>("time") = 0.0;
   es.parameters.set<Real>("pseudo_time") = 0.0;
 
   const int n_time_step = es.parameters.get<int>("number_of_time_steps");
@@ -103,10 +103,9 @@ void coupled_hcc (LibMeshInit & init)
       if (ltp.end()!=ltp.find(t))
         es.parameters.set<Real>("pseudo_time") += model_sb.deltat;
 
-      libMesh::out << std::endl
-                   << " ==== Step " << std::setw(4) << t << " out of " << std::setw(4) << n_time_step
-                   << " (time=" << es.parameters.get<Real>("time") << ") ==== "
-                   << std::endl;
+      libMesh::out << " ==== Step " << std::setw(4) << t << " out of " << std::setw(4) << n_time_step
+                   << " (time=" << es.parameters.get<Real>("time") << ") ====          \r"
+                   << std::flush;
 
       // update the solution (containers) for up to 2 steps behind
       *(model_rds.older_local_solution) = *(model_rds.old_local_solution);
@@ -349,18 +348,11 @@ void input (const std::string & file_name, EquationSystems & es)
     }
 
   {
-    name = "range/active_tumor/min"; es.parameters.set<Real>(name) = in(name, 1.0e-12);
-    name = "range/active_tumor/max"; es.parameters.set<Real>(name) = in(name, 1.0e+12);
-    name = "range/necrotic/min"; es.parameters.set<Real>(name) = in(name, 1.0e-12);
-    name = "range/necrotic/max"; es.parameters.set<Real>(name) = in(name, 1.0e+12);
-    name = "range/total_cell/min"; es.parameters.set<Real>(name) = in(name, 1.0e-12);
-    name = "range/total_cell/max"; es.parameters.set<Real>(name) = in(name, 1.0e+12);
-    //
-    name = "cells_min_capacity";
+    name = "cells/min_capacity";
     es.parameters.set<Real>(name) = in(name, 0.0);
-    name = "cells_max_capacity";
+    name = "cells/max_capacity";
     es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "cells_max_capacity/exponent";
+    name = "cells/max_capacity/exponent";
     es.parameters.set<Real>(name) = in(name, 1.0);
   }
 
@@ -457,9 +449,9 @@ void assemble_hcc (EquationSystems & es,
 
   const Real DT_2 = es.parameters.get<Real>("time_step") / 2.0;
 
-  const Real Lambda_k = es.parameters.get<Real>("cells_min_capacity");
-  const Real Kappa_k = es.parameters.get<Real>("cells_max_capacity");
-  const Real ek = es.parameters.get<Real>("cells_max_capacity/exponent");
+  const Real Lambda_k = es.parameters.get<Real>("cells/min_capacity");
+  const Real Kappa_k = es.parameters.get<Real>("cells/max_capacity");
+  const Real ek = es.parameters.get<Real>("cells/max_capacity/exponent");
   const Real produce_l  = es.parameters.get<Real>("produce/l");
   const Real diffuse_c_ = es.parameters.get<Real>("diffuse/c"),
              mechano_c_ = es.parameters.get<Real>("mechano/c"),
