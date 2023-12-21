@@ -1,5 +1,88 @@
 #include "./utils.h"
 
+void write_mesh (Mesh& mesh, const char* fname)
+{
+  // Build a list of (elem, side, bc) tuples.
+  auto boundary_element_triples = mesh.get_boundary_info().build_side_list();
+  std::cout << boundary_element_triples.size() << std::endl;
+
+  int n_nodes = mesh.n_nodes();
+  int n_cells = 0;
+  for (const auto & elem : mesh.active_element_ptr_range())
+    {
+      for (auto s : elem->side_index_range())
+        if (nullptr == elem->neighbor_ptr(s))
+          ++n_cells;
+      ++n_cells;
+    }
+  int index;
+
+  std::ofstream fmsh(fname);
+
+  fmsh << "$MeshFormat" << std::endl;
+  fmsh << "2.2 0 8" << std::endl;
+  fmsh << "$EndMeshFormat" << std::endl;
+  fmsh << "$Nodes" << std::endl;
+  fmsh << n_nodes << std::endl;
+  index = 1;
+  for (const auto & node : mesh.node_ptr_range())
+    {
+      if (1+node->id()!=index) libmesh_error();
+      const Point coord = (*node);
+      fmsh << index
+           << ' ' << coord(0)
+           << ' ' << coord(1)
+           << ' ' << coord(2)
+           << std::endl;
+      //
+      ++index;
+    }
+  fmsh << "$EndNodes" << std::endl;
+  fmsh << "$Elements" << std::endl;
+  fmsh << n_cells << std::endl;
+  index = 1;
+  for (const auto & triplet : boundary_element_triples)
+    {
+      const Elem & elem = mesh.elem_ref(std::get<0>(triplet));
+      //
+      std::unique_ptr<const Elem> side =
+        elem.build_side_ptr(std::get<1>(triplet));
+
+      int gmsh_type;
+      if      (TRI3 ==side->type()) gmsh_type=2;
+      else if (QUAD4==side->type()) gmsh_type=3;
+      else libmesh_error();
+      //
+      fmsh << index
+           << ' ' << gmsh_type
+           << ' ' << 2 << ' ' << std::get<2>(triplet) << ' ' << 0;
+      for (unsigned int i=0; i<side->n_nodes(); i++)
+        fmsh << ' ' << (1+side->node_id(i));
+      fmsh << std::endl;
+      //
+      ++index;
+    }
+  for (const auto & elem : mesh.active_element_ptr_range())
+    {
+      int gmsh_type;
+      if      (TET4    ==elem->type()) gmsh_type=4;
+      else if (HEX8    ==elem->type()) gmsh_type=5;
+      else if (PRISM6  ==elem->type()) gmsh_type=6;
+      else if (PYRAMID5==elem->type()) gmsh_type=7;
+      else libmesh_error();
+      //
+      fmsh << index
+           << ' ' << gmsh_type
+           << ' ' << 2 << ' ' << elem->subdomain_id() << ' ' << 0;
+      for (unsigned int i=0; i<elem->n_nodes(); i++)
+        fmsh << ' ' << (1+elem->node_id(i));
+      fmsh << std::endl;
+      //
+      ++index;
+    }
+  fmsh << "$EndElements" << std::endl;
+}
+
 void process_mesh (LibMeshInit & init)
 {
   std::string in_str;
@@ -46,6 +129,7 @@ void process_mesh (LibMeshInit & init)
   // print out some info about the FE mesh
   std::cout << std::endl;
   msh.print_info();
+  //msh.get_boundary_info().print_info();
   std::cout << std::endl;
   // process the space vector of all nodes of the FE mesh
   std::cout << "FE mesh is now under processing... " << std::flush;
@@ -69,8 +153,7 @@ void process_mesh (LibMeshInit & init)
   const std::string output_filename = in_str;
   //
   std::cout << "Mesh and configuration data is now saving... " << std::flush;
-  GmshIO(msh).write((output_filename+".msh").c_str());
-  ExodusII_IO(msh).write((output_filename+".ex2").c_str());
+  write_mesh(msh, (output_filename+".msh").c_str());
   {
     std::ofstream fout(output_filename+".config");
     fout << "Gmsh input: " << input_Gmsh_file << std::endl;
@@ -81,7 +164,9 @@ void process_mesh (LibMeshInit & init)
     fout << "rotation (X-axis) in degrees: " << radians_to_degrees(rotate_X) << std::endl;
     fout << "rotation (Y-axis) in degrees: " << radians_to_degrees(rotate_Y) << std::endl;
     fout << "rotation (Z-axis) in degrees: " << radians_to_degrees(rotate_Z) << std::endl;
+    fout << "output file name: " << output_filename << std::endl;
   }
+  ExodusII_IO(msh).write((output_filename+".ex2").c_str());
   std::cout << " ok" << std::endl;
   // ...done
 }
