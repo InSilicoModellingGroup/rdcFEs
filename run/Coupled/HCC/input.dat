@@ -1,0 +1,53 @@
+
+directory = simulation
+input_GMSH = HCC_Model.msh
+output_PARAVIEW = out
+
+time_step = 0.01
+number_of_time_steps = 400
+number_of_loading_steps = 40
+output_step = 40
+remeshing_step = 0
+
+solver/quiet = false
+solver/nonlinear/max_nonlinear_iterations = 30
+solver/nonlinear/relative_step_tolerance = 1.e-3
+solver/nonlinear/relative_residual_tolerance = 1.e-6
+solver/nonlinear/absolute_residual_tolerance = 1.e-8
+solver/nonlinear/require_reduction = false
+solver/linear/max_linear_iterations = 50000
+solver/linear/initial_linear_tolerance = 1.e-3
+solver/use_symmetry = true
+
+mesh/skip_renumber_nodes_and_elements = false
+mesh/AMR/max_steps = 1
+mesh/AMR/max_level = 2
+mesh/AMR/refine_percentage  = 0.2
+mesh/AMR/coarsen_percentage = 0.2
+
+cells/min_capacity = 0.0
+cells/max_capacity = 1.0
+cells/max_capacity/exponent = 3
+
+BCs = ' 2000 2002 2003 '
+BC/2000/displacement/0 = +0.000
+BC/2000/displacement/1 = +0.000
+BC/2000/displacement/2 = +0.000
+BC/2002/displacement/0 = NAN
+BC/2002/displacement/1 = NAN
+BC/2002/displacement/2 = +0.000
+BC/2003/displacement/0 = NAN
+BC/2003/displacement/1 = NAN
+BC/2003/displacement/2 = +0.000
+BCs/displacement_penalty = 1.e+8
+
+materials = ' 3000 3001 3002 '
+material/3000/Hyperelastic/Young   = 2.0e+3
+material/3000/Hyperelastic/Poisson = 0.4
+material/3001/Hyperelastic/Young   = 2.0e+3
+material/3001/Hyperelastic/Poisson = 0.4
+material/3002/Hyperelastic/Young   = 2.0e+3
+material/3002/Hyperelastic/Poisson = 0.4
+material/3002/Hyperelastic/VolumetricStretchRatio/rate_0 = 3.0e-1
+material/3002/Hyperelastic/VolumetricStretchRatio/rate_1 = 3.0e-1
+material/3002/Hyperelastic/VolumetricStretchRatio/rate_2 = 3.0e-1
