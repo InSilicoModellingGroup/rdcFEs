@@ -493,14 +493,15 @@ void assemble_ripf (EquationSystems & es,
           else if (fb__dtime<-phi_tol) epsilon_fb = phi_fb_D;
           //
           const Real VolFr_cells = cc_old + fb_old;
-	  const Real VolFr_HU = (HU_old + 1000.0)/1000.0;
+	  const Real VolFr_HU = (HU_old + HU_ref)/HU_ref;
           const Real VolFr_TOTAL = VolFr_HU + VolFr_cells;
           //
           Real Tau = 0.0;
-          Real Tau__dcc = 0.0, Tau__dfb = 0.0;
+          Real Tau__dHU = 0.0, Tau__dcc = 0.0, Tau__dfb = 0.0;
           if (VolFr_TOTAL<1.0)
             {
               Tau = 1.0 - pow(VolFr_TOTAL, VolFr_exponent);
+	      Tau__dHU = -VolFr_exponent * pow(VolFr_TOTAL, VolFr_exponent-1.0)/HU_ref;
               Tau__dcc =
               Tau__dfb = -VolFr_exponent * pow(VolFr_TOTAL, VolFr_exponent-1.0);
               // if ( Tau < VolFr_min_vacant )
@@ -541,11 +542,12 @@ void assemble_ripf (EquationSystems & es,
 		    }
 		  }
 
-		  //		  std::cout << "Exponent = " << HU_exp << ", HU_term = " << HU_term << ", HU_deriv = " << HU_deriv <<  std::endl;
-                  Omecro = (fb_old-pow2(fb_old))*HU_term;
-                  Omecro__dHU = (fb_old-pow2(fb_old))*HU_deriv;
+		  //		  std::cout << "Tau_dHU = " << Tau__dHU << ", HU_term = " << HU_term << ", HU_deriv = " << HU_deriv <<  std::endl;
+		  if ( HU_term > 1 || HU_term < 0 ) std::cout << "Unphysical HU_term = " << HU_term << ", HU_deriv = " << HU_deriv <<  std::endl;
+                  Omecro = (fb_old-pow2(fb_old));
+                  Omecro__dHU = 0.0;
                   Omecro__dcc = 0.0;
-                  Omecro__dfb = (1.0-2.0*fb_old)*HU_term;
+                  Omecro__dfb = (1.0-2.0*fb_old);
             }
 
           for (std::size_t i=0; i<n_var_dofs; i++)
@@ -600,6 +602,11 @@ void assemble_ripf (EquationSystems & es,
                                                       )
                                                );
                   // Matrix contribution
+                  Ke_var[1][0](i,j) += JxW[qp]*(
+                                               - DT_2*( // transport, source, sink terms
+						       kappa_RT * Tau__dHU * Koppa * phi[j][qp] * phi[i][qp]
+                                                      )
+						);
                   Ke_var[1][1](i,j) += JxW[qp]*(
                                                  phi[j][qp] * phi[i][qp] // capacity term
                                                - DT_2*( // transport, source, sink terms
@@ -617,7 +624,9 @@ void assemble_ripf (EquationSystems & es,
                   Ke_var[2][0](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
                                                         lambda_RT * Tau * Lombda__dHU * phi[j][qp] * phi[i][qp]
+						      + lambda_RT * Tau__dHU * Lombda * phi[j][qp] * phi[i][qp]
                                                       + omicro_RT * Tau * Omecro__dHU * phi[j][qp] * phi[i][qp]
+						      + omicro_RT * Tau__dHU * Omecro* phi[j][qp] * phi[i][qp]
                                                       - haptotaxis * Tau * (dphi[j][qp] * fb_old * dphi[i][qp])
                                                       )
                                                );
