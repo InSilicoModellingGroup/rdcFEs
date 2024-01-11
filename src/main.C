@@ -8,7 +8,7 @@ PerfLog plog("rdcFEs");
 
 extern void adpm (LibMeshInit & );
 extern void pihna (LibMeshInit & );
-extern void ripf (LibMeshInit & );
+extern void ripf (LibMeshInit &, std::string input_file );
 extern void process_mesh (LibMeshInit & );
 
 int main (int argc, char* argv[])
@@ -25,7 +25,14 @@ int main (int argc, char* argv[])
       // PIHNA cancer model
       else if ("pihna"==s) pihna(init);
       // radiation-induced pulmonary fibrosis model
-      else if ("ripf"==s) ripf(init);
+      else if ("ripf"==s) {
+	std::string input_file;
+	if (command_line.search(1, "-i")) {
+	  input_file = command_line.next(input_file);
+	  ripf(init,input_file);
+	}
+	else ripf(init,"input.dat");
+      }
     }
   else if (command_line.search(1, "-u"))
     {

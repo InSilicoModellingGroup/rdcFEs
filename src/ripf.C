@@ -10,14 +10,14 @@ static void save_solution (std::ofstream & , EquationSystems & );
 extern PerfLog plog;
 static Parallel::Communicator * pm_ptr = 0;
 
-void ripf (LibMeshInit & init)
+void ripf (LibMeshInit & init, std::string input_file)
 {
   Mesh mesh(init.comm(), 3);
   EquationSystems es(mesh);
 
   pm_ptr = & init.comm();
 
-  input("input.dat", es);
+  input(input_file, es);
 
   TransientLinearImplicitSystem & model =
     es.add_system<TransientLinearImplicitSystem>("RIPF");
