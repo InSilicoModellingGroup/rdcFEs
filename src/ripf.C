@@ -231,16 +231,10 @@ void input (const std::string & file_name, EquationSystems & es)
   {
     name = "fb/lambda";      es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "fb/lambda/RT/r"; es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "fb/lambda/HU/r"; es.parameters.set<Real>(name) = in(name, -1.);
-    if (es.parameters.get<Real>(name)>=0.0) libmesh_error();
     name = "fb/omicro";      es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "fb/omicro/RT/r"; es.parameters.set<Real>(name) = in(name, 0.);
+    name = "fb/omicro/exponent";   es.parameters.set<Real>(name) = in(name, 1.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "fb/omicro/fb/b"; es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0||es.parameters.get<Real>(name)>1.0) libmesh_error();
     name = "fb/omega";       es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/diffusion";   es.parameters.set<Real>(name) = in(name, 0.);
@@ -249,6 +243,10 @@ void input (const std::string & file_name, EquationSystems & es)
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/radiotaxis";  es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
+    name = "fb/RT/ref"; es.parameters.set<Real>(name) = in(name, 0.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
+    name = "fb/HU/ref"; es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)==0.0) libmesh_error();
   }
 
   // ...done
@@ -397,13 +395,10 @@ void assemble_ripf (EquationSystems & es,
              delta_RT_a = es.parameters.get<Real>("cc/delta/RT/a"),
              delta_RT_b = es.parameters.get<Real>("cc/delta/RT/b");
   const Real lambda      = es.parameters.get<Real>("fb/lambda"),
-             lambda_RT_r = es.parameters.get<Real>("fb/lambda/RT/r")
-                         ? es.parameters.get<Real>("fb/lambda/RT/r") : es.parameters.get<int>("RT_dose/total/max"),
-             lambda_HU_r = es.parameters.get<Real>("fb/lambda/HU/r"),
+             RT_ref = es.parameters.get<Real>("fb/RT/ref"),
+             HU_ref = es.parameters.get<Real>("fb/HU/ref"),
              omicro      = es.parameters.get<Real>("fb/omicro"),
-             omicro_RT_r = es.parameters.get<Real>("fb/omicro/RT/r")
-                         ? es.parameters.get<Real>("fb/omicro/RT/r") : es.parameters.get<int>("RT_dose/total/max"),
-             omicro_fb_b = es.parameters.get<Real>("fb/omicro/fb/b"),
+             omicro_HU_exponent      = es.parameters.get<Real>("fb/omicro/exponent"),
              omega       = es.parameters.get<Real>("fb/omega"),
              diffusion   = es.parameters.get<Real>("fb/diffusion"),
              haptotaxis  = es.parameters.get<Real>("fb/haptotaxis"),
@@ -487,8 +482,8 @@ void assemble_ripf (EquationSystems & es,
 
           const Real kappa_RT = kappa * exp(-kappa_RT_c*RT_td);
           const Real delta_RT = delta * (1.0 - exp(-delta_RT_a*RT_td-delta_RT_b*pow2(RT_td)));
-          const Real lambda_RT = lambda * (RT_td/lambda_RT_r);
-          const Real omicro_RT = omicro * apply_lbound(0.0, 4.0*((RT_td/omicro_RT_r)-pow2(RT_td/omicro_RT_r)));
+          const Real lambda_RT = lambda * (RT_td/RT_ref);
+          const Real omicro_RT = omicro * (RT_td/RT_ref);
           //
           Real epsilon_cc = 0.0;
           if      (cc__dtime> phi_tol) epsilon_cc = phi_cc_B;
@@ -498,21 +493,22 @@ void assemble_ripf (EquationSystems & es,
           else if (fb__dtime<-phi_tol) epsilon_fb = phi_fb_D;
           //
           const Real VolFr_cells = cc_old + fb_old;
-          const Real VolFr_TOTAL = VolFr_stroma + VolFr_parenchyma + VolFr_cells;
+	  const Real VolFr_HU = (HU_old + 1000.0)/1000.0;
+          const Real VolFr_TOTAL = VolFr_HU + VolFr_cells;
           //
           Real Tau = 0.0;
           Real Tau__dcc = 0.0, Tau__dfb = 0.0;
           if (VolFr_TOTAL<1.0)
             {
-              Tau = pow(1.0-VolFr_TOTAL, VolFr_exponent);
+              Tau = 1.0 - pow(VolFr_TOTAL, VolFr_exponent);
               Tau__dcc =
-              Tau__dfb = -VolFr_exponent * pow(1.0-VolFr_TOTAL, VolFr_exponent-1.0);
-              if ( Tau < VolFr_min_vacant )
-                {
-                  Tau = 0.0;
-                  Tau__dcc =
-                  Tau__dfb = 0.0;
-                }
+              Tau__dfb = -VolFr_exponent * pow(VolFr_TOTAL, VolFr_exponent-1.0);
+              // if ( Tau < VolFr_min_vacant )
+              //   {
+              //     Tau = 0.0;
+              //     Tau__dcc =
+              //     Tau__dfb = 0.0;
+              //   }
             }
           //
           Real Koppa = 0.0;
@@ -528,38 +524,28 @@ void assemble_ripf (EquationSystems & es,
           Real Lombda__dHU = 0.0, Lombda__dcc = 0.0, Lombda__dfb = 0.0;
           Real Omecro = 0.0;
           Real Omecro__dHU = 0.0, Omecro__dcc = 0.0, Omecro__dfb = 0.0;
-          if      (fb_old<0.0) ;
-          else if (fb_old<1.0)
+          if (fb_old >= 0.0 && fb_old < 1.0)
             {
-              if (HU_old>lambda_HU_r && HU_old<0.0)
-                {
-                  Lombda = (1.0-pow2(fb_old))*(HU_old/lambda_HU_r);
-                  Lombda__dHU = (1.0-pow2(fb_old))/lambda_HU_r;
-                  Lombda__dcc = 0.0;
-                  Lombda__dfb = -(2.0*fb_old)*(HU_old/lambda_HU_r);
-                }
-              else if (HU_old<lambda_HU_r)
-                {
                   Lombda = (1.0-pow2(fb_old));
                   Lombda__dHU = 0.0;
                   Lombda__dcc = 0.0;
                   Lombda__dfb = -(2.0*fb_old);
-                }
-              //
-              if (fb_old<=omicro_fb_b)
-                {
-                  Omecro = 4.0*(omicro_fb_b-pow2(omicro_fb_b));
-                  Omecro__dHU = 0.0;
+
+		  Real HU_exp=omicro_HU_exponent;
+		  Real HU_term=0, HU_deriv=0;
+		  if ( HU_old < 0 ) {
+		    HU_term = 1;
+		    if ( HU_exp >= 1 ) {
+		      HU_term = 1 - pow((HU_old+HU_ref)/HU_ref,HU_exp);
+		      HU_deriv = -HU_exp*pow((HU_old+HU_ref)/HU_ref,HU_exp-1.0)/HU_ref;
+		    }
+		  }
+
+		  //		  std::cout << "Exponent = " << HU_exp << ", HU_term = " << HU_term << ", HU_deriv = " << HU_deriv <<  std::endl;
+                  Omecro = (fb_old-pow2(fb_old))*HU_term;
+                  Omecro__dHU = (fb_old-pow2(fb_old))*HU_deriv;
                   Omecro__dcc = 0.0;
-                  Omecro__dfb = 0.0;
-                }
-              else
-                {
-                  Omecro = 4.0*(fb_old-pow2(fb_old));
-                  Omecro__dHU = 0.0;
-                  Omecro__dcc = 0.0;
-                  Omecro__dfb = 4.0-8.0*fb_old;
-                }
+                  Omecro__dfb = (1.0-2.0*fb_old)*HU_term;
             }
 
           for (std::size_t i=0; i<n_var_dofs; i++)
