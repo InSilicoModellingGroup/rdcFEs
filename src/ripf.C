@@ -398,7 +398,7 @@ void assemble_ripf (EquationSystems & es,
              RT_ref = es.parameters.get<Real>("fb/RT/ref"),
              HU_ref = es.parameters.get<Real>("fb/HU/ref"),
              omicro      = es.parameters.get<Real>("fb/omicro"),
-             omicro_HU_exponent      = es.parameters.get<Real>("fb/omicro/exponent"),
+             omicro_exponent      = es.parameters.get<Real>("fb/omicro/exponent"),
              omega       = es.parameters.get<Real>("fb/omega"),
              diffusion   = es.parameters.get<Real>("fb/diffusion"),
              haptotaxis  = es.parameters.get<Real>("fb/haptotaxis"),
@@ -512,6 +512,8 @@ void assemble_ripf (EquationSystems & es,
               //   }
             }
           //
+	  //	  std::cout << "Tau = " << Tau << ", Tau_dfb = " << Tau__dfb << ", Tau_dHU = " << Tau__dHU <<  std::endl;
+	  //
           Real Koppa = 0.0;
           Real Koppa__dcc = 0.0;
           if      (cc_old<0.0) ;
@@ -532,22 +534,10 @@ void assemble_ripf (EquationSystems & es,
                   Lombda__dcc = 0.0;
                   Lombda__dfb = -(2.0*fb_old);
 
-		  Real HU_exp=omicro_HU_exponent;
-		  Real HU_term=0, HU_deriv=0;
-		  if ( HU_old < 0 ) {
-		    HU_term = 1;
-		    if ( HU_exp >= 1 ) {
-		      HU_term = 1 - pow((HU_old+HU_ref)/HU_ref,HU_exp);
-		      HU_deriv = -HU_exp*pow((HU_old+HU_ref)/HU_ref,HU_exp-1.0)/HU_ref;
-		    }
-		  }
-
-		  //		  std::cout << "Tau_dHU = " << Tau__dHU << ", HU_term = " << HU_term << ", HU_deriv = " << HU_deriv <<  std::endl;
-		  if ( HU_term > 1 || HU_term < 0 ) std::cout << "Unphysical HU_term = " << HU_term << ", HU_deriv = " << HU_deriv <<  std::endl;
-                  Omecro = (fb_old-pow2(fb_old));
+		  Omecro = pow(fb_old,omicro_exponent)*(1-fb_old);
                   Omecro__dHU = 0.0;
                   Omecro__dcc = 0.0;
-                  Omecro__dfb = (1.0-2.0*fb_old);
+                  Omecro__dfb = omicro_exponent*pow(fb_old,omicro_exponent-1)*(1-fb_old) + pow(fb_old,omicro_exponent)*(-1.0);
             }
 
           for (std::size_t i=0; i<n_var_dofs; i++)
