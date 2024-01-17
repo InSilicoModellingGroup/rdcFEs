@@ -707,6 +707,11 @@ void check_solution (EquationSystems & es, std::vector<Number> & prev_soln)
       cc_ = soln[idof[1]]; if (cc_<0.0) cc_ = 0.0;
       fb_ = soln[idof[2]]; if (fb_<0.0) fb_ = 0.0;
 
+      if (fb_>1.0) {
+	std::cout << "fb has overshoot: " << fb_ << " (not changed)" << std::endl;
+	//fb_ = 1.0;
+      }
+
       Real HU_p_, cc_p_, fb_p_;
       HU_p_ = prev_soln[idof[0]];
       cc_p_ = prev_soln[idof[1]];
