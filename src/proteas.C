@@ -98,20 +98,20 @@ void input (const std::string & file_name, EquationSystems & es)
 
   const std::string DIR_default = date_time_to_string(date_now(), "%Y%m%d_%H%M%S");
   name = "directory";
-  const std::string DIR = in(name, DIR_default) + "/";
+  const std::string DIR = in(name, DIR_default);
 
   // create a directory to store simulation results
   if (0==global_processor_id())
     std::system(std::string("mkdir -p "+DIR).c_str());
   // create a copy of the input file containing all model parameters
   if (0==global_processor_id())
-    std::system(std::string("cp "+file_name+" "+DIR+file_name).c_str());
+    std::system(std::string("cp "+file_name+" "+DIR+"/"+file_name).c_str());
 
   name = "input_GMSH";
   es.parameters.set<std::string>(name) = in(name, "input.msh");
   //
   name = "output_GMSH";
-  es.parameters.set<std::string>(name) = DIR + in(name, "output.msh");
+  es.parameters.set<std::string>(name) = DIR + "/" + in(name, "output.msh");
   //
   name = "input_nodal";
   es.parameters.set<std::string>(name) = in(name, "input.nd");
@@ -124,10 +124,11 @@ void input (const std::string & file_name, EquationSystems & es)
   //   std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+es.parameters.get<std::string>(name)).c_str());
   //
   name = "output_Paraview";
-  es.parameters.set<std::string>(name) = DIR + in(name, "output4paraview");
+  std::string  pv_filename = std::filesystem::path(DIR).filename();
+  es.parameters.set<std::string>(name) = DIR + "/" + in(name, pv_filename);
   //
   name = "output_CSV";
-  es.parameters.set<std::string>(name) = DIR + in(name, "output.csv");
+  es.parameters.set<std::string>(name) = DIR + "/" + in(name, pv_filename+".csv");
 
   es.parameters.set<Real>("time") = 0.0;
 

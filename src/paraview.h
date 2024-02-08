@@ -1,6 +1,8 @@
 #ifndef __PARAVIEW_H__
 #define __PARAVIEW_H__
 
+#include <filesystem>
+
 //-------------------------------------------------------------------------------------------------
 #ifdef SMALLEST_NUMBER
 #error "macro parameter \"SMALLEST_NUMBER\" has been defined elsewhere!"
@@ -178,8 +180,9 @@ public:
       const std::string vtu = this->_filename + "-" + std::to_string(t) + ".vtu";
 
       this->write_equation_systems(vtu, es);
+      std::string  vtu_filename = std::filesystem::path(vtu).filename();
 
-      this->_pvd << "    <DataSet timestep=\"" << t << "\" group=\"\" part=\"0\" file=\"../" << vtu << "\"/>\n"
+      this->_pvd << "    <DataSet timestep=\"" << t << "\" group=\"\" part=\"0\" file=\"" << vtu_filename << "\"/>\n"
                  << std::flush;
     }
   inline
