@@ -384,7 +384,7 @@ void assemble_proteas_model (EquationSystems & es,
              delta_h   = es.parameters.get<Real>("host/RT_death_rate"),
              a_RT_h    = es.parameters.get<Real>("host/RT_exp_a"),
              b_RT_h    = es.parameters.get<Real>("host/RT_exp_b"),
-             alpha_n_h = es.parameters.get<Real>("host/necrosis_rate");
+             nu_h = es.parameters.get<Real>("host/necrosis_rate");
 
   const Real D_c       = es.parameters.get<Real>("tumour/diffusion"),
              D_c_h     = es.parameters.get<Real>("tumour/diffusion_host"),
@@ -393,22 +393,21 @@ void assemble_proteas_model (EquationSystems & es,
              delta_c   = es.parameters.get<Real>("tumour/RT_death_rate"),
              a_RT_c    = es.parameters.get<Real>("tumour/RT_exp_a"),
              b_RT_c    = es.parameters.get<Real>("tumour/RT_exp_b"),
-             alpha_n_c = es.parameters.get<Real>("tumour/necrosis_rate");
+             nu_c = es.parameters.get<Real>("tumour/necrosis_rate");
 
-  const Real iota_n = es.parameters.get<Real>("necrosis/clearance"),
+  const Real psi_n = es.parameters.get<Real>("necrosis/clearance"),
              k_n    = es.parameters.get<Real>("necrosis/slope"),
              u_n    = es.parameters.get<Real>("necrosis/vsc_threshold");
 
   const Real rho_v     = es.parameters.get<Real>("vascular/proliferation"),
-             alpha_n_v = es.parameters.get<Real>("vascular/necrosis_rate");
+             nu_v = es.parameters.get<Real>("vascular/necrosis_rate");
 
   const Real D_e    = es.parameters.get<Real>("oedema/diffusion"),
              rho_e  = es.parameters.get<Real>("oedema/proliferation"),
              u_e    = es.parameters.get<Real>("oedema/vsc_threshold"),
-             e_e    = es.parameters.get<Real>("oedema/oedema_threshold"),
              xi_e   = es.parameters.get<Real>("oedema/RT_coeff"),
              p_RT_e = es.parameters.get<Real>("oedema/RT_exp"),
-             a_e    = es.parameters.get<Real>("oedema/reabsorption_rate");
+             psi_e    = es.parameters.get<Real>("oedema/reabsorption_rate");
 
   for (const auto & elem : mesh.active_local_element_ptr_range())
     {
@@ -487,38 +486,39 @@ void assemble_proteas_model (EquationSystems & es,
 	  }
 
           const Real T = hos_old + tum_old + nec_old + vsc_old;
-          const Real Kappa = 1.0 - T/T_max;
-          const Real dKappa = -1.0;
+          Real Kappa = 1.0 - T/T_max;
+	  Kappa = std::min(std::max(Kappa,0.0),1.0);
+	  const Real dKappa = -1.0/T_max;
 	  
           const Real host_prol = rho_h * Kappa * heaviside(vsc_old - u_h);
           const Real dhost_prol = rho_h * dKappa * heaviside(vsc_old - u_h);
           const Real host_RT_death = delta_h * (1.0 - exp(- a_RT_h*RTD - b_RT_h*pow2(RTD)));
-          const Real host_nec = alpha_n_h * nec_old;
+          const Real host_nec = nu_h * nec_old;
 
           const Real tumour_prol = rho_c * Kappa * heaviside(vsc_old - u_c);
           const Real dtumour_prol = rho_c * dKappa * heaviside(vsc_old - u_c);
           const Real tumour_RT_death = delta_c * (1.0 - exp(- a_RT_c*RTD - b_RT_c*pow2(RTD)));
-          const Real tumour_nec = alpha_n_c * nec_old;
+          const Real tumour_nec = nu_c * nec_old;
 
-          const Real nec_prol = alpha_n_h * hos_old + alpha_n_c * tum_old + alpha_n_v * vsc_old;
-          const Real nec_clearance = iota_n*(1.0 - tanh(k_n*(vsc_old - u_n)));
-          const Real dnec_clearance_dv = iota_n* -k_n / (cosh(k_n*(vsc_old - u_n)) * cosh(k_n*(vsc_old - u_n)));
+          const Real nec_prol = nu_h * hos_old + nu_c * tum_old + nu_v * vsc_old;
+          const Real nec_clearance = psi_n*(1.0 - tanh(k_n*vsc_old - u_n));
+          const Real dnec_clearance_dv = psi_n* -k_n / (cosh(k_n*vsc_old - u_n) * cosh(k_n*vsc_old - u_n));
 
           const Real vsc_prol = rho_v * Kappa * tum_old;
           const Real dvsc_prol = rho_v * dKappa * tum_old;
-          const Real vsc_nec = alpha_n_v * nec_old;
+          const Real vsc_nec = nu_v * nec_old;
 
           const Real oed_prol = rho_e * tum_old * (1.0-tum_old);
           const Real doed_prol_dc = rho_e * (1.0-2.0*tum_old);
           const Real oed_RT = xi_e * std::pow(RTD / RT_max,p_RT_e);
-          const Real oed_clearance = a_e * (1.0 - heaviside(vsc_old - u_e));
+          const Real oed_clearance = psi_e * (1.0 - heaviside(vsc_old - u_e));
 
           // RHS contribution
           for (std::size_t i=0; i<n_var_dofs; i++)
             {
               // Host (healthy) cells
               Fe_var[0](i) += JxW[qp]*(
-                                        hos_old * phi[i][qp] // capacity term
+                                        hos_old * phi[i][qp]
                                       + DT_2*(
                                              + host_prol * hos_old * (1.0-hos_old) * phi[i][qp]
                                              - host_RT_death * hos_old * phi[i][qp]
@@ -527,7 +527,7 @@ void assemble_proteas_model (EquationSystems & es,
                                       );
               // Tumour cells
               Fe_var[1](i) += JxW[qp]*(
-                                        tum_old * phi[i][qp] // capacity term
+                                        tum_old * phi[i][qp]
                                       + DT_2*(
                                              - D_c * Kappa * (GRAD_tum_old * dphi[i][qp])
                                              - D_c_h * Kappa * (GRAD_hos_old * tum_old * dphi[i][qp])
@@ -538,7 +538,7 @@ void assemble_proteas_model (EquationSystems & es,
                                       );
               // Necrotic cells
               Fe_var[2](i) += JxW[qp]*(
-                                        nec_old * phi[i][qp] // capacity term
+                                        nec_old * phi[i][qp]
                                       + DT_2*(
                                              + nec_prol * nec_old * phi[i][qp]
                                              - nec_clearance * nec_old * phi[i][qp]
@@ -546,7 +546,7 @@ void assemble_proteas_model (EquationSystems & es,
                                       );
               // Vascular cells
               Fe_var[3](i) += JxW[qp]*(
-                                        vsc_old * phi[i][qp] // capacity term
+                                        vsc_old * phi[i][qp]
                                       + DT_2*(
                                              + vsc_prol * vsc_old * phi[i][qp]
                                              - vsc_nec * vsc_old * phi[i][qp]
@@ -569,10 +569,10 @@ void assemble_proteas_model (EquationSystems & es,
 
                   // Host (healthy) cells
                   Ke_var[0][0](i,j) += JxW[qp]*(
-                                                 phi[j][qp] * phi[i][qp] // capacity term
+                                                 phi[j][qp] * phi[i][qp]
                                                - DT_2*(
-                                                      + dhost_prol * hos_old * (1.0-hos_old) * phi[j][qp] * phi[i][qp]
-                                                      + host_prol * (1.0-2.0*hos_old) * phi[j][qp] *phi[i][qp]
+						      + dhost_prol * hos_old * (1.0-hos_old) * phi[j][qp] * phi[i][qp]
+						      + host_prol * (1.0-2.0*hos_old) * phi[j][qp] *phi[i][qp]
                                                       - host_RT_death * phi[j][qp] * phi[i][qp]
                                                       - host_nec * phi[j][qp] * phi[i][qp]
                                                       )
@@ -585,7 +585,7 @@ void assemble_proteas_model (EquationSystems & es,
                   Ke_var[0][2](i,j) += JxW[qp]*(
                                                - DT_2*(
                                                       + dhost_prol * hos_old * (1.0-hos_old) * phi[j][qp] * phi[i][qp]
-                                                      - alpha_n_h * phi[j][qp] * hos_old * phi[i][qp]
+                                                      - nu_h * phi[j][qp] * hos_old * phi[i][qp]
                                                       )
                                                );
                   Ke_var[0][3](i,j) += JxW[qp]*(
@@ -603,7 +603,7 @@ void assemble_proteas_model (EquationSystems & es,
                                                       )
                                                );
                   Ke_var[1][1](i,j) += JxW[qp]*(
-                                                 phi[j][qp] * phi[i][qp] // capacity term
+                                                 phi[j][qp] * phi[i][qp]
                                                - DT_2*(
                                                       - D_c * dKappa * phi[j][qp] * (GRAD_tum_old * dphi[i][qp])
                                                       - D_c * Kappa * (dphi[j][qp] * dphi[i][qp])
@@ -618,7 +618,7 @@ void assemble_proteas_model (EquationSystems & es,
                                                       - D_c * dKappa * phi[j][qp] * (GRAD_tum_old * dphi[i][qp])
                                                       - D_c_h * dKappa * phi[j][qp] * (GRAD_hos_old * tum_old * dphi[i][qp])
                                                       + dtumour_prol * phi[j][qp] * tum_old * phi[i][qp]
-                                                      - alpha_n_c * phi[j][qp] * tum_old * phi[i][qp]
+                                                      - nu_c * phi[j][qp] * tum_old * phi[i][qp]
                                                       )
                                                );
                   Ke_var[1][3](i,j) += JxW[qp]*(
@@ -631,16 +631,16 @@ void assemble_proteas_model (EquationSystems & es,
                   // Necrotic cells
                   Ke_var[2][0](i,j) += JxW[qp]*(
                                                - DT_2*(
-                                                      + alpha_n_h * phi[j][qp] * nec_old * phi[i][qp]
+                                                      + nu_h * phi[j][qp] * nec_old * phi[i][qp]
                                                       )
                                                );
                   Ke_var[2][1](i,j) += JxW[qp]*(
                                                - DT_2*(
-                                                      + alpha_n_c * phi[j][qp] * nec_old * phi[i][qp]
+                                                      + nu_c * phi[j][qp] * nec_old * phi[i][qp]
                                                       )
                                                );
                   Ke_var[2][2](i,j) += JxW[qp]*(
-                                                 phi[j][qp] * phi[i][qp] // capacity term
+                                                 phi[j][qp] * phi[i][qp]
                                                - DT_2*(
                                                       + nec_prol * phi[j][qp] * phi[i][qp]
                                                       - nec_clearance * phi[j][qp] * phi[i][qp]
@@ -648,7 +648,7 @@ void assemble_proteas_model (EquationSystems & es,
                                                );
                   Ke_var[2][3](i,j) += JxW[qp]*(
                                                - DT_2*(
-                                                      + alpha_n_v * phi[j][qp] * nec_old * phi[i][qp]
+                                                      + nu_v * phi[j][qp] * nec_old * phi[i][qp]
                                                       - dnec_clearance_dv * phi[j][qp] * nec_old * phi[i][qp]
                                                       )
                                                );
@@ -666,11 +666,11 @@ void assemble_proteas_model (EquationSystems & es,
                   Ke_var[3][2](i,j) += JxW[qp]*(
                                                - DT_2*(
                                                       + dvsc_prol * phi[j][qp] * vsc_old * phi[i][qp]
-                                                      - alpha_n_v * phi[j][qp] * vsc_old * phi[i][qp]
+                                                      - nu_v * phi[j][qp] * vsc_old * phi[i][qp]
                                                       )
                                                );
                   Ke_var[3][3](i,j) += JxW[qp]*(
-                                                 phi[j][qp] * phi[i][qp] // capacity term
+                                                 phi[j][qp] * phi[i][qp]
                                                - DT_2*(
                                                       + dvsc_prol * phi[j][qp] * vsc_old * phi[i][qp]
                                                       + vsc_prol * phi[j][qp] * phi[i][qp]
@@ -684,7 +684,7 @@ void assemble_proteas_model (EquationSystems & es,
                                                       )
                                                );
                   Ke_var[4][4](i,j) += JxW[qp]*(
-                                                 phi[j][qp] * phi[i][qp] // capacity term
+                                                 phi[j][qp] * phi[i][qp]
                                                - DT_2*(
                                                       - D_e * (dphi[j][qp] * dphi[i][qp])
                                                       + oed_prol * phi[j][qp] * phi[i][qp]
