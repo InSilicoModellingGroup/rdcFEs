@@ -231,6 +231,8 @@ void input (const std::string & file_name, EquationSystems & es)
   {
     name = "fb/lambda";      es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
+    name = "fb/lambda/exponent";   es.parameters.set<Real>(name) = in(name, 1.);
+    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/omicro";      es.parameters.set<Real>(name) = in(name, 0.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
     name = "fb/omicro/exponent";   es.parameters.set<Real>(name) = in(name, 1.);
@@ -395,6 +397,7 @@ void assemble_ripf (EquationSystems & es,
              delta_RT_a = es.parameters.get<Real>("cc/delta/RT/a"),
              delta_RT_b = es.parameters.get<Real>("cc/delta/RT/b");
   const Real lambda      = es.parameters.get<Real>("fb/lambda"),
+             lambda_exponent = es.parameters.get<Real>("fb/lambda/exponent"),
              RT_ref = es.parameters.get<Real>("fb/RT/ref"),
              HU_ref = es.parameters.get<Real>("fb/HU/ref"),
              omicro      = es.parameters.get<Real>("fb/omicro"),
@@ -529,15 +532,15 @@ void assemble_ripf (EquationSystems & es,
           Real Omecro__dHU = 0.0, Omecro__dcc = 0.0, Omecro__dfb = 0.0;
           if (fb_old >= 0.0 && fb_old < 1.0)
             {
-                  Lombda = (1.0-pow2(fb_old));
-                  Lombda__dHU = 0.0;
-                  Lombda__dcc = 0.0;
-                  Lombda__dfb = -(2.0*fb_old);
+	      Lombda = pow(1.0-fb_old,lambda_exponent);
+	      Lombda__dHU = 0.0;
+	      Lombda__dcc = 0.0;
+	      Lombda__dfb = lambda_exponent*pow(1-fb_old,lambda_exponent-1)*(-1.0);
 
-		  Omecro = pow(fb_old,omicro_exponent)*(1-fb_old);
-                  Omecro__dHU = 0.0;
-                  Omecro__dcc = 0.0;
-                  Omecro__dfb = omicro_exponent*pow(fb_old,omicro_exponent-1)*(1-fb_old) + pow(fb_old,omicro_exponent)*(-1.0);
+	      Omecro = pow(fb_old,omicro_exponent)*(1-fb_old);
+	      Omecro__dHU = 0.0;
+	      Omecro__dcc = 0.0;
+	      Omecro__dfb = omicro_exponent*pow(fb_old,omicro_exponent-1)*(1-fb_old) + pow(fb_old,omicro_exponent)*(-1.0);
             }
 
           for (std::size_t i=0; i<n_var_dofs; i++)
