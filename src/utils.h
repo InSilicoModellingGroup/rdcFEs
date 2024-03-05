@@ -280,6 +280,13 @@ RealTensorValue tensor (const RealVectorValue& a)
   return a_a;
 }
 //-------------------------------------------------------------------------------------------------
+inline
+void undefined_param_error (std::string param_name)
+{
+  std::cout << "\n\nERROR: Undefined or wrongly defined parameter: " << param_name << "\n\n" << std::endl;
+  exit(1);
+}
+//-------------------------------------------------------------------------------------------------
 
 #include "./ida.h"
 

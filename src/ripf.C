@@ -175,24 +175,14 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "RT_dose/broad/fractions"; es.parameters.set<int>(name) = in(name, 1);
     name = "RT_dose/focus/fractions"; es.parameters.set<int>(name) = in(name, 1);
     //
-    name = "volume_fraction/stroma";     es.parameters.set<Real>(name) = in(name, 0.);
-    name = "volume_fraction/parenchyma"; es.parameters.set<Real>(name) = in(name, 0.);
-    name = "volume_fraction/exponent";   es.parameters.set<Real>(name) = in(name, 1.);
+    name = "capacity/exponent";   es.parameters.set<Real>(name) = in(name, 1.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "volume_fraction/min_vacant"; es.parameters.set<Real>(name) = in(name, 1.e-12);
-    const Real VF_ = es.parameters.get<Real>(name);
-    name = "volume_fraction/max_vacant"; es.parameters.set<Real>(name) = in(name, 1.-VF_);
     //
     name = "HU/min"; es.parameters.set<Real>(name) = in(name, -1000.);
     name = "HU/max"; es.parameters.set<Real>(name) = in(name, +1000.);
     //
-    name = "range_cc/HU/min"; es.parameters.set<Real>(name) = in(name, es.parameters.get<Real>("HU/min"));
-    name = "range_cc/HU/max"; es.parameters.set<Real>(name) = in(name, es.parameters.get<Real>("HU/max"));
-    name = "range_cc/min"; es.parameters.set<Real>(name) = in(name, 1.0e-9);
-    //
-    name = "range_fb/HU/min"; es.parameters.set<Real>(name) = in(name, es.parameters.get<Real>("HU/min"));
-    name = "range_fb/HU/max"; es.parameters.set<Real>(name) = in(name, es.parameters.get<Real>("HU/max"));
-    name = "range_fb/min"; es.parameters.set<Real>(name) = in(name, 1.0e-9);
+    name = "cc/threshold"; es.parameters.set<Real>(name) = in(name, 1.0e-9);
+    name = "fb/threshold"; es.parameters.set<Real>(name) = in(name, 1.0e-9);
   }
 
   // parameters for the species: HU
@@ -215,16 +205,20 @@ void input (const std::string & file_name, EquationSystems & es)
 
   // parameters for the species: cc
   {
-    name = "cc/kappa";      es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "cc/kappa/RT/c"; es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "cc/delta";      es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "cc/delta/RT/a"; es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<=0.0) libmesh_error();
-    name = "cc/delta/RT/b"; es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<=0.0) libmesh_error();
+    name = "cc/diffusion";      es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "cc/lambda"; es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "cc/Pc/gamma";      es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "cc/theta"; es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "cc/Qc/alpha"; es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<=0.0) undefined_param_error(name);
+    name = "cc/Qc/beta"; es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<=0.0) undefined_param_error(name);
+    name = "cc/RTD/ref"; es.parameters.set<Real>(name) = in(name, 1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
   }
 
   // parameters for the species: fb
@@ -378,11 +372,7 @@ void assemble_ripf (EquationSystems & es,
 
   const Real DT_2 = es.parameters.get<Real>("time_step") / 2.0;
 
-  const Real VolFr_stroma     = es.parameters.get<Real>("volume_fraction/stroma"),
-             VolFr_parenchyma = es.parameters.get<Real>("volume_fraction/parenchyma"),
-             VolFr_exponent   = es.parameters.get<Real>("volume_fraction/exponent"),
-             VolFr_min_vacant = es.parameters.get<Real>("volume_fraction/min_vacant"),
-             VolFr_max_vacant = es.parameters.get<Real>("volume_fraction/max_vacant");
+  const Real capacity_exponent = es.parameters.get<Real>("capacity/exponent");
 
   const Real phi_cc_B = es.parameters.get<Real>("HU/phi/cc/build"),
              phi_cc_D = es.parameters.get<Real>("HU/phi/cc/decay"),
@@ -391,11 +381,13 @@ void assemble_ripf (EquationSystems & es,
              phi_fb_D = es.parameters.get<Real>("HU/phi/fb/decay"),
              phi_fb   = es.parameters.get<Real>("HU/phi/fb/rate"),
              phi_tol  = es.parameters.get<Real>("HU/phi/tolerance");
-  const Real kappa      = es.parameters.get<Real>("cc/kappa"),
-             kappa_RT_c = es.parameters.get<Real>("cc/kappa/RT/c"),
-             delta      = es.parameters.get<Real>("cc/delta"),
-             delta_RT_a = es.parameters.get<Real>("cc/delta/RT/a"),
-             delta_RT_b = es.parameters.get<Real>("cc/delta/RT/b");
+  const Real diffusion_cc  = es.parameters.get<Real>("cc/diffusion"),
+             lambda_cc = es.parameters.get<Real>("cc/lambda"),
+             gamma      = es.parameters.get<Real>("cc/Pc/gamma"),
+             theta_cc = es.parameters.get<Real>("cc/theta"),
+             alpha = es.parameters.get<Real>("cc/Qc/alpha"),
+             beta = es.parameters.get<Real>("cc/Qc/beta"),
+             RTD_ref_cc = es.parameters.get<Real>("cc/RTD/ref");
   const Real lambda      = es.parameters.get<Real>("fb/lambda"),
              lambda_exponent = es.parameters.get<Real>("fb/lambda/exponent"),
              RT_ref = es.parameters.get<Real>("fb/RT/ref"),
@@ -449,13 +441,14 @@ void assemble_ripf (EquationSystems & es,
       for (unsigned int qp=0; qp<qrule.n_points(); qp++)
         {
           Number HU_old(0.0), cc_old(0.0), fb_old(0.0);
-          Gradient GRAD_HU_old({0.0, 0.0, 0.0}), GRAD_fb_old({0.0, 0.0, 0.0});
+          Gradient GRAD_HU_old({0.0, 0.0, 0.0}), GRAD_cc_old({0.0, 0.0, 0.0}), GRAD_fb_old({0.0, 0.0, 0.0});
           for (std::size_t l=0; l<n_var_dofs; l++)
             {
               HU_old += phi[l][qp] * system.old_solution(dof_indices_var[0][l]);
               cc_old += phi[l][qp] * system.old_solution(dof_indices_var[1][l]);
               fb_old += phi[l][qp] * system.old_solution(dof_indices_var[2][l]);
               GRAD_HU_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[0][l]));
+              GRAD_cc_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[1][l]));
               GRAD_fb_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[2][l]));
             }
           Number cc_older(0.0), fb_older(0.0);
@@ -483,8 +476,20 @@ void assemble_ripf (EquationSystems & es,
             GRAD_RT_td = l2norm ? GRAD_RT_td.unit() : Gradient(0.0,0.0,0.0);
           }
 
-          const Real kappa_RT = kappa * exp(-kappa_RT_c*RT_td);
-          const Real delta_RT = delta * (1.0 - exp(-delta_RT_a*RT_td-delta_RT_b*pow2(RT_td)));
+	  // cc terms
+	  const Real normRT_cc = RT_td/RTD_ref_cc;
+          const Real lambda_cc_Pc = lambda_cc * exp(-gamma*normRT_cc);
+          const Real theta_cc_Qc = theta_cc * (1.0 - exp(-alpha*normRT_cc-beta*pow2(normRT_cc)));
+          Real cc_prol = 0.0;
+          Real cc_prol_dcc = 0.0;
+          if      (cc_old<0.0) ;
+          else if (cc_old<1.0)
+            {
+              cc_prol = (cc_old-cc_old*cc_old);
+              cc_prol_dcc = 1.0-2.0*cc_old;
+            }
+
+	  // fb terms
           const Real lambda_RT = lambda * (RT_td/RT_ref);
           const Real omicro_RT = omicro * (RT_td/RT_ref);
           //
@@ -495,36 +500,18 @@ void assemble_ripf (EquationSystems & es,
           if      (fb__dtime> phi_tol) epsilon_fb = phi_fb_B;
           else if (fb__dtime<-phi_tol) epsilon_fb = phi_fb_D;
           //
-          const Real VolFr_cells = cc_old + fb_old;
-	  const Real VolFr_HU = (HU_old + HU_ref)/HU_ref;
-          const Real VolFr_TOTAL = VolFr_HU + VolFr_cells;
+          const Real total_cells = cc_old + fb_old + (HU_old + HU_ref)/HU_ref;
           //
           Real Tau = 0.0;
           Real Tau__dHU = 0.0, Tau__dcc = 0.0, Tau__dfb = 0.0;
-          if (VolFr_TOTAL<1.0)
+          if (total_cells<1.0)
             {
-              Tau = 1.0 - pow(VolFr_TOTAL, VolFr_exponent);
-	      Tau__dHU = -VolFr_exponent * pow(VolFr_TOTAL, VolFr_exponent-1.0)/HU_ref;
-              Tau__dcc =
-              Tau__dfb = -VolFr_exponent * pow(VolFr_TOTAL, VolFr_exponent-1.0);
-              // if ( Tau < VolFr_min_vacant )
-              //   {
-              //     Tau = 0.0;
-              //     Tau__dcc =
-              //     Tau__dfb = 0.0;
-              //   }
+              Tau = 1.0 - pow(total_cells, capacity_exponent);
+              Tau__dcc = Tau__dfb = -capacity_exponent * pow(total_cells, capacity_exponent-1.0);
+	      Tau__dHU = -capacity_exponent * pow(total_cells, capacity_exponent-1.0)/HU_ref;
             }
-          //
 	  //	  std::cout << "Tau = " << Tau << ", Tau_dfb = " << Tau__dfb << ", Tau_dHU = " << Tau__dHU <<  std::endl;
 	  //
-          Real Koppa = 0.0;
-          Real Koppa__dcc = 0.0;
-          if      (cc_old<0.0) ;
-          else if (cc_old<1.0)
-            {
-              Koppa = 4.0*(cc_old-cc_old*cc_old);
-              Koppa__dcc = 4.0-8.0*cc_old;
-            }
           //
           Real Lombda = 0.0;
           Real Lombda__dHU = 0.0, Lombda__dcc = 0.0, Lombda__dfb = 0.0;
@@ -559,8 +546,9 @@ void assemble_ripf (EquationSystems & es,
               Fe_var[1](i) += JxW[qp]*(
                                         cc_old * phi[i][qp] // capacity term
                                       + DT_2*( // source, sink terms
-                                               kappa_RT * Tau * Koppa * phi[i][qp]
-                                             - delta_RT * cc_old * phi[i][qp]
+                                               lambda_cc_Pc * cc_prol * Tau * phi[i][qp]
+                                             - theta_cc_Qc * cc_old * phi[i][qp]
+					     - diffusion_cc * Tau * (GRAD_cc_old * dphi[i][qp])
                                              )
                                       );
               // RHS contribution
@@ -597,20 +585,23 @@ void assemble_ripf (EquationSystems & es,
                   // Matrix contribution
                   Ke_var[1][0](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
-						       kappa_RT * Tau__dHU * Koppa * phi[j][qp] * phi[i][qp]
+						       lambda_cc_Pc * cc_prol * Tau__dHU * phi[j][qp] * phi[i][qp]
                                                       )
 						);
                   Ke_var[1][1](i,j) += JxW[qp]*(
                                                  phi[j][qp] * phi[i][qp] // capacity term
                                                - DT_2*( // transport, source, sink terms
-                                                        kappa_RT * Tau__dcc * Koppa * phi[j][qp] * phi[i][qp]
-                                                      + kappa_RT * Tau * Koppa__dcc * phi[j][qp] * phi[i][qp]
-                                                      - delta_RT * phi[j][qp] * phi[i][qp]
+                                                        lambda_cc_Pc * Tau__dcc * cc_prol * phi[j][qp] * phi[i][qp]
+                                                      + lambda_cc_Pc * Tau * cc_prol_dcc * phi[j][qp] * phi[i][qp]
+                                                      - theta_cc_Qc * phi[j][qp] * phi[i][qp]
+						      - diffusion_cc * Tau__dcc * phi[j][qp] * (GRAD_cc_old * dphi[i][qp])
+                                                      - diffusion_cc * Tau * (dphi[j][qp] * dphi[i][qp])
                                                       )
                                                );
                   Ke_var[1][2](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
-                                                        kappa_RT * Tau__dfb * Koppa * phi[j][qp] * phi[i][qp]
+                                                        lambda_cc_Pc * Tau__dfb * cc_prol * phi[j][qp] * phi[i][qp]
+                                                      - diffusion_cc * Tau__dfb * phi[j][qp] * (GRAD_cc_old * dphi[i][qp])
                                                       )
                                                );
                   // Matrix contribution
@@ -781,13 +772,6 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
   std::vector<Number> soln;
   system.update_global_solution(soln);
 
-  const Real cc__HU_min = es.parameters.get<Real>("range_cc/HU/min"),
-             cc__HU_max = es.parameters.get<Real>("range_cc/HU/max"),
-             cc__min = es.parameters.get<Real>("range_cc/min");
-  const Real fb__HU_min = es.parameters.get<Real>("range_fb/HU/min"),
-             fb__HU_max = es.parameters.get<Real>("range_fb/HU/max"),
-             fb__min = es.parameters.get<Real>("range_fb/min");
-
   pm_ptr->barrier();
 
   if (0==global_processor_id())
@@ -814,14 +798,16 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
           libmesh_assert(elem->n_nodes() == dof_indices_var[2].size());
 
           Real HU_, cc_, fb_;
+	  const Real cc_thres = es.parameters.get<Real>("cc/threshold");
+	  const Real fb_thres = es.parameters.get<Real>("fb/threshold");
           bool cc_cell=true, fb_cell=true;
           for (unsigned int l=0; l<elem->n_nodes(); l++)
             {
               HU_ = soln[dof_indices_var[0][l]];
               cc_ = soln[dof_indices_var[1][l]];
               fb_ = soln[dof_indices_var[2][l]];
-	      if ( HU_ < cc__HU_min || HU_ > cc__HU_max || cc_ < cc__min ) cc_cell = false;
-	      if ( HU_ < fb__HU_min || HU_ > fb__HU_max || fb_ < fb__min ) fb_cell = false;
+	      if ( cc_ < cc_thres ) cc_cell = false;
+	      if ( fb_ < fb_thres ) fb_cell = false;
 	      if ( !cc_cell && !fb_cell ) break;
             }
 
