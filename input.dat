@@ -1,5 +1,5 @@
 #
-directory = 'rpf_sim_p05_v3b-trials-exp2-7-incremental-3'
+directory = 'rpf_sim_p05_v3b-trials-exp2-7-incremental-4'
 input_GMSH     = 'bococ_initial_data/p05/p05_ct0.msh'
 input_nodal    = 'bococ_initial_data/p05/p05_ct0-nodal_field.dat'
 input_nodal_RT = 'bococ_initial_data/p05/p05_ct0-nodal_field-RT.dat'
@@ -13,15 +13,6 @@ output_time_points = '104 380'
 RT_dose/broad/fractions = 28
 RT_dose/focus/fractions = 8
 capacity/exponent = 5.0
-HU/min = -1000.
-HU/max = +1000.
-#
-cc/threshold = 0.05
-fb/threshold = 0.1
-#
-HU/phi/cc/rate = 1.3e+3
-HU/phi/fb/rate = 1.0e+3
-HU/phi/tolerance = 1.0e-9
 #
 cc/diffusion = 0.0e-3
 cc/lambda = 0.003456
@@ -30,6 +21,7 @@ cc/theta = 0.024
 cc/Qc/alpha = 0.3
 cc/Qc/beta = 0.03
 cc/RTD/ref = 1.0
+cc/threshold = 0.05
 #
 fb/diffusion = 1.3256e-03
 fb/haptotaxis = 1.2573e-05 
@@ -39,6 +31,11 @@ fb/lambda =  1.02e-3
 fb/nu = 1.5
 fb/theta = 12.5e-03
 fb/RTD/ref = 1.0
+fb/threshold = 0.1
 #
+ecm/phi/cc = 1.3e+3
+ecm/phi/fb = 1.0e+3
+ecm/min = -1000.
+ecm/max = +1000.
 ecm/ref = 1000
 #

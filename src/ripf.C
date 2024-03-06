@@ -177,30 +177,16 @@ void input (const std::string & file_name, EquationSystems & es)
     //
     name = "capacity/exponent";   es.parameters.set<Real>(name) = in(name, 1.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    //
-    name = "HU/min"; es.parameters.set<Real>(name) = in(name, -1000.);
-    name = "HU/max"; es.parameters.set<Real>(name) = in(name, +1000.);
-    //
-    name = "cc/threshold"; es.parameters.set<Real>(name) = in(name, 1.0e-9);
-    name = "fb/threshold"; es.parameters.set<Real>(name) = in(name, 1.0e-9);
   }
 
-  // parameters for the species: HU
+  // parameters for the species: ecm
   {
-    name = "HU/phi/cc/build";  es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "HU/phi/cc/decay";  es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)>0.0) libmesh_error();
-    name = "HU/phi/cc/rate";   es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "HU/phi/fb/build";  es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "HU/phi/fb/decay";  es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)>0.0) libmesh_error();
-    name = "HU/phi/fb/rate";   es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "HU/phi/tolerance"; es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
+    name = "ecm/min"; es.parameters.set<Real>(name) = in(name, -1000.);
+    name = "ecm/max"; es.parameters.set<Real>(name) = in(name, +1000.);
+    name = "ecm/phi/cc";   es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "ecm/phi/fb";   es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
     name = "ecm/ref"; es.parameters.set<Real>(name) = in(name, -1.);
     if (es.parameters.get<Real>(name)==0.0) undefined_param_error(name);
   }
@@ -221,6 +207,7 @@ void input (const std::string & file_name, EquationSystems & es)
     if (es.parameters.get<Real>(name)<=0.0) undefined_param_error(name);
     name = "cc/RTD/ref"; es.parameters.set<Real>(name) = in(name, 1.);
     if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "cc/threshold"; es.parameters.set<Real>(name) = in(name, 1.0e-9);
   }
 
   // parameters for the species: fb
@@ -243,6 +230,7 @@ void input (const std::string & file_name, EquationSystems & es)
     if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
     name = "fb/RTD/ref"; es.parameters.set<Real>(name) = in(name, 1.);
     if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "fb/threshold"; es.parameters.set<Real>(name) = in(name, 1.0e-9);
   }
 
   // ...done
@@ -374,13 +362,8 @@ void assemble_ripf (EquationSystems & es,
 
   const Real capacity_exponent = es.parameters.get<Real>("capacity/exponent");
 
-  const Real phi_cc_B = es.parameters.get<Real>("HU/phi/cc/build"),
-             phi_cc_D = es.parameters.get<Real>("HU/phi/cc/decay"),
-             phi_cc   = es.parameters.get<Real>("HU/phi/cc/rate"),
-             phi_fb_B = es.parameters.get<Real>("HU/phi/fb/build"),
-             phi_fb_D = es.parameters.get<Real>("HU/phi/fb/decay"),
-             phi_fb   = es.parameters.get<Real>("HU/phi/fb/rate"),
-             phi_tol  = es.parameters.get<Real>("HU/phi/tolerance"),
+  const Real ecm_phi_cc   = es.parameters.get<Real>("ecm/phi/cc"),
+             ecm_phi_fb   = es.parameters.get<Real>("ecm/phi/fb"),
              ecm_ref = es.parameters.get<Real>("ecm/ref");
   const Real diffusion_cc  = es.parameters.get<Real>("cc/diffusion"),
              lambda_cc = es.parameters.get<Real>("cc/lambda"),
@@ -518,25 +501,14 @@ void assemble_ripf (EquationSystems & es,
 	      fb_prol_dfb = nu*pow(fb_old,nu-1)*(1-fb_old) + pow(fb_old,nu)*(-1.0);
             }
 
-          // ecm terms
-          Real epsilon_cc = 0.0;
-          if      (cc__dtime> phi_tol) epsilon_cc = phi_cc_B;
-          else if (cc__dtime<-phi_tol) epsilon_cc = phi_cc_D;
-          Real epsilon_fb = 0.0;
-          if      (fb__dtime> phi_tol) epsilon_fb = phi_fb_B;
-          else if (fb__dtime<-phi_tol) epsilon_fb = phi_fb_D;
-          //
-
           for (std::size_t i=0; i<n_var_dofs; i++)
             {
               // RHS contribution
               Fe_var[0](i) += JxW[qp]*(
                                         HU_old * phi[i][qp] // capacity term
                                       + DT_2*( // source, sink terms
-                                               epsilon_cc * cc_old * phi[i][qp]
-                                             + epsilon_fb * fb_old * phi[i][qp]
-                                             + phi_cc * cc__dtime * phi[i][qp]
-                                             + phi_fb * fb__dtime * phi[i][qp]
+                                             + ecm_phi_cc * cc__dtime * phi[i][qp]
+                                             + ecm_phi_fb * fb__dtime * phi[i][qp]
                                              )
                                       );
               // RHS contribution
@@ -566,17 +538,17 @@ void assemble_ripf (EquationSystems & es,
                   // Matrix contribution
                   Ke_var[0][0](i,j) += JxW[qp]*(
                                                  phi[j][qp] * phi[i][qp] // capacity term
-                                               //- DT_2*( // source, sink terms
-                                               //       )
+                                               - DT_2*( 0.0// source, sink terms
+                                                      )
                                                );
                   Ke_var[0][1](i,j) += JxW[qp]*(
                                                - DT_2*( // source, sink terms
-                                                        epsilon_cc * phi[j][qp] * phi[i][qp]
+                                                        0.0//epsilon_cc * phi[j][qp] * phi[i][qp]
                                                       )
                                                );
                   Ke_var[0][2](i,j) += JxW[qp]*(
                                                - DT_2*( // source, sink terms
-                                                        epsilon_fb * phi[j][qp] * phi[i][qp]
+						       0.0 //epsilon_fb * phi[j][qp] * phi[i][qp]
                                                       )
                                                );
                   // Matrix contribution
@@ -674,8 +646,8 @@ void check_solution (EquationSystems & es, std::vector<Number> & prev_soln)
 
   const Real DT_R = 1.0 / es.parameters.get<Real>("time_step");
 
-  const Real HU_min = es.parameters.get<Real>("HU/min"),
-             HU_max = es.parameters.get<Real>("HU/max");
+  const Real ecm_min = es.parameters.get<Real>("ecm/min"),
+             ecm_max = es.parameters.get<Real>("ecm/max");
   const Real RT_broad_frac = es.parameters.get<int>("RT_dose/broad/fractions"),
              RT_focus_frac = es.parameters.get<int>("RT_dose/focus/fractions"),
              RT_total_frac = RT_broad_frac + RT_focus_frac;
@@ -694,7 +666,7 @@ void check_solution (EquationSystems & es, std::vector<Number> & prev_soln)
       libmesh_assert( node->n_comp(system.number(), 2) == 1 );
 
       Real HU_, cc_, fb_;
-      HU_ = soln[idof[0]]; if (HU_<HU_min) HU_ = HU_min; else if (HU_>HU_max) HU_ = HU_max;
+      HU_ = soln[idof[0]]; if (HU_<ecm_min) HU_ = ecm_min; else if (HU_>ecm_max) HU_ = ecm_max;
       cc_ = soln[idof[1]]; if (cc_<0.0) cc_ = 0.0;
       fb_ = soln[idof[2]]; if (fb_<0.0) fb_ = 0.0;
 
