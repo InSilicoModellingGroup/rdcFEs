@@ -1,5 +1,5 @@
 #
-directory = 'rpf_sim_p05_v3b-trials-exp2-7-incremental-7'
+directory = 'rpf_sim_p05_v3b-trials-exp2-7-incremental-9'
 input_GMSH     = 'bococ_initial_data/p05/p05_ct0.msh'
 input_nodal    = 'bococ_initial_data/p05/p05_ct0-nodal_field.dat'
 input_nodal_RT = 'bococ_initial_data/p05/p05_ct0-nodal_field-RT.dat'

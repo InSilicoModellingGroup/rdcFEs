@@ -21,17 +21,17 @@ void ripf (LibMeshInit & init, std::string input_file)
 
   TransientLinearImplicitSystem & model =
     es.add_system<TransientLinearImplicitSystem>("RIPF");
-  model.add_variable("hu", FIRST, LAGRANGE);
   model.add_variable("cc", FIRST, LAGRANGE);
   model.add_variable("fb", FIRST, LAGRANGE);
+  model.add_variable("hu", FIRST, LAGRANGE);
   model.attach_assemble_function(assemble_ripf);
   model.attach_init_function(initial_ripf);
 
   System & model_rates =
     es.add_system<System>("RIPF-dot");
-  model_rates.add_variable("hu-dot", FIRST, LAGRANGE);
   model_rates.add_variable("cc-dot", FIRST, LAGRANGE);
   model_rates.add_variable("fb-dot", FIRST, LAGRANGE);
+  model_rates.add_variable("hu-dot", FIRST, LAGRANGE);
 
   ExplicitSystem & radiotherapy =
     es.add_system<ExplicitSystem>("RTD");
@@ -179,18 +179,6 @@ void input (const std::string & file_name, EquationSystems & es)
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
   }
 
-  // parameters for the species: hu
-  {
-    name = "hu/min"; es.parameters.set<Real>(name) = in(name, -1000.);
-    name = "hu/max"; es.parameters.set<Real>(name) = in(name, +1000.);
-    name = "hu/phi/cc";   es.parameters.set<Real>(name) = in(name, -1.);
-    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
-    name = "hu/phi/fb";   es.parameters.set<Real>(name) = in(name, -1.);
-    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
-    name = "hu/ref"; es.parameters.set<Real>(name) = in(name, -1.);
-    if (es.parameters.get<Real>(name)==0.0) undefined_param_error(name);
-  }
-
   // parameters for the species: cc
   {
     name = "cc/diffusion";      es.parameters.set<Real>(name) = in(name, -1.);
@@ -233,7 +221,17 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "fb/threshold"; es.parameters.set<Real>(name) = in(name, 1.0e-9);
   }
 
-  // ...done
+  // parameters for the species: hu
+  {
+    name = "hu/min"; es.parameters.set<Real>(name) = in(name, -1000.);
+    name = "hu/max"; es.parameters.set<Real>(name) = in(name, +1000.);
+    name = "hu/phi/cc";   es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "hu/phi/fb";   es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "hu/ref"; es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)==0.0) undefined_param_error(name);
+  }
 }
 
 void initial_radiotherapy (EquationSystems & es,
@@ -297,7 +295,7 @@ void initial_ripf (EquationSystems & es,
 
   for (const auto & node : mesh.node_ptr_range())
     {
-      Real hu_, cc_, fb_;
+      Real cc_, fb_, hu_;
       fin >> hu_ >> cc_ >> fb_;
 
       const dof_id_type idof[] = { node->dof_number(system.number(), 0, 0) ,
@@ -307,9 +305,9 @@ void initial_ripf (EquationSystems & es,
       libmesh_assert( node->n_comp(system.number(), 1) == 1 );
       libmesh_assert( node->n_comp(system.number(), 2) == 1 );
 
-      system.solution->set(idof[0], hu_);
-      system.solution->set(idof[1], cc_);
-      system.solution->set(idof[2], fb_);
+      system.solution->set(idof[0], cc_);
+      system.solution->set(idof[1], fb_);
+      system.solution->set(idof[2], hu_);
     }
 
   // close solution vector and update the system
@@ -362,9 +360,6 @@ void assemble_ripf (EquationSystems & es,
 
   const Real capacity_exponent = es.parameters.get<Real>("capacity/exponent");
 
-  const Real hu_phi_cc   = es.parameters.get<Real>("hu/phi/cc"),
-             hu_phi_fb   = es.parameters.get<Real>("hu/phi/fb"),
-             hu_ref = es.parameters.get<Real>("hu/ref");
   const Real diffusion_cc  = es.parameters.get<Real>("cc/diffusion"),
              lambda_cc = es.parameters.get<Real>("cc/lambda"),
              gamma      = es.parameters.get<Real>("cc/Pc/gamma"),
@@ -381,6 +376,9 @@ void assemble_ripf (EquationSystems & es,
              nu = es.parameters.get<Real>("fb/nu"),
              theta_fb = es.parameters.get<Real>("fb/theta"),
              RTD_ref_fb = es.parameters.get<Real>("fb/RTD/ref");
+  const Real hu_phi_cc   = es.parameters.get<Real>("hu/phi/cc"),
+             hu_phi_fb   = es.parameters.get<Real>("hu/phi/fb"),
+             hu_ref = es.parameters.get<Real>("hu/ref");
 
   for (const auto & elem : mesh.active_local_element_ptr_range())
     {
@@ -423,28 +421,28 @@ void assemble_ripf (EquationSystems & es,
 
       for (unsigned int qp=0; qp<qrule.n_points(); qp++)
         {
-          Number hu_old(0.0), cc_old(0.0), fb_old(0.0);
-          Gradient GRAD_hu_old({0.0, 0.0, 0.0}), GRAD_cc_old({0.0, 0.0, 0.0}), GRAD_fb_old({0.0, 0.0, 0.0});
+          Number cc_old(0.0), fb_old(0.0), hu_old(0.0);
+          Gradient GRAD_cc_old({0.0, 0.0, 0.0}), GRAD_fb_old({0.0, 0.0, 0.0}),GRAD_hu_old({0.0, 0.0, 0.0});
           for (std::size_t l=0; l<n_var_dofs; l++)
             {
-              hu_old += phi[l][qp] * system.old_solution(dof_indices_var[0][l]);
-              cc_old += phi[l][qp] * system.old_solution(dof_indices_var[1][l]);
-              fb_old += phi[l][qp] * system.old_solution(dof_indices_var[2][l]);
-              GRAD_hu_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[0][l]));
-              GRAD_cc_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[1][l]));
-              GRAD_fb_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[2][l]));
+              cc_old += phi[l][qp] * system.old_solution(dof_indices_var[0][l]);
+              fb_old += phi[l][qp] * system.old_solution(dof_indices_var[1][l]);
+              hu_old += phi[l][qp] * system.old_solution(dof_indices_var[2][l]);
+              GRAD_cc_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[0][l]));
+              GRAD_fb_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[1][l]));
+              GRAD_hu_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[2][l]));
             }
           Number cc_older(0.0), fb_older(0.0);
           for (std::size_t l=0; l<n_var_dofs; l++)
             {
-              cc_older += phi[l][qp] * system.older_solution(dof_indices_var[1][l]);
-              fb_older += phi[l][qp] * system.older_solution(dof_indices_var[2][l]);
+              cc_older += phi[l][qp] * system.older_solution(dof_indices_var[0][l]);
+              fb_older += phi[l][qp] * system.older_solution(dof_indices_var[1][l]);
             }
           Number cc__dtime(0.0), fb__dtime(0.0);
           for (std::size_t l=0; l<n_var_dofs; l++)
             {
-              cc__dtime += phi[l][qp] * TD_system.current_solution(dof_indices_var[1][l]);
-              fb__dtime += phi[l][qp] * TD_system.current_solution(dof_indices_var[2][l]);
+              cc__dtime += phi[l][qp] * TD_system.current_solution(dof_indices_var[0][l]);
+              fb__dtime += phi[l][qp] * TD_system.current_solution(dof_indices_var[1][l]);
             }
           Number RTD_td(0.0);
           Gradient GRAD_RTD_td({0.0, 0.0, 0.0});
@@ -461,7 +459,7 @@ void assemble_ripf (EquationSystems & es,
 
           // Capacity function
           Real Tau = 0.0;
-          Real Tau_dhu = 0.0, Tau_dcc = 0.0, Tau_dfb = 0.0;
+          Real Tau_dcc = 0.0, Tau_dfb = 0.0, Tau_dhu = 0.0;
           const Real total_cells = cc_old + fb_old + (hu_old + hu_ref)/hu_ref;
           if (total_cells<1.0)
             {
@@ -489,9 +487,9 @@ void assemble_ripf (EquationSystems & es,
           const Real kappa_fb_RTD = kappa_fb * normRTD_fb;
           const Real lambda_fb_RTD = lambda_fb * normRTD_fb;
           Real fb_recruit = 0.0;
-          Real fb_recruit_dhu = 0.0, fb_recruit_dcc = 0.0, fb_recruit_dfb = 0.0;
+          Real fb_recruit_dcc = 0.0, fb_recruit_dfb = 0.0, fb_recruit_dhu = 0.0;
           Real fb_prol = 0.0;
-          Real fb_prol_dhu = 0.0, fb_prol_dcc = 0.0, fb_prol_dfb = 0.0;
+          Real fb_prol_dcc = 0.0, fb_prol_dfb = 0.0, fb_prol_dhu = 0.0;
           if (fb_old >= 0.0 && fb_old < 1.0)
             {
 	      fb_recruit = pow(1.0-fb_old,mu);
@@ -505,14 +503,6 @@ void assemble_ripf (EquationSystems & es,
             {
               // RHS contribution
               Fe_var[0](i) += JxW[qp]*(
-                                        hu_old * phi[i][qp] // capacity term
-                                      + DT_2*( // source, sink terms
-                                             + hu_phi_cc * cc__dtime * phi[i][qp]
-                                             + hu_phi_fb * fb__dtime * phi[i][qp]
-                                             )
-                                      );
-              // RHS contribution
-              Fe_var[1](i) += JxW[qp]*(
                                         cc_old * phi[i][qp] // capacity term
                                       + DT_2*( // source, sink terms
                                                lambda_cc_Pc * cc_prol * Tau * phi[i][qp]
@@ -521,7 +511,7 @@ void assemble_ripf (EquationSystems & es,
                                              )
                                       );
               // RHS contribution
-              Fe_var[2](i) += JxW[qp]*(
+              Fe_var[1](i) += JxW[qp]*(
                                         fb_old * phi[i][qp] // capacity term
                                       + DT_2*( // transport, source, sink terms
                                                kappa_fb_RTD * fb_recruit * Tau * phi[i][qp]
@@ -532,32 +522,19 @@ void assemble_ripf (EquationSystems & es,
                                              - radiotaxis_fb * Tau * (GRAD_RTD_td  * fb_old * dphi[i][qp])
                                              )
                                       );
+              // RHS contribution
+              Fe_var[2](i) += JxW[qp]*(
+                                        hu_old * phi[i][qp] // capacity term
+                                      + DT_2*( // source, sink terms
+                                             + hu_phi_cc * cc__dtime * phi[i][qp]
+                                             + hu_phi_fb * fb__dtime * phi[i][qp]
+                                             )
+                                      );
 
               for (std::size_t j=0; j<n_var_dofs; j++)
                 {
                   // Matrix contribution
                   Ke_var[0][0](i,j) += JxW[qp]*(
-                                                 phi[j][qp] * phi[i][qp] // capacity term
-                                               - DT_2*( 0.0// source, sink terms
-                                                      )
-                                               );
-                  Ke_var[0][1](i,j) += JxW[qp]*(
-                                               - DT_2*( // source, sink terms
-                                                        0.0//epsilon_cc * phi[j][qp] * phi[i][qp]
-                                                      )
-                                               );
-                  Ke_var[0][2](i,j) += JxW[qp]*(
-                                               - DT_2*( // source, sink terms
-						       0.0 //epsilon_fb * phi[j][qp] * phi[i][qp]
-                                                      )
-                                               );
-                  // Matrix contribution
-                  Ke_var[1][0](i,j) += JxW[qp]*(
-                                               - DT_2*( // transport, source, sink terms
-						       lambda_cc_Pc * cc_prol * Tau_dhu * phi[j][qp] * phi[i][qp]
-                                                      )
-						);
-                  Ke_var[1][1](i,j) += JxW[qp]*(
                                                  phi[j][qp] * phi[i][qp] // capacity term
                                                - DT_2*( // transport, source, sink terms
                                                         lambda_cc_Pc * cc_prol * Tau_dcc * phi[j][qp] * phi[i][qp]
@@ -567,23 +544,19 @@ void assemble_ripf (EquationSystems & es,
                                                       - diffusion_cc * Tau * (dphi[j][qp] * dphi[i][qp])
                                                       )
                                                );
-                  Ke_var[1][2](i,j) += JxW[qp]*(
+                  Ke_var[0][1](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
                                                         lambda_cc_Pc * cc_prol * Tau_dfb * phi[j][qp] * phi[i][qp]
                                                       - diffusion_cc * Tau_dfb * phi[j][qp] * (GRAD_cc_old * dphi[i][qp])
                                                       )
                                                );
-                  // Matrix contribution
-                  Ke_var[2][0](i,j) += JxW[qp]*(
+                  Ke_var[0][2](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
-                                                        kappa_fb_RTD * fb_recruit_dhu * Tau * phi[j][qp] * phi[i][qp]
-						      + kappa_fb_RTD * fb_recruit * Tau_dhu * phi[j][qp] * phi[i][qp]
-                                                      + lambda_fb_RTD * fb_prol_dhu * Tau * phi[j][qp] * phi[i][qp]
-						      + lambda_fb_RTD * fb_prol * Tau_dhu * phi[j][qp] * phi[i][qp]
-                                                      - haptotaxis_fb * Tau * (dphi[j][qp] * fb_old * dphi[i][qp])
+						       lambda_cc_Pc * cc_prol * Tau_dhu * phi[j][qp] * phi[i][qp]
                                                       )
-                                               );
-                  Ke_var[2][1](i,j) += JxW[qp]*(
+						);
+                  // Matrix contribution
+                  Ke_var[1][0](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
                                                         kappa_fb_RTD * fb_recruit * Tau_dcc * phi[j][qp] * phi[i][qp]
                                                       + kappa_fb_RTD * fb_recruit_dcc * Tau * phi[j][qp] * phi[i][qp]
@@ -594,7 +567,7 @@ void assemble_ripf (EquationSystems & es,
                                                       - radiotaxis_fb * Tau_dcc * phi[j][qp] * (GRAD_RTD_td  * fb_old * dphi[i][qp])
                                                       )
                                                );
-                  Ke_var[2][2](i,j) += JxW[qp]*(
+                  Ke_var[1][1](i,j) += JxW[qp]*(
                                                  phi[j][qp] * phi[i][qp] // capacity term
                                                - DT_2*( // transport, source, sink terms
                                                         kappa_fb_RTD * fb_recruit * Tau_dfb * phi[j][qp] * phi[i][qp]
@@ -608,6 +581,32 @@ void assemble_ripf (EquationSystems & es,
                                                       - haptotaxis_fb * Tau * (GRAD_hu_old * phi[j][qp] * dphi[i][qp])
                                                       - radiotaxis_fb * Tau_dfb * phi[j][qp] * (GRAD_RTD_td  * fb_old * dphi[i][qp])
                                                       - radiotaxis_fb * Tau * (GRAD_RTD_td  * phi[j][qp] * dphi[i][qp])
+                                                      )
+                                               );
+                  Ke_var[1][2](i,j) += JxW[qp]*(
+                                               - DT_2*( // transport, source, sink terms
+                                                        kappa_fb_RTD * fb_recruit_dhu * Tau * phi[j][qp] * phi[i][qp]
+						      + kappa_fb_RTD * fb_recruit * Tau_dhu * phi[j][qp] * phi[i][qp]
+                                                      + lambda_fb_RTD * fb_prol_dhu * Tau * phi[j][qp] * phi[i][qp]
+						      + lambda_fb_RTD * fb_prol * Tau_dhu * phi[j][qp] * phi[i][qp]
+                                                      - haptotaxis_fb * Tau * (dphi[j][qp] * fb_old * dphi[i][qp])
+                                                      )
+                                               );
+                  // Matrix contribution
+                  Ke_var[2][0](i,j) += JxW[qp]*(
+                                               - DT_2*( // source, sink terms
+                                                        0.0//epsilon_cc * phi[j][qp] * phi[i][qp]
+                                                      )
+                                               );
+                  Ke_var[2][1](i,j) += JxW[qp]*(
+                                               - DT_2*( // source, sink terms
+						       0.0 //epsilon_fb * phi[j][qp] * phi[i][qp]
+                                                      )
+                                               );
+
+                  Ke_var[2][2](i,j) += JxW[qp]*(
+                                                 phi[j][qp] * phi[i][qp] // capacity term
+                                               - DT_2*( 0.0// source, sink terms
                                                       )
                                                );
                 }
@@ -665,24 +664,24 @@ void check_solution (EquationSystems & es, std::vector<Number> & prev_soln)
       libmesh_assert( node->n_comp(system.number(), 1) == 1 );
       libmesh_assert( node->n_comp(system.number(), 2) == 1 );
 
-      Real hu_, cc_, fb_;
-      hu_ = soln[idof[0]]; if (hu_<hu_min) hu_ = hu_min; else if (hu_>hu_max) hu_ = hu_max;
-      cc_ = soln[idof[1]]; if (cc_<0.0) cc_ = 0.0;
-      fb_ = soln[idof[2]]; if (fb_<0.0) fb_ = 0.0;
+      Real cc_, fb_, hu_;
+      cc_ = soln[idof[0]]; if (cc_<0.0) cc_ = 0.0;
+      fb_ = soln[idof[1]]; if (fb_<0.0) fb_ = 0.0;
+      hu_ = soln[idof[2]]; if (hu_<hu_min) hu_ = hu_min; else if (hu_>hu_max) hu_ = hu_max;
 
       if (fb_>1.0) {
 	std::cout << "fb has overshoot: " << fb_ << " (not changed)" << std::endl;
 	//fb_ = 1.0;
       }
 
-      Real hu_p_, cc_p_, fb_p_;
-      hu_p_ = prev_soln[idof[0]];
-      cc_p_ = prev_soln[idof[1]];
-      fb_p_ = prev_soln[idof[2]];
+      Real cc_p_, fb_p_, hu_p_;
+      cc_p_ = prev_soln[idof[0]];
+      fb_p_ = prev_soln[idof[1]];
+      hu_p_ = prev_soln[idof[2]];
 
-      system.solution->set(idof[0], hu_);
-      system.solution->set(idof[1], cc_);
-      system.solution->set(idof[2], fb_);
+      system.solution->set(idof[0], cc_);
+      system.solution->set(idof[1], fb_);
+      system.solution->set(idof[2], hu_);
 
       const dof_id_type TD_idof[] = { node->dof_number(TD_system.number(), 0, 0) ,
                                       node->dof_number(TD_system.number(), 1, 0) ,
@@ -691,9 +690,9 @@ void check_solution (EquationSystems & es, std::vector<Number> & prev_soln)
       libmesh_assert( node->n_comp(TD_system.number(), 1) == 1 );
       libmesh_assert( node->n_comp(TD_system.number(), 2) == 1 );
 
-      TD_system.solution->set(TD_idof[0], (hu_-hu_p_)*DT_R);
-      TD_system.solution->set(TD_idof[1], (cc_-cc_p_)*DT_R);
-      TD_system.solution->set(TD_idof[2], (fb_-fb_p_)*DT_R);
+      TD_system.solution->set(TD_idof[0], (cc_-cc_p_)*DT_R);
+      TD_system.solution->set(TD_idof[1], (fb_-fb_p_)*DT_R);
+      TD_system.solution->set(TD_idof[2], (hu_-hu_p_)*DT_R);
 
       const dof_id_type RTD_idof[] = { node->dof_number(RTD_system.number(), 0, 0) ,
                                       node->dof_number(RTD_system.number(), 1, 0) ,
@@ -766,15 +765,15 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
           libmesh_assert(elem->n_nodes() == dof_indices_var[1].size());
           libmesh_assert(elem->n_nodes() == dof_indices_var[2].size());
 
-          Real hu_, cc_, fb_;
+          Real cc_, fb_, hu_;
 	  const Real cc_thres = es.parameters.get<Real>("cc/threshold");
 	  const Real fb_thres = es.parameters.get<Real>("fb/threshold");
           bool cc_cell=true, fb_cell=true;
           for (unsigned int l=0; l<elem->n_nodes(); l++)
             {
-              hu_ = soln[dof_indices_var[0][l]];
-              cc_ = soln[dof_indices_var[1][l]];
-              fb_ = soln[dof_indices_var[2][l]];
+              cc_ = soln[dof_indices_var[0][l]];
+              fb_ = soln[dof_indices_var[1][l]];
+              hu_ = soln[dof_indices_var[2][l]];
 	      if ( cc_ < cc_thres ) cc_cell = false;
 	      if ( fb_ < fb_thres ) fb_cell = false;
 	      if ( !cc_cell && !fb_cell ) break;
