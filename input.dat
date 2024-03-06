@@ -1,5 +1,5 @@
 #
-directory = 'rpf_sim_p05_v3b-trials-exp2-7-incremental-4'
+directory = 'rpf_sim_p05_v3b-trials-exp2-7-incremental-7'
 input_GMSH     = 'bococ_initial_data/p05/p05_ct0.msh'
 input_nodal    = 'bococ_initial_data/p05/p05_ct0-nodal_field.dat'
 input_nodal_RT = 'bococ_initial_data/p05/p05_ct0-nodal_field-RT.dat'
@@ -10,8 +10,8 @@ output_step = 7
 output_time_points = '104 380'
 
 #
-RT_dose/broad/fractions = 28
-RT_dose/focus/fractions = 8
+RTD/broad/fractions = 28
+RTD/focus/fractions = 8
 capacity/exponent = 5.0
 #
 cc/diffusion = 0.0e-3
@@ -33,9 +33,9 @@ fb/theta = 12.5e-03
 fb/RTD/ref = 1.0
 fb/threshold = 0.1
 #
-ecm/phi/cc = 1.3e+3
-ecm/phi/fb = 1.0e+3
-ecm/min = -1000.
-ecm/max = +1000.
-ecm/ref = 1000
+hu/phi/cc = 1.3e+3
+hu/phi/fb = 1.0e+3
+hu/min = -1000.
+hu/max = +1000.
+hu/ref = 1000
 #
