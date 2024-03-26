@@ -475,7 +475,7 @@ void assemble_ripf (EquationSystems & es,
           const Real theta_cc_Qc = theta_cc * (1.0 - exp(-alpha*normRTD_cc-beta*pow2(normRTD_cc)));
           Real cc_prol = 0.0;
           Real cc_prol_dcc = 0.0;
-          if      (cc_old<0.0) ;
+          if      (cc_old<1e-2) ;
           else if (cc_old<1.0)
             {
               cc_prol = (cc_old-cc_old*cc_old);
@@ -498,6 +498,12 @@ void assemble_ripf (EquationSystems & es,
 	      fb_prol = pow(fb_old,nu)*(1-fb_old);
 	      fb_prol_dfb = nu*pow(fb_old,nu-1)*(1-fb_old) + pow(fb_old,nu)*(-1.0);
             }
+
+	  // hu terms
+	  const Real hu_cc_term = hu_phi_cc * (hu_old + hu_ref)/hu_ref;
+	  const Real hu_cc_term_dhu = 0.0; //hu_phi_cc / hu_ref;
+	  const Real hu_fb_term = hu_phi_fb * (hu_old + hu_ref)/hu_ref;
+	  const Real hu_fb_term_dhu = 0.0; //hu_phi_fb / hu_ref;
 
           for (std::size_t i=0; i<n_var_dofs; i++)
             {
@@ -526,8 +532,8 @@ void assemble_ripf (EquationSystems & es,
               Fe_var[2](i) += JxW[qp]*(
                                         hu_old * phi[i][qp] // capacity term
                                       + DT_2*( // source, sink terms
-                                             + hu_phi_cc * cc__dtime * phi[i][qp]
-                                             + hu_phi_fb * fb__dtime * phi[i][qp]
+                                             + hu_cc_term * cc__dtime * phi[i][qp]
+                                             + hu_fb_term * fb__dtime * phi[i][qp]
                                              )
                                       );
 
@@ -606,7 +612,9 @@ void assemble_ripf (EquationSystems & es,
 
                   Ke_var[2][2](i,j) += JxW[qp]*(
                                                  phi[j][qp] * phi[i][qp] // capacity term
-                                               - DT_2*( 0.0// source, sink terms
+                                               - DT_2*(
+						       + hu_cc_term_dhu * cc__dtime * phi[j][qp] * phi[i][qp]
+						       + hu_fb_term_dhu * fb__dtime * phi[j][qp] * phi[i][qp]
                                                       )
                                                );
                 }

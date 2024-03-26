@@ -1,40 +1,40 @@
 #
-directory = 'rpf_sim_p05_v3b-trials-exp2-7-incremental-9'
-input_GMSH     = 'bococ_initial_data/p05/p05_ct0.msh'
-input_nodal    = 'bococ_initial_data/p05/p05_ct0-nodal_field.dat'
-input_nodal_RT = 'bococ_initial_data/p05/p05_ct0-nodal_field-RT.dat'
+directory = 'rpf_sim_p06_v3r-newHUmodel-hucalib-trials-dhu0-2b'
+input_GMSH     = 'bococ_initial_data/p06/p06_ct0.msh'
+input_nodal    = 'bococ_initial_data/p06/p06_ct0-nodal_field.dat'
+input_nodal_RT = 'bococ_initial_data/p06/p06_ct0-nodal_field-RT.dat'
 #
-time_step_number = 400
+time_step_number = 440
 time_step = 1
 output_step = 7
-output_time_points = '104 380'
+output_time_points = '130 417'
 
 #
 RTD/broad/fractions = 28
 RTD/focus/fractions = 8
 capacity/exponent = 5.0
 #
-cc/diffusion = 0.0e-3
-cc/lambda = 0.003456
+cc/diffusion = 0.1
+cc/lambda = 0.05
 cc/Pc/gamma = 0.0
-cc/theta = 0.024
-cc/Qc/alpha = 0.3
-cc/Qc/beta = 0.03
+cc/theta = 1.0
+cc/Qc/alpha = 0.003
+cc/Qc/beta = 0.0003
 cc/RTD/ref = 1.0
-cc/threshold = 0.05
+cc/threshold = 0.1
 #
-fb/diffusion = 1.3256e-03
-fb/haptotaxis = 1.2573e-05 
-fb/kappa =  2.5e-5
-fb/mu = 2.0
-fb/lambda =  1.02e-3
-fb/nu = 1.5
-fb/theta = 12.5e-03
+fb/diffusion = 5e-2
+fb/haptotaxis = 5e-5
+fb/kappa =  6.3e-5
+fb/mu = 1.8
+fb/lambda =  0.89e-4
+fb/nu = 1.0
+fb/theta = 14.4e-3
 fb/RTD/ref = 1.0
 fb/threshold = 0.1
 #
-hu/phi/cc = 1.3e+3
-hu/phi/fb = 1.0e+3
+hu/phi/cc = 2.5e+3
+hu/phi/fb = 20.0e+3
 hu/min = -1000.
 hu/max = +1000.
 hu/ref = 1000
