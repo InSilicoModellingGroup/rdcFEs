@@ -185,8 +185,6 @@ void input (const std::string & file_name, EquationSystems & es)
     if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
     name = "cc/lambda"; es.parameters.set<Real>(name) = in(name, -1.);
     if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
-    name = "cc/Pc/gamma";      es.parameters.set<Real>(name) = in(name, -1.);
-    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
     name = "cc/theta"; es.parameters.set<Real>(name) = in(name, -1.);
     if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
     name = "cc/Qc/alpha"; es.parameters.set<Real>(name) = in(name, -1.);
@@ -362,7 +360,6 @@ void assemble_ripf (EquationSystems & es,
 
   const Real diffusion_cc  = es.parameters.get<Real>("cc/diffusion"),
              lambda_cc = es.parameters.get<Real>("cc/lambda"),
-             gamma      = es.parameters.get<Real>("cc/Pc/gamma"),
              theta_cc = es.parameters.get<Real>("cc/theta"),
              alpha = es.parameters.get<Real>("cc/Qc/alpha"),
              beta = es.parameters.get<Real>("cc/Qc/beta"),
@@ -471,7 +468,6 @@ void assemble_ripf (EquationSystems & es,
 
 	  // cc terms
 	  const Real normRTD_cc = RTD_td/RTD_ref_cc;
-          const Real lambda_cc_Pc = lambda_cc * exp(-gamma*normRTD_cc);
           const Real theta_cc_Qc = theta_cc * (1.0 - exp(-alpha*normRTD_cc-beta*pow2(normRTD_cc)));
           Real cc_prol = 0.0;
           Real cc_prol_dcc = 0.0;
@@ -511,7 +507,7 @@ void assemble_ripf (EquationSystems & es,
               Fe_var[0](i) += JxW[qp]*(
                                         cc_old * phi[i][qp] // capacity term
                                       + DT_2*( // source, sink terms
-                                               lambda_cc_Pc * cc_prol * Tau * phi[i][qp]
+                                               lambda_cc * cc_prol * Tau * phi[i][qp]
                                              - theta_cc_Qc * cc_old * phi[i][qp]
 					     - diffusion_cc * Tau * (GRAD_cc_old * dphi[i][qp])
                                              )
@@ -543,8 +539,8 @@ void assemble_ripf (EquationSystems & es,
                   Ke_var[0][0](i,j) += JxW[qp]*(
                                                  phi[j][qp] * phi[i][qp] // capacity term
                                                - DT_2*( // transport, source, sink terms
-                                                        lambda_cc_Pc * cc_prol * Tau_dcc * phi[j][qp] * phi[i][qp]
-                                                      + lambda_cc_Pc * cc_prol_dcc * Tau * phi[j][qp] * phi[i][qp]
+                                                        lambda_cc * cc_prol * Tau_dcc * phi[j][qp] * phi[i][qp]
+                                                      + lambda_cc * cc_prol_dcc * Tau * phi[j][qp] * phi[i][qp]
                                                       - theta_cc_Qc * phi[j][qp] * phi[i][qp]
 						      - diffusion_cc * Tau_dcc * phi[j][qp] * (GRAD_cc_old * dphi[i][qp])
                                                       - diffusion_cc * Tau * (dphi[j][qp] * dphi[i][qp])
@@ -552,13 +548,13 @@ void assemble_ripf (EquationSystems & es,
                                                );
                   Ke_var[0][1](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
-                                                        lambda_cc_Pc * cc_prol * Tau_dfb * phi[j][qp] * phi[i][qp]
+                                                        lambda_cc * cc_prol * Tau_dfb * phi[j][qp] * phi[i][qp]
                                                       - diffusion_cc * Tau_dfb * phi[j][qp] * (GRAD_cc_old * dphi[i][qp])
                                                       )
                                                );
                   Ke_var[0][2](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
-						       lambda_cc_Pc * cc_prol * Tau_dhu * phi[j][qp] * phi[i][qp]
+						       lambda_cc * cc_prol * Tau_dhu * phi[j][qp] * phi[i][qp]
                                                       )
 						);
                   // Matrix contribution

@@ -1,5 +1,5 @@
 #
-directory = 'rpf_sim_p06_v3r-newHUmodel-hucalib-trials-dhu0-2b'
+directory = 'rpf_sim_p06_v3r-final'
 input_GMSH     = 'bococ_initial_data/p06/p06_ct0.msh'
 input_nodal    = 'bococ_initial_data/p06/p06_ct0-nodal_field.dat'
 input_nodal_RT = 'bococ_initial_data/p06/p06_ct0-nodal_field-RT.dat'
@@ -16,7 +16,6 @@ capacity/exponent = 5.0
 #
 cc/diffusion = 0.1
 cc/lambda = 0.05
-cc/Pc/gamma = 0.0
 cc/theta = 1.0
 cc/Qc/alpha = 0.003
 cc/Qc/beta = 0.0003
