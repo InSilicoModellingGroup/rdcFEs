@@ -457,12 +457,12 @@ void assemble_ripf (EquationSystems & es,
           // Capacity function
           Real Tau = 0.0;
           Real Tau_dcc = 0.0, Tau_dfb = 0.0, Tau_dhu = 0.0;
-          const Real total_cells = cc_old + fb_old + (hu_old + hu_ref)/hu_ref;
+          const Real total_cells = cc_old + fb_old + 0.5*(hu_old + hu_ref)/hu_ref;
           if (total_cells<1.0)
             {
               Tau = 1.0 - pow(total_cells, capacity_exponent);
               Tau_dcc = Tau_dfb = -capacity_exponent * pow(total_cells, capacity_exponent-1.0);
-	      Tau_dhu = -capacity_exponent * pow(total_cells, capacity_exponent-1.0)/hu_ref;
+	      Tau_dhu = -capacity_exponent * pow(total_cells, capacity_exponent-1.0)*0.5/hu_ref;
             }
 	  //	  std::cout << "Tau = " << Tau << ", Tau_dfb = " << Tau_dfb << ", Tau_dhu = " << Tau_dhu <<  std::endl;
 
