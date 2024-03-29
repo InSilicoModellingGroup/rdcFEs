@@ -8,6 +8,7 @@ PerfLog plog("rdcFEs");
 
 extern void adpm (LibMeshInit & );
 extern void pihna (LibMeshInit & );
+extern void proteas (LibMeshInit &, const std::string &inputFile );
 extern void ripf (LibMeshInit & );
 extern void process_mesh (LibMeshInit & );
 extern void solid (LibMeshInit & );
@@ -18,6 +19,9 @@ int main (int argc, char* argv[])
   LibMeshInit init(argc, argv);
   GetPot command_line(argc, argv);
 
+  std::string inputFile = command_line("input", "input.dat");
+  std::cout << "Input file is: " << inputFile  << ". Use input=<file> to specify a different input file." << std::endl;
+
   std::string s;
   if (command_line.search(1, "-m"))
     {
@@ -26,6 +30,8 @@ int main (int argc, char* argv[])
       if ("adpm"==s) adpm(init);
       // PIHNA cancer model
       else if ("pihna"==s) pihna(init);
+      // PROTEAS project cancer model
+      else if ("proteas"==s) proteas(init,inputFile);
       // radiation-induced pulmonary fibrosis model
       else if ("ripf"==s) ripf(init);
     }

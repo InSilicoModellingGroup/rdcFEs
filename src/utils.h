@@ -81,6 +81,8 @@ inline
 Real radians_to_degrees (const Real r) { return r*(180.0/libMesh::pi); }
 //-------------------------------------------------------------------------------------------------
 inline
+Real heaviside (const Real& x) { return ( x > 0 ? 1 : 0 ); }
+inline
 Real apply_lbound (const Real& L, const Real& X) { return ( X < L ? L : X ); }
 inline
 Real apply_ubound (const Real& X, const Real& U) { return ( X > U ? U : X ); }
