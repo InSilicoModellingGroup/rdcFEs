@@ -20,7 +20,9 @@ int main (int argc, char* argv[])
   GetPot command_line(argc, argv);
 
   std::string inputFile = command_line("input", "input.dat");
-  std::cout << "Input file is: " << inputFile  << ". Use input=<file> to specify a different input file." << std::endl;
+  std::cout << std::endl
+    << " ** Input file is: " << inputFile  << "\n"
+    << "    Use 'input=<file>' to specify a different input file.\n" << std::endl;
 
   std::string s;
   if (command_line.search(1, "-m"))
