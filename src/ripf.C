@@ -492,7 +492,7 @@ void assemble_ripf (EquationSystems & es,
 	      fb_recruit_dfb = mu*pow(1-fb_old,mu-1)*(-1.0);
 
 	      fb_prol = pow(fb_old,nu)*(1-fb_old);
-	      fb_prol_dfb = nu*pow(fb_old,nu-1)*(1-fb_old) + pow(fb_old,nu)*(-1.0);
+	      if ( fb_old > 0 ) fb_prol_dfb = nu*pow(fb_old,nu-1)*(1-fb_old) + pow(fb_old,nu)*(-1.0);
             }
 
 	  // hu terms
