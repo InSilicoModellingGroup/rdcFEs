@@ -1,5 +1,5 @@
 #
-directory = 'rpf_sim_p06_v3r-afterHU-TauMod-7-test4b'
+directory = 'rpf_sim_p06_v3r-final-2'
 input_GMSH     = 'bococ_initial_data/p06/p06_ct0.msh'
 input_nodal    = 'bococ_initial_data/p06/p06_ct0-nodal_field.dat'
 input_nodal_RT = 'bococ_initial_data/p06/p06_ct0-nodal_field-RT.dat'
@@ -24,11 +24,11 @@ cc/threshold = 0.1
 #
 fb/diffusion = 5e-2
 fb/haptotaxis = 5e-5
-fb/kappa =  5.85e-5
-fb/mu = 1.8
-fb/lambda =  1.32e-4
-fb/nu = 1.01
-fb/theta = 13.7e-3
+fb/kappa =  5.93e-5
+fb/mu = 2.0
+fb/lambda =  1.38e-4
+fb/nu = 1.0
+fb/theta = 13.70e-3
 fb/RTD/ref = 1.0
 fb/threshold = 0.1
 #

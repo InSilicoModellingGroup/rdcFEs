@@ -439,7 +439,16 @@ void assemble_ripf (EquationSystems & es,
           for (std::size_t l=0; l<n_var_dofs; l++)
             {
               cc__dtime += phi[l][qp] * TD_system.current_solution(dof_indices_var[0][l]);
+	      // if ( cc__dtime > 1e-6 )
+	      // 	{
+	      // 	  std::cout << "Positive cc derivative. cc_dtime=" << cc__dtime << ", cc_old=" << cc_old << ", cc_older=" << cc_older << std::endl;
+	      // 	}
               fb__dtime += phi[l][qp] * TD_system.current_solution(dof_indices_var[1][l]);
+	      if ( fb__dtime < -1e-2 )
+		{
+		  std::cout << "Negative fb derivative. fb_dtime=" << fb__dtime << ", fb_old=" << fb_old << ", fb_older=" << fb_older << std::endl;
+		  fb__dtime = 0.0;
+		}
             }
           Number RTD_td(0.0);
           Gradient GRAD_RTD_td({0.0, 0.0, 0.0});
