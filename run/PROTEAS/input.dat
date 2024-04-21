@@ -1,0 +1,48 @@
+#
+directory = 'output'
+input_GMSH      = 'RP01-model.msh'
+input_nodal     = 'RP01-nodal_field.dat'
+input_nodal_aux = 'RP01-nodal_field_aux.dat'
+#
+time_step_number = 700
+time_step = 0.01
+output_step = 100
+#
+linear_solver_tolerance = 1.0e-6
+linear_solver_maximum_iterations = 5000
+#
+cells/total_capacity = 1.0
+#
+radiotherapy/min_dosage =  1.0
+radiotherapy/max_dosage = 23.0
+#
+host/vsc_threshold = 0.09
+host/proliferation = 0.
+host/RT_death_rate = 1.0e-4
+host/RT_exp_a = 0.03
+host/RT_exp_b = 0.003
+host/necrosis_rate = 0.
+#
+tumour/vsc_threshold = 0.04
+tumour/proliferation = 0.
+tumour/RT_death_rate = 1.0e-3
+tumour/RT_exp_a = 0.3
+tumour/RT_exp_b = 0.03
+tumour/necrosis_rate = 1.0e-4
+tumour/diffusion = 0.
+tumour/diffusion_host = 0.
+#
+necrosis/vsc_threshold = 0.05
+necrosis/slope = 0.
+necrosis/clearance = 1.0e-5
+#
+vascular/proliferation = 0.
+vascular/necrosis_rate = 0.
+#
+oedema/vsc_threshold = 0.
+oedema/RT_inflammation_rate = 0.
+oedema/proliferation = 0.
+oedema/RT_exp = 3.0
+oedema/reabsorption_rate = 0.
+oedema/diffusion = 0.
+#
