@@ -5,49 +5,61 @@
 #include "libmesh/kelly_error_estimator.h"
 
 static void input (const std::string & , EquationSystems & );
+static void calc_capacity_matrix (EquationSystems & );
+static void calc_rhs_vector (EquationSystems & );
+static void explicit_solve (EquationSystems & );
 static void initial_aux_data (EquationSystems & , const std::string & );
 static void initial_proteas_model (EquationSystems & , const std::string & );
-static void assemble_proteas_model (EquationSystems & , const std::string & );
 static void check_solution (EquationSystems & );
-static void adaptive_mesh_refinement (EquationSystems & , MeshRefinement & );
+static void adaptive_remeshing (EquationSystems & , MeshRefinement & );
 
 extern PerfLog plog;
 static Parallel::Communicator * pm_ptr = 0;
 
 void proteas (LibMeshInit & init, const std::string &inputFile)
 {
-  Mesh mesh(init.comm(), 3);
-  EquationSystems es(mesh);
-  MeshRefinement amr(mesh);
+  Mesh msh(init.comm(), 3);
+  EquationSystems es(msh);
+  MeshRefinement amr(msh);
 
   pm_ptr = & init.comm();
 
   input(inputFile, es);
 
-  TransientLinearImplicitSystem & model =
-    es.add_system<TransientLinearImplicitSystem>("PROTEAS_model");
-  model.add_variable("hos", FIRST, LAGRANGE); // host (healthy) cells
-  model.add_variable("tum", FIRST, LAGRANGE); // tumour cells
-  model.add_variable("nec", FIRST, LAGRANGE); // necrotic cells
-  model.add_variable("vsc", FIRST, LAGRANGE); // vascular cells
-  model.add_variable("oed", FIRST, LAGRANGE); // oedema
-  model.attach_init_function(initial_proteas_model);
-  model.attach_assemble_function(assemble_proteas_model);
+  LinearImplicitSystem & sys_PROTEAS =
+    es.add_system<LinearImplicitSystem>("PROTEAS");
+  sys_PROTEAS.add_variable("hos", FIRST, LAGRANGE); // host (healthy) cells
+  sys_PROTEAS.add_variable("tum", FIRST, LAGRANGE); // tumour cells
+  sys_PROTEAS.add_variable("nec", FIRST, LAGRANGE); // necrotic cells
+  sys_PROTEAS.add_variable("vsc", FIRST, LAGRANGE); // vascular cells
+  sys_PROTEAS.add_variable("oed", FIRST, LAGRANGE); // oedema
+  sys_PROTEAS.attach_init_function(initial_proteas_model);
+  sys_PROTEAS.add_vector("rhs");
+  sys_PROTEAS.add_vector("reciprocal_vector_of_diagonal_capacity_matrix");
+  sys_PROTEAS.add_vector("previous_solution");
 
-  ExplicitSystem & AUX =
+  ExplicitSystem & sys_PROTEAS_dt =
+    es.add_system<ExplicitSystem>("PROTEAS (rate)");
+  sys_PROTEAS_dt.add_variable("hos_dt", FIRST, LAGRANGE); // host (healthy) cells
+  sys_PROTEAS_dt.add_variable("tum_dt", FIRST, LAGRANGE); // tumour cells
+  sys_PROTEAS_dt.add_variable("nec_dt", FIRST, LAGRANGE); // necrotic cells
+  sys_PROTEAS_dt.add_variable("vsc_dt", FIRST, LAGRANGE); // vascular cells
+  sys_PROTEAS_dt.add_variable("oed_dt", FIRST, LAGRANGE); // oedema
+
+  ExplicitSystem & sys_AUX =
     es.add_system<ExplicitSystem>("AUX");
-  AUX.add_variable("HU", FIRST, LAGRANGE);
-  AUX.add_variable("RTD", FIRST, LAGRANGE);
-  AUX.attach_init_function(initial_aux_data);
+  sys_AUX.add_variable("HU", FIRST, LAGRANGE);
+  sys_AUX.add_variable("RTD", FIRST, LAGRANGE);
+  sys_AUX.attach_init_function(initial_aux_data);
 
-  GmshIO(mesh).read(es.parameters.get<std::string>("input_GMSH"));
-  mesh.prepare_for_use(es.parameters.get<bool>("mesh/skip_renumber_nodes_and_elements"));
-  mesh.print_info();
-  //  GmshIO(mesh).write(es.parameters.get<std::string>("output_GMSH"));
+  GmshIO(msh).read(es.parameters.get<std::string>("input_GMSH"));
+  msh.prepare_for_use(es.parameters.get<bool>("mesh/skip_renumber_nodes_and_elements"));
+  msh.print_info();
+  GmshIO(msh).write(es.parameters.get<std::string>("output_GMSH"));
   es.init();
   es.print_info();
 
-  Paraview_IO paraview(mesh);
+  Paraview_IO paraview(msh);
   paraview.open_pvd(es.parameters.get<std::string>("output_Paraview"));
 
   std::ofstream csv;
@@ -59,28 +71,29 @@ void proteas (LibMeshInit & init, const std::string &inputFile)
 
   const std::set<int> otp = export_integers(es.parameters.get<std::string>("output_time_points"));
 
-  const int refinement_step = es.parameters.get<int>("refinement_step");
+  Real & time = es.parameters.set<Real>("time");
+
+  const int remeshing_step = es.parameters.get<int>("remeshing_step");
   const int n_t_step = es.parameters.get<int>("time_step_number");
+
+  calc_capacity_matrix(es);
+
   for (int t=1; t<=n_t_step; t++)
     {
       // update the simulation time
-      es.parameters.set<Real>("time") += es.parameters.get<Real>("time_step");
-      model.time = es.parameters.get<Real>("time");
+      time += es.parameters.get<Real>("time_step");
 
-      libMesh::out << " ==== Step " << std::setw(4) << t << " out of " << std::setw(4) << n_t_step
-                   << " (Time=" << std::setw(9) << model.time << ") ==== "
-                   << std::endl;
+      libMesh::out << " === Step " << std::setw(4) << t << "/" << std::setw(4) << n_t_step
+                   << " (Time=" << std::setw(9) << time << ") === \r" << std::flush;
 
-      // update the solution (containers) for up to 2 steps behind
-      *(model.older_local_solution) = *(model.old_local_solution);
-      *(model.old_local_solution) = *(model.current_local_solution);
-      // now solve the AD progression model
-      model.solve();
+      calc_rhs_vector(es);
+
+      explicit_solve(es);
 
       check_solution(es);
 
-      if (0 == t%refinement_step)
-        adaptive_mesh_refinement(es, amr);
+      if (0 == t%remeshing_step)
+        adaptive_remeshing(es, amr);
 
       // save current solution
       if (otp.end()!=otp.find(t))
@@ -105,30 +118,29 @@ void input (const std::string & file_name, EquationSystems & es)
     std::system(std::string("mkdir -p "+DIR).c_str());
   // create a copy of the input file containing all model parameters
   if (0==global_processor_id())
-    std::system(std::string("cp "+file_name+" "+DIR+"/"+file_name).c_str());
+    std::system(std::string("cp "+file_name+" "+DIR+"/input.dat").c_str());
 
   name = "input_GMSH";
   es.parameters.set<std::string>(name) = in(name, "input.msh");
   //
   name = "output_GMSH";
-  es.parameters.set<std::string>(name) = DIR + "/" + in(name, "output.msh");
+  es.parameters.set<std::string>(name) = (DIR+"/output.msh");
   //
   name = "input_nodal";
   es.parameters.set<std::string>(name) = in(name, "input.nd");
-  // if (0==global_processor_id())
-  //   std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+es.parameters.get<std::string>(name)).c_str());
+  if (0==global_processor_id())
+    std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+"/input.nd").c_str());
   //
   name = "input_nodal_aux";
   es.parameters.set<std::string>(name) = in(name, "input_aux.nd");
-  // if (0==global_processor_id())
-  //   std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+es.parameters.get<std::string>(name)).c_str());
+  if (0==global_processor_id())
+    std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+"/input_aux.nd").c_str());
   //
   name = "output_Paraview";
-  std::string  pv_filename = std::filesystem::path(DIR).filename();
-  es.parameters.set<std::string>(name) = DIR + "/" + in(name, pv_filename);
+  es.parameters.set<std::string>(name) = (DIR+"/output.paraview");
   //
   name = "output_CSV";
-  es.parameters.set<std::string>(name) = DIR + "/" + in(name, pv_filename+".csv");
+  es.parameters.set<std::string>(name) = (DIR+"/output.csv");
 
   es.parameters.set<Real>("time") = 0.0;
 
@@ -138,8 +150,13 @@ void input (const std::string & file_name, EquationSystems & es)
   es.parameters.set<int>(name) = in(name, 1);
   name = "output_step";
   es.parameters.set<int>(name) = in(name, 0);
-  name = "refinement_step";
+  name = "remeshing_step";
   es.parameters.set<int>(name) = in(name, 1+es.parameters.get<int>("time_step_number"));
+
+  name = "linear_solver_tolerance";
+  es.parameters.set<Real>("linear solver tolerance") = in(name, 1.0e-6);
+  name = "linear_solver_maximum_iterations";
+  es.parameters.set<unsigned int>("linear solver maximum iterations") = in(name, 1000);
 
   std::string otp;
   if (0==es.parameters.get<int>("output_step"))
@@ -176,193 +193,181 @@ void input (const std::string & file_name, EquationSystems & es)
   }
 
   {
-    // Model parameters set
     name = "cells/total_capacity"; es.parameters.set<Real>(name) = in(name, 1.0);
+
+    name = "radiotherapy/min_dosage"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "radiotherapy/max_dosage"; es.parameters.set<Real>(name) = in(name, 1.0);
 
-    name = "host/proliferation"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "host/vsc_threshold"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "host/RT_death_rate"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "host/vsc_threshold"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "host/proliferation"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "host/RT_death_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "host/RT_exp_a"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "host/RT_exp_b"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "host/RT_exp_b"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "host/necrosis_rate"; es.parameters.set<Real>(name) = in(name, 1.0);
 
-    name = "tumour/diffusion"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "tumour/diffusion_host"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "tumour/proliferation"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "tumour/vsc_threshold"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "tumour/RT_death_rate"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "tumour/vsc_threshold"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "tumour/proliferation"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "tumour/RT_death_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "tumour/RT_exp_a"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "tumour/RT_exp_b"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "tumour/necrosis_rate"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "tumour/RT_exp_b"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "tumour/necrosis_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "tumour/diffusion"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "tumour/diffusion_host"; es.parameters.set<Real>(name) = in(name, 0.0);
 
-    name = "necrosis/clearance"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "necrosis/slope"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "necrosis/vsc_threshold"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "necrosis/vsc_threshold"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "necrosis/vsc_slope"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "necrosis/clearance"; es.parameters.set<Real>(name) = in(name, 0.0);
 
-    name = "vascular/proliferation"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "vascular/necrosis_rate"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "vascular/proliferation"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "vascular/necrosis_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
 
-    name = "oedema/diffusion"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "oedema/proliferation"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "oedema/vsc_threshold"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "oedema/oedema_threshold"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "oedema/RT_coeff"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "oedema/vsc_threshold"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "oedema/proliferation"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "oedema/RT_inflammation_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "oedema/RT_exp"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "oedema/reabsorption_rate"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "oedema/reabsorption_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "oedema/diffusion"; es.parameters.set<Real>(name) = in(name, 0.0);
   }
 
+  es.parameters.print();
+
   // ...done
 }
 
-void initial_aux_data (EquationSystems & es,
-                                  const std::string & libmesh_dbg_var(system_name))
+void calc_capacity_matrix (EquationSystems & es)
 {
-  libmesh_assert_equal_to(system_name, "AUX");
-
-  const MeshBase& mesh = es.get_mesh();
-  libmesh_assert_equal_to(mesh.mesh_dimension(), 2);
-
-  ExplicitSystem & system =
-    es.get_system<ExplicitSystem>("AUX");
-  libmesh_assert_equal_to(system.n_vars(), 2);
-
-  std::ifstream fin(es.parameters.get<std::string>("input_nodal_aux"));
-  if ( !fin.is_open() )
-    {
-      std::cout << "ERROR: Failed to open nodal aux input file " << es.parameters.get<std::string>("input_nodal_aux") << std::endl;
-      exit(1);
-    }
-
-  for (const auto & node : mesh.node_ptr_range())
-    {
-      Real HU_, RTD_;
-      std::string line;
-      while ( std::getline(fin,line) ) {
-	if (line.empty() || line[0] == '#') {
-	  continue;  // Ignore empty lines and lines starting with '#'
-        }
-
-	std::istringstream iss(line);
-        if ( iss >> HU_ >> RTD_) {
-	  break;
-        }
-	else {
-	  std::cout << "ERROR: Nodal input aux file failed to read line: " << line << std::endl;
-	  exit(1);
-	}
-      }
-
-      const dof_id_type idof[] = { node->dof_number(system.number(), 0, 0),
-				   node->dof_number(system.number(), 1, 0) };
-      libmesh_assert( node->n_comp(system.number(), 0) == 1 );
-      libmesh_assert( node->n_comp(system.number(), 01) == 1 );
-
-      system.solution->set(idof[0], HU_);
-      system.solution->set(idof[1], RTD_);
-    }
-
-  // close solution vector and update the system
-  system.solution->close();
-  system.update();
-  // ...done
-}
-
-void initial_proteas_model (EquationSystems & es,
-                            const std::string & libmesh_dbg_var(system_name))
-{
-  libmesh_assert_equal_to(system_name, "PROTEAS_model");
-
-  const MeshBase& mesh = es.get_mesh();
-  libmesh_assert_equal_to(mesh.mesh_dimension(), 3);
-
-  TransientLinearImplicitSystem & system =
-    es.get_system<TransientLinearImplicitSystem>("PROTEAS_model");
-  libmesh_assert_equal_to(system.n_vars(), 5);
-
-  es.parameters.set<Real> ("time") =
-    system.time = 0.0;
-
-  std::ifstream fin(es.parameters.get<std::string>("input_nodal"));
-  if ( !fin.is_open() )
-    {
-      std::cout << "ERROR: Failed to open nodal input file " << es.parameters.get<std::string>("input_nodal") << std::endl;
-      exit(1);
-    }
-
-  for (const auto & node : mesh.node_ptr_range())
-    {
-      Real hos_, tum_, nec_, vsc_, oed_;
-      std::string line;
-      while ( std::getline(fin,line) ) {
-	if (line.empty() || line[0] == '#') {
-	  continue;  // Ignore empty lines and lines starting with '#'
-        }
-
-	std::istringstream iss(line);
-        if ( iss >> hos_ >> tum_ >> nec_ >> vsc_ >> oed_) {
-	  break;
-        }
-	else {
-	  std::cout << "ERROR: Nodal input file failed to read line: " << line << std::endl;
-	  exit(1);
-	}
-      }
-
-      const dof_id_type idof[] = { node->dof_number(system.number(), 0, 0) ,
-                                   node->dof_number(system.number(), 1, 0) ,
-                                   node->dof_number(system.number(), 2, 0) ,
-                                   node->dof_number(system.number(), 3, 0) ,
-                                   node->dof_number(system.number(), 4, 0) };
-
-      libmesh_assert( node->n_comp(system.number(), 0) == 1 );
-      libmesh_assert( node->n_comp(system.number(), 1) == 1 );
-      libmesh_assert( node->n_comp(system.number(), 2) == 1 );
-      libmesh_assert( node->n_comp(system.number(), 3) == 1 );
-      libmesh_assert( node->n_comp(system.number(), 4) == 1 );
-
-      system.solution->set(idof[0], hos_);
-      system.solution->set(idof[1], tum_);
-      system.solution->set(idof[2], nec_);
-      system.solution->set(idof[3], vsc_);
-      system.solution->set(idof[4], oed_);
-    }
-
-  fin.close();
-  // close solution vector and update the system
-  system.solution->close();
-  system.update();
-  // ...done
-}
-
-void assemble_proteas_model (EquationSystems & es,
-                             const std::string & libmesh_dbg_var(system_name))
-{
-  libmesh_assert_equal_to(system_name, "PROTEAS_model");
-
   const MeshBase & mesh = es.get_mesh();
+  libmesh_assert_equal_to(3, mesh.mesh_dimension());
+
   const unsigned int dim = mesh.mesh_dimension();
+  const int MODEL_vars = 5;
 
-  const int proteas_model_vars=5;
-  const int AUX_vars=2;
-  
-  TransientLinearImplicitSystem & system =
-    es.get_system<TransientLinearImplicitSystem>("PROTEAS_model");
-  libmesh_assert_equal_to(system.n_vars(), proteas_model_vars);
+  LinearImplicitSystem & sys_PROTEAS =
+    es.get_system<LinearImplicitSystem>("PROTEAS");
+  libmesh_assert_equal_to(sys_PROTEAS.n_vars(), MODEL_vars);
 
-  const ExplicitSystem & AUX_system =
-    es.get_system<ExplicitSystem>("AUX");
-  libmesh_assert_equal_to(AUX_system.n_vars(), AUX_vars);
-
-  FEType fe_type = system.variable_type(0);
-  FEType fe_type_AUX = AUX_system.variable_type(0);
-
-  std::unique_ptr<FEBase> fe(FEBase::build(dim, fe_type));
-  std::unique_ptr<FEBase> fe_AUX(FEBase::build(dim, fe_type_AUX));
+  FEType fe_type = sys_PROTEAS.variable_type(0);
 
   QGauss qrule(dim, fe_type.default_quadrature_order());
 
+  std::unique_ptr<FEBase> fe(FEBase::build(dim, fe_type));
   fe->attach_quadrature_rule(&qrule);
+
+  const std::vector<Real> & JxW = fe->get_JxW();
+
+  const std::vector<std::vector<Real>> & phi = fe->get_phi();
+
+  const Real reciprocal_dt = 1.0 / es.parameters.get<Real>("time_step");
+
+  // initialize the system matrix
+  sys_PROTEAS.matrix->zero();
+
+  for (const auto & elem : mesh.active_local_element_ptr_range())
+    {
+      std::vector<dof_id_type> dof_indices;
+      sys_PROTEAS.get_dof_map().dof_indices(elem, dof_indices);
+
+      std::vector<std::vector<dof_id_type>> dof_indices_var(MODEL_vars);
+      for (unsigned int v=0; v<MODEL_vars; v++)
+        sys_PROTEAS.get_dof_map().dof_indices(elem, dof_indices_var[v], v);
+
+      const unsigned int n_dofs     = dof_indices.size();
+      const unsigned int n_var_dofs = dof_indices_var[0].size();
+
+      DenseMatrix<Number> Me(n_dofs, n_dofs);
+      DenseSubMatrix<Number> Me_var[MODEL_vars][MODEL_vars] =
+      {
+        { DenseSubMatrix<Number>(Me), DenseSubMatrix<Number>(Me), DenseSubMatrix<Number>(Me), DenseSubMatrix<Number>(Me), DenseSubMatrix<Number>(Me) } ,
+        { DenseSubMatrix<Number>(Me), DenseSubMatrix<Number>(Me), DenseSubMatrix<Number>(Me), DenseSubMatrix<Number>(Me), DenseSubMatrix<Number>(Me) } ,
+        { DenseSubMatrix<Number>(Me), DenseSubMatrix<Number>(Me), DenseSubMatrix<Number>(Me), DenseSubMatrix<Number>(Me), DenseSubMatrix<Number>(Me) } ,
+        { DenseSubMatrix<Number>(Me), DenseSubMatrix<Number>(Me), DenseSubMatrix<Number>(Me), DenseSubMatrix<Number>(Me), DenseSubMatrix<Number>(Me) } ,
+        { DenseSubMatrix<Number>(Me), DenseSubMatrix<Number>(Me), DenseSubMatrix<Number>(Me), DenseSubMatrix<Number>(Me), DenseSubMatrix<Number>(Me) }
+      };
+
+      for (unsigned int i=0; i<MODEL_vars; i++)
+        for (unsigned int j=0; j<MODEL_vars; j++)
+          Me_var[i][j].reposition(i*n_var_dofs, j*n_var_dofs, n_var_dofs, n_var_dofs);
+
+      fe->reinit(elem);
+
+      for (unsigned int qp=0; qp<qrule.n_points(); qp++)
+        {
+          for (unsigned int i=0; i<n_var_dofs; i++)
+            {
+              for (unsigned int j=0; j<n_var_dofs; j++)
+                {
+                  // Host (healthy) cells
+                  Me_var[0][0](i,j) += JxW[qp]*(phi[i][qp]*phi[j][qp])*reciprocal_dt;
+                  // Tumour cells
+                  Me_var[1][1](i,j) += JxW[qp]*(phi[i][qp]*phi[j][qp])*reciprocal_dt;
+                  // Necrotic cells
+                  Me_var[2][2](i,j) += JxW[qp]*(phi[i][qp]*phi[j][qp])*reciprocal_dt;
+                  // Vascular cells
+                  Me_var[3][3](i,j) += JxW[qp]*(phi[i][qp]*phi[j][qp])*reciprocal_dt;
+                  // Oedema
+                  Me_var[4][4](i,j) += JxW[qp]*(phi[i][qp]*phi[j][qp])*reciprocal_dt;
+                }
+            }
+        }
+
+      // row-sum method for lumping
+      for (unsigned int a=0; a<n_dofs; a++)
+        {
+          Real Me_rowsum = 0.0;
+          for (unsigned int b=0; b<n_dofs; b++)
+            {
+              Me_rowsum += Me(a,b);
+              Me(a,b) = 0.0;
+            }
+          Me(a,a) = Me_rowsum;
+        }
+
+      sys_PROTEAS.get_dof_map().constrain_element_matrix(Me, dof_indices);
+
+      sys_PROTEAS.matrix->add_matrix(Me, dof_indices);
+    }
+
+  NumericVector<Number> & diag_v =
+    sys_PROTEAS.get_vector("reciprocal_vector_of_diagonal_capacity_matrix");
+  diag_v.zero();
+
+  // close the system matrix first
+  sys_PROTEAS.matrix->close();
+  // extract the diagonal of the lumped (diagonal) capacity matrix
+  sys_PROTEAS.matrix->get_diagonal(diag_v);
+  // evaluate the reciprocal vector
+  diag_v.reciprocal();
+  diag_v.close();
+
+  // ...done
+}
+
+void calc_rhs_vector (EquationSystems & es)
+{
+  const MeshBase & mesh = es.get_mesh();
+  libmesh_assert_equal_to(3, mesh.mesh_dimension());
+
+  const unsigned int dim = mesh.mesh_dimension();
+  const int MODEL_vars = 5;
+  const int AUX_vars = 2;
+
+  LinearImplicitSystem & sys_PROTEAS =
+    es.get_system<LinearImplicitSystem>("PROTEAS");
+  libmesh_assert_equal_to(sys_PROTEAS.n_vars(), MODEL_vars);
+
+  const ExplicitSystem & sys_AUX =
+    es.get_system<ExplicitSystem>("AUX");
+  libmesh_assert_equal_to(sys_AUX.n_vars(), AUX_vars);
+
+  FEType fe_type = sys_PROTEAS.variable_type(0);
+  FEType fe_type_AUX = sys_AUX.variable_type(0);
+
+  QGauss qrule(dim, fe_type.default_quadrature_order());
+
+  std::unique_ptr<FEBase> fe(FEBase::build(dim, fe_type));
+  fe->attach_quadrature_rule(&qrule);
+
+  std::unique_ptr<FEBase> fe_AUX(FEBase::build(dim, fe_type_AUX));
   fe_AUX->attach_quadrature_rule(&qrule);
 
   const std::vector<Real> & JxW = fe->get_JxW();
@@ -373,79 +378,66 @@ void assemble_proteas_model (EquationSystems & es,
   const std::vector<std::vector<RealGradient>> & dphi = fe->get_dphi();
   const std::vector<std::vector<RealGradient>> & dphi_AUX = fe_AUX->get_dphi();
 
-  const Real DT_2 = es.parameters.get<Real>("time_step") / 2.0;
-
   const Real T_max = es.parameters.get<Real>("cells/total_capacity");
+  const Real RT_min = es.parameters.get<Real>("radiotherapy/min_dosage"),
+             RT_max = es.parameters.get<Real>("radiotherapy/max_dosage");
 
-  const Real RT_max = es.parameters.get<Real>("radiotherapy/max_dosage");
+  const Real vsc_h   = es.parameters.get<Real>("host/vsc_threshold"),
+             rho_h   = es.parameters.get<Real>("host/proliferation"),
+             delta_h = es.parameters.get<Real>("host/RT_death_rate"),
+             a_RT_h  = es.parameters.get<Real>("host/RT_exp_a"),
+             b_RT_h  = es.parameters.get<Real>("host/RT_exp_b"),
+             nu_h    = es.parameters.get<Real>("host/necrosis_rate");
 
-  const Real rho_h     = es.parameters.get<Real>("host/proliferation"),
-             u_h       = es.parameters.get<Real>("host/vsc_threshold"),
-             delta_h   = es.parameters.get<Real>("host/RT_death_rate"),
-             a_RT_h    = es.parameters.get<Real>("host/RT_exp_a"),
-             b_RT_h    = es.parameters.get<Real>("host/RT_exp_b"),
-             nu_h = es.parameters.get<Real>("host/necrosis_rate");
+  const Real vsc_c   = es.parameters.get<Real>("tumour/vsc_threshold"),
+             rho_c   = es.parameters.get<Real>("tumour/proliferation"),
+             delta_c = es.parameters.get<Real>("tumour/RT_death_rate"),
+             a_RT_c  = es.parameters.get<Real>("tumour/RT_exp_a"),
+             b_RT_c  = es.parameters.get<Real>("tumour/RT_exp_b"),
+             nu_c    = es.parameters.get<Real>("tumour/necrosis_rate");
+  const Real D_c     = es.parameters.get<Real>("tumour/diffusion"),
+             D_c_h   = es.parameters.get<Real>("tumour/diffusion_host");
 
-  const Real D_c       = es.parameters.get<Real>("tumour/diffusion"),
-             D_c_h     = es.parameters.get<Real>("tumour/diffusion_host"),
-             rho_c     = es.parameters.get<Real>("tumour/proliferation"),
-             u_c       = es.parameters.get<Real>("tumour/vsc_threshold"),
-             delta_c   = es.parameters.get<Real>("tumour/RT_death_rate"),
-             a_RT_c    = es.parameters.get<Real>("tumour/RT_exp_a"),
-             b_RT_c    = es.parameters.get<Real>("tumour/RT_exp_b"),
-             nu_c = es.parameters.get<Real>("tumour/necrosis_rate");
+  const Real vsc_n = es.parameters.get<Real>("necrosis/vsc_threshold"),
+             vsc_k = es.parameters.get<Real>("necrosis/vsc_slope"),
+             psi_n = es.parameters.get<Real>("necrosis/clearance");
 
-  const Real psi_n = es.parameters.get<Real>("necrosis/clearance"),
-             k_n    = es.parameters.get<Real>("necrosis/slope"),
-             u_n    = es.parameters.get<Real>("necrosis/vsc_threshold");
+  const Real rho_v = es.parameters.get<Real>("vascular/proliferation"),
+             nu_v  = es.parameters.get<Real>("vascular/necrosis_rate");
 
-  const Real rho_v     = es.parameters.get<Real>("vascular/proliferation"),
-             nu_v = es.parameters.get<Real>("vascular/necrosis_rate");
-
-  const Real D_e    = es.parameters.get<Real>("oedema/diffusion"),
+  const Real vsc_e  = es.parameters.get<Real>("oedema/vsc_threshold"),
              rho_e  = es.parameters.get<Real>("oedema/proliferation"),
-             u_e    = es.parameters.get<Real>("oedema/vsc_threshold"),
-             xi_e   = es.parameters.get<Real>("oedema/RT_coeff"),
-             p_RT_e = es.parameters.get<Real>("oedema/RT_exp"),
-             psi_e    = es.parameters.get<Real>("oedema/reabsorption_rate");
+             xi_e   = es.parameters.get<Real>("oedema/RT_inflammation_rate"),
+             c_RT_e = es.parameters.get<Real>("oedema/RT_exp"),
+             psi_e  = es.parameters.get<Real>("oedema/reabsorption_rate");
+  const Real D_e    = es.parameters.get<Real>("oedema/diffusion");
+
+  // initialize the system rhs vector
+  sys_PROTEAS.rhs->zero();
 
   for (const auto & elem : mesh.active_local_element_ptr_range())
     {
       std::vector<dof_id_type> dof_indices;
-      system.get_dof_map().dof_indices(elem, dof_indices);
+      sys_PROTEAS.get_dof_map().dof_indices(elem, dof_indices);
 
-      std::vector<std::vector<dof_id_type>> dof_indices_var(proteas_model_vars);
-      for (unsigned int v=0; v<proteas_model_vars; v++)
-        system.get_dof_map().dof_indices(elem, dof_indices_var[v], v);
+      std::vector<std::vector<dof_id_type>> dof_indices_var(MODEL_vars);
+      for (unsigned int v=0; v<MODEL_vars; v++)
+        sys_PROTEAS.get_dof_map().dof_indices(elem, dof_indices_var[v], v);
 
       std::vector<std::vector<dof_id_type>> dof_indices_AUX_var(AUX_vars);
       for (unsigned int l=0; l<AUX_vars; l++)
-        AUX_system.get_dof_map().dof_indices(elem, dof_indices_AUX_var[l], l);
+        sys_AUX.get_dof_map().dof_indices(elem, dof_indices_AUX_var[l], l);
 
       const unsigned int n_dofs     = dof_indices.size();
       const unsigned int n_var_dofs = dof_indices_var[0].size();
       const unsigned int n_AUX_var_dofs = dof_indices_AUX_var[0].size();
 
-      DenseMatrix<Number> Ke(n_dofs, n_dofs);
-      DenseSubMatrix<Number> Ke_var[proteas_model_vars][proteas_model_vars] =
-      {
-        { DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke) } ,
-        { DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke) } ,
-        { DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke) } ,
-        { DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke) } ,
-        { DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke) }
-      };
-      
-      for (unsigned int i=0; i<proteas_model_vars; i++)
-        for (unsigned int j=0; j<proteas_model_vars; j++)
-          Ke_var[i][j].reposition(i*n_var_dofs, j*n_var_dofs, n_var_dofs, n_var_dofs);
-
       DenseVector<Number> Fe(n_dofs);
-      DenseSubVector<Number> Fe_var[proteas_model_vars] =
+      DenseSubVector<Number> Fe_var[MODEL_vars] =
       {
         DenseSubVector<Number>(Fe), DenseSubVector<Number>(Fe), DenseSubVector<Number>(Fe), DenseSubVector<Number>(Fe), DenseSubVector<Number>(Fe)
       };
-      for (unsigned int i=0; i<proteas_model_vars; i++)
+      for (unsigned int i=0; i<MODEL_vars; i++)
         Fe_var[i].reposition(i*n_var_dofs, n_var_dofs);
 
       fe->reinit(elem);
@@ -453,281 +445,321 @@ void assemble_proteas_model (EquationSystems & es,
 
       for (unsigned int qp=0; qp<qrule.n_points(); qp++)
         {
-          Number hos_old(0.0), tum_old(0.0), nec_old(0.0), vsc_old(0.0), oed_old(0.0);
-          Gradient GRAD_hos_old({0.0, 0.0, 0.0}),GRAD_tum_old({0.0, 0.0, 0.0}),GRAD_oed_old({0.0, 0.0, 0.0});
-          for (std::size_t l=0; l<n_var_dofs; l++)
+
+          Number hos(0.0), tum(0.0), nec(0.0), vsc(0.0), oed(0.0);
+          Gradient GRAD_hos({0.0, 0.0, 0.0}), GRAD_tum({0.0, 0.0, 0.0}), GRAD_oed({0.0, 0.0, 0.0});
+          for (unsigned int l=0; l<n_var_dofs; l++)
             {
-              hos_old += phi[l][qp] * system.old_solution(dof_indices_var[0][l]);
-              tum_old += phi[l][qp] * system.old_solution(dof_indices_var[1][l]);
-              nec_old += phi[l][qp] * system.old_solution(dof_indices_var[2][l]);
-              vsc_old += phi[l][qp] * system.old_solution(dof_indices_var[3][l]);
-              oed_old += phi[l][qp] * system.old_solution(dof_indices_var[4][l]);
-              GRAD_hos_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[0][l]));
-              GRAD_tum_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[1][l]));
-              GRAD_oed_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[4][l]));
+              hos += phi[l][qp] * sys_PROTEAS.current_solution(dof_indices_var[0][l]);
+              tum += phi[l][qp] * sys_PROTEAS.current_solution(dof_indices_var[1][l]);
+              nec += phi[l][qp] * sys_PROTEAS.current_solution(dof_indices_var[2][l]);
+              vsc += phi[l][qp] * sys_PROTEAS.current_solution(dof_indices_var[3][l]);
+              oed += phi[l][qp] * sys_PROTEAS.current_solution(dof_indices_var[4][l]);
+              GRAD_hos.add_scaled(dphi[l][qp], sys_PROTEAS.current_solution(dof_indices_var[0][l]));
+              GRAD_tum.add_scaled(dphi[l][qp], sys_PROTEAS.current_solution(dof_indices_var[1][l]));
+              GRAD_oed.add_scaled(dphi[l][qp], sys_PROTEAS.current_solution(dof_indices_var[4][l]));
             }
 
-          Number HU(0.0);
-          Gradient GRAD_HU({0.0, 0.0, 0.0});
-	  HU += phi_AUX[0][qp] * AUX_system.current_solution(dof_indices_AUX_var[0][0]);
-	  GRAD_HU.add_scaled(dphi_AUX[0][qp], AUX_system.current_solution(dof_indices_AUX_var[0][0]));
-	  {
-	    const Real l2norm = GRAD_HU.norm();
-	    GRAD_HU = l2norm ? GRAD_HU.unit() : Gradient(0.0,0.0,0.0);
-	  }
+          Number HU(0.0), RTD(0.0);
+          Gradient GRAD_HU({0.0, 0.0, 0.0}), GRAD_RTD({0.0, 0.0, 0.0});
+          for (unsigned int l=0; l<n_AUX_var_dofs; l++)
+            {
+              HU  += phi_AUX[l][qp] * sys_AUX.current_solution(dof_indices_AUX_var[0][l]);
+              RTD += phi_AUX[l][qp] * sys_AUX.current_solution(dof_indices_AUX_var[1][l]);
+              GRAD_HU.add_scaled( dphi_AUX[l][qp], sys_AUX.current_solution(dof_indices_AUX_var[0][l]));
+              GRAD_RTD.add_scaled(dphi_AUX[l][qp], sys_AUX.current_solution(dof_indices_AUX_var[1][l]));
+            }
+          {
+            GRAD_HU  = GRAD_HU.norm() >1.0e-6 ? GRAD_HU.unit()  : Gradient(0.0, 0.0, 0.0);
+            GRAD_RTD = GRAD_RTD.norm()>1.0e-6 ? GRAD_RTD.unit() : Gradient(0.0, 0.0, 0.0);
+          }
 
-          Number RTD(0.0);
-          Gradient GRAD_RTD({0.0, 0.0, 0.0});
-	  RTD += phi_AUX[1][qp] * AUX_system.current_solution(dof_indices_AUX_var[0][1]);
-	  GRAD_RTD.add_scaled(dphi_AUX[1][qp], AUX_system.current_solution(dof_indices_AUX_var[0][1]));
-	  {
-	    const Real l2norm = GRAD_RTD.norm();
-	    GRAD_RTD = l2norm ? GRAD_RTD.unit() : Gradient(0.0,0.0,0.0);
-	  }
+          Real Kappa;
+          {
+            const Real T = hos + tum + nec + vsc;
+            Kappa = 1.0 - (T/T_max);
+            Kappa = std::min(std::max(Kappa,0.0),1.0);
+          }
 
-          const Real T = hos_old + tum_old + nec_old + vsc_old;
-          Real Kappa = 1.0 - T/T_max;
-	  Kappa = std::min(std::max(Kappa,0.0),1.0);
-	  const Real dKappa = -1.0/T_max;
-	  
-          const Real host_prol = rho_h * Kappa * heaviside(vsc_old - u_h);
-          const Real dhost_prol = rho_h * dKappa * heaviside(vsc_old - u_h);
-          const Real host_RT_death = delta_h * (1.0 - exp(- a_RT_h*RTD - b_RT_h*pow2(RTD)));
-          const Real host_nec = nu_h * nec_old;
+          Real Radio;
+          if      (RTD<RT_min) Radio = 0.0;
+          else if (RTD>RT_max) Radio = 1.0;
+          else Radio = 1.0 - exp(-RTD*(a_RT_h+b_RT_h*RTD));
 
-          const Real tumour_prol = rho_c * Kappa * heaviside(vsc_old - u_c);
-          const Real dtumour_prol = rho_c * dKappa * heaviside(vsc_old - u_c);
-          const Real tumour_RT_death = delta_c * (1.0 - exp(- a_RT_c*RTD - b_RT_c*pow2(RTD)));
-          const Real tumour_nec = nu_c * nec_old;
+          const Real Omicron = std::pow(RTD/RT_max, c_RT_e);
 
-          const Real nec_prol = nu_h * hos_old + nu_c * tum_old + nu_v * vsc_old;
-          const Real nec_clearance = psi_n*(1.0 - tanh(k_n*vsc_old - u_n));
-          const Real dnec_clearance_dv = psi_n* -k_n / (cosh(k_n*vsc_old - u_n) * cosh(k_n*vsc_old - u_n));
-
-          const Real vsc_prol = rho_v * Kappa * tum_old;
-          const Real dvsc_prol = rho_v * dKappa * tum_old;
-          const Real vsc_nec = nu_v * nec_old;
-
-          const Real oed_prol = rho_e * tum_old * (1.0-tum_old);
-          const Real doed_prol_dc = rho_e * (1.0-2.0*tum_old);
-          const Real oed_RT = xi_e * std::pow(RTD / RT_max,p_RT_e);
-          const Real oed_clearance = psi_e * (1.0 - heaviside(vsc_old - u_e));
-
-          // RHS contribution
-          for (std::size_t i=0; i<n_var_dofs; i++)
+          for (unsigned int i=0; i<n_var_dofs; i++)
             {
               // Host (healthy) cells
               Fe_var[0](i) += JxW[qp]*(
-                                        hos_old * phi[i][qp]
-                                      + DT_2*(
-                                             + host_prol * hos_old * (1.0-hos_old) * phi[i][qp]
-                                             - host_RT_death * hos_old * phi[i][qp]
-                                             - host_nec * hos_old * phi[i][qp]
-                                             )
+                                      //
+                                        rho_h * heaviside(vsc-vsc_h) * Kappa * hos * (1.0-hos) * phi[i][qp]
+                                      //
+                                      - delta_h * Radio * hos * phi[i][qp]
+                                      //
+                                      - nu_h * nec * hos * phi[i][qp]
                                       );
               // Tumour cells
               Fe_var[1](i) += JxW[qp]*(
-                                        tum_old * phi[i][qp]
-                                      + DT_2*(
-                                             - D_c * Kappa * (GRAD_tum_old * dphi[i][qp])
-                                             - D_c_h * Kappa * (GRAD_hos_old * tum_old * dphi[i][qp])
-                                             + tumour_prol * tum_old * phi[i][qp]
-                                             - tumour_RT_death * tum_old * phi[i][qp]
-                                             - tumour_nec * tum_old * phi[i][qp]
-                                             )
+                                      //
+                                        rho_c * heaviside(vsc-vsc_c) * Kappa * tum * phi[i][qp]
+                                      //
+                                      - delta_c * Radio * tum * phi[i][qp]
+                                      //
+                                      - nu_c * nec * tum * phi[i][qp]
+                                      //
+                                      - D_c * Kappa * (GRAD_tum * dphi[i][qp])
+                                      //
+                                      - D_c_h * Kappa * (GRAD_hos * tum * dphi[i][qp])
                                       );
               // Necrotic cells
               Fe_var[2](i) += JxW[qp]*(
-                                        nec_old * phi[i][qp]
-                                      + DT_2*(
-                                             + nec_prol * nec_old * phi[i][qp]
-                                             - nec_clearance * nec_old * phi[i][qp]
-                                             )
+                                      //
+                                        nu_h * nec * hos * phi[i][qp]
+                                      + nu_c * nec * tum * phi[i][qp]
+                                      + nu_v * nec * vsc * phi[i][qp]
+                                      //
+                                      - psi_n * (1.0-tanh(vsc_k*vsc-vsc_n)) * nec * phi[i][qp]
                                       );
               // Vascular cells
               Fe_var[3](i) += JxW[qp]*(
-                                        vsc_old * phi[i][qp]
-                                      + DT_2*(
-                                             + vsc_prol * vsc_old * phi[i][qp]
-                                             - vsc_nec * vsc_old * phi[i][qp]
-                                             )
+                                      //
+                                        rho_v * Kappa * tum * vsc * phi[i][qp]
+                                      //
+                                      - nu_v * nec * vsc * phi[i][qp]
                                       );
               // Oedema
               Fe_var[4](i) += JxW[qp]*(
-                                        oed_old * phi[i][qp] // capacity term
-                                      + DT_2*(
-                                             - D_e * (GRAD_oed_old * dphi[i][qp])
-                                             + oed_prol * oed_old * phi[i][qp]
-                                             - oed_RT * oed_old * phi[i][qp]
-                                             - oed_clearance * oed_old * phi[i][qp]
-                                             )
+                                      //
+                                        rho_e * tum * (1.0-tum) * oed * phi[i][qp]
+                                      //
+                                      - xi_e * Omicron * oed * phi[i][qp]
+                                      //
+                                      - psi_e * (1.0-heaviside(vsc-vsc_e)) * oed * phi[i][qp]
+                                      //
+                                      - D_e * (GRAD_oed * dphi[i][qp])
                                       );
-	      
-              for (std::size_t j=0; j<n_var_dofs; j++)
-                {
-                  // Matrix contribution
-
-                  // Host (healthy) cells
-                  Ke_var[0][0](i,j) += JxW[qp]*(
-                                                 phi[j][qp] * phi[i][qp]
-                                               - DT_2*(
-						      + dhost_prol * hos_old * (1.0-hos_old) * phi[j][qp] * phi[i][qp]
-						      + host_prol * (1.0-2.0*hos_old) * phi[j][qp] *phi[i][qp]
-                                                      - host_RT_death * phi[j][qp] * phi[i][qp]
-                                                      - host_nec * phi[j][qp] * phi[i][qp]
-                                                      )
-                                               );
-                  Ke_var[0][1](i,j) += JxW[qp]*(
-                                               - DT_2*(
-                                                      + dhost_prol * hos_old * (1.0-hos_old) * phi[j][qp] * phi[i][qp]
-                                                      )
-                                               );
-                  Ke_var[0][2](i,j) += JxW[qp]*(
-                                               - DT_2*(
-                                                      + dhost_prol * hos_old * (1.0-hos_old) * phi[j][qp] * phi[i][qp]
-                                                      - nu_h * phi[j][qp] * hos_old * phi[i][qp]
-                                                      )
-                                               );
-                  Ke_var[0][3](i,j) += JxW[qp]*(
-                                               - DT_2*(
-                                                      + dhost_prol * hos_old * (1.0-hos_old) * phi[j][qp] * phi[i][qp]
-                                                      )
-                                               );
-                  // Tumour cells
-                  Ke_var[1][0](i,j) += JxW[qp]*(
-                                               - DT_2*(
-                                                      - D_c * dKappa * phi[j][qp] * (GRAD_tum_old * dphi[i][qp])
-                                                      - D_c_h * dKappa * phi[j][qp] * (GRAD_hos_old * tum_old * dphi[i][qp])
-                                                      - D_c_h * Kappa * (dphi[j][qp] * tum_old * dphi[i][qp])
-                                                      + dtumour_prol * phi[j][qp] * tum_old * phi[i][qp]
-                                                      )
-                                               );
-                  Ke_var[1][1](i,j) += JxW[qp]*(
-                                                 phi[j][qp] * phi[i][qp]
-                                               - DT_2*(
-                                                      - D_c * dKappa * phi[j][qp] * (GRAD_tum_old * dphi[i][qp])
-                                                      - D_c * Kappa * (dphi[j][qp] * dphi[i][qp])
-                                                      + dtumour_prol * phi[j][qp] * tum_old * phi[i][qp]
-                                                      + tumour_prol * phi[j][qp] * phi[i][qp]
-                                                      - tumour_RT_death * phi[j][qp] * phi[i][qp]
-                                                      - tumour_nec * phi[j][qp] * phi[i][qp]
-                                                      )
-                                               );
-                  Ke_var[1][2](i,j) += JxW[qp]*(
-                                               - DT_2*(
-                                                      - D_c * dKappa * phi[j][qp] * (GRAD_tum_old * dphi[i][qp])
-                                                      - D_c_h * dKappa * phi[j][qp] * (GRAD_hos_old * tum_old * dphi[i][qp])
-                                                      + dtumour_prol * phi[j][qp] * tum_old * phi[i][qp]
-                                                      - nu_c * phi[j][qp] * tum_old * phi[i][qp]
-                                                      )
-                                               );
-                  Ke_var[1][3](i,j) += JxW[qp]*(
-                                               - DT_2*(
-                                                      - D_c * dKappa * phi[j][qp] * (GRAD_tum_old * dphi[i][qp])
-                                                      - D_c_h * dKappa * phi[j][qp] * (GRAD_hos_old * tum_old * dphi[i][qp])
-                                                      + dtumour_prol * phi[j][qp] * tum_old * phi[i][qp]
-                                                      )
-                                               );
-                  // Necrotic cells
-                  Ke_var[2][0](i,j) += JxW[qp]*(
-                                               - DT_2*(
-                                                      + nu_h * phi[j][qp] * nec_old * phi[i][qp]
-                                                      )
-                                               );
-                  Ke_var[2][1](i,j) += JxW[qp]*(
-                                               - DT_2*(
-                                                      + nu_c * phi[j][qp] * nec_old * phi[i][qp]
-                                                      )
-                                               );
-                  Ke_var[2][2](i,j) += JxW[qp]*(
-                                                 phi[j][qp] * phi[i][qp]
-                                               - DT_2*(
-                                                      + nec_prol * phi[j][qp] * phi[i][qp]
-                                                      - nec_clearance * phi[j][qp] * phi[i][qp]
-                                                      )
-                                               );
-                  Ke_var[2][3](i,j) += JxW[qp]*(
-                                               - DT_2*(
-                                                      + nu_v * phi[j][qp] * nec_old * phi[i][qp]
-                                                      - dnec_clearance_dv * phi[j][qp] * nec_old * phi[i][qp]
-                                                      )
-                                               );
-                  // Vascular cells
-                  Ke_var[3][0](i,j) += JxW[qp]*(
-                                               - DT_2*(
-                                                      + dvsc_prol * phi[j][qp] * vsc_old * phi[i][qp]
-                                                      )
-                                               );
-                  Ke_var[3][1](i,j) += JxW[qp]*(
-                                               - DT_2*(
-                                                      + dvsc_prol * phi[j][qp] * vsc_old * phi[i][qp]
-                                                      )
-                                               );
-                  Ke_var[3][2](i,j) += JxW[qp]*(
-                                               - DT_2*(
-                                                      + dvsc_prol * phi[j][qp] * vsc_old * phi[i][qp]
-                                                      - nu_v * phi[j][qp] * vsc_old * phi[i][qp]
-                                                      )
-                                               );
-                  Ke_var[3][3](i,j) += JxW[qp]*(
-                                                 phi[j][qp] * phi[i][qp]
-                                               - DT_2*(
-                                                      + dvsc_prol * phi[j][qp] * vsc_old * phi[i][qp]
-                                                      + vsc_prol * phi[j][qp] * phi[i][qp]
-                                                      - vsc_nec * phi[j][qp] * phi[i][qp]
-                                                      )
-                                               );
-                  // Oedema
-                  Ke_var[4][1](i,j) += JxW[qp]*(
-                                               - DT_2*(
-                                                      + doed_prol_dc * phi[j][qp] * oed_old * phi[i][qp]
-                                                      )
-                                               );
-                  Ke_var[4][4](i,j) += JxW[qp]*(
-                                                 phi[j][qp] * phi[i][qp]
-                                               - DT_2*(
-                                                      - D_e * (dphi[j][qp] * dphi[i][qp])
-                                                      + oed_prol * phi[j][qp] * phi[i][qp]
-                                                      - oed_RT * phi[j][qp] * phi[i][qp]
-                                                      - oed_clearance * phi[j][qp] * phi[i][qp]
-                                                      )
-                                               );
-
-                }
             }
         }
 
-      system.get_dof_map().constrain_element_matrix_and_vector(Ke, Fe, dof_indices);
+      sys_PROTEAS.get_dof_map().constrain_element_vector(Fe, dof_indices);
 
-      system.get_system_matrix().add_matrix(Ke, dof_indices);
-      system.rhs->add_vector(Fe, dof_indices);
+      sys_PROTEAS.rhs->add_vector(Fe, dof_indices);
     }
+
+  const NumericVector<Number> & diag_v =
+    sys_PROTEAS.get_vector("reciprocal_vector_of_diagonal_capacity_matrix");
+
+  // close the system rhs vector first
+  sys_PROTEAS.rhs->close();
+  // calculate the effective rhs vector
+  sys_PROTEAS.get_vector("rhs").zero();
+  sys_PROTEAS.get_vector("rhs").pointwise_mult(*sys_PROTEAS.rhs, diag_v);
+  sys_PROTEAS.get_vector("rhs").close();
+
+  // ...done
+}
+
+void explicit_solve (EquationSystems & es)
+{
+  const MeshBase & mesh = es.get_mesh();
+  libmesh_assert_equal_to(3, mesh.mesh_dimension());
+
+  const unsigned int dim = mesh.mesh_dimension();
+  const int MODEL_vars = 5;
+
+  LinearImplicitSystem & sys_PROTEAS =
+    es.get_system<LinearImplicitSystem>("PROTEAS");
+  libmesh_assert_equal_to(sys_PROTEAS.n_vars(), MODEL_vars);
+
+  ExplicitSystem & sys_PROTEAS_dt =
+    es.get_system<ExplicitSystem>("PROTEAS (rate)");
+
+  const Real reciprocal_dt = 1.0 / es.parameters.get<Real>("time_step");
+
+  // update the previous solution
+  sys_PROTEAS.get_vector("previous_solution").zero();
+  sys_PROTEAS.get_vector("previous_solution").add(*sys_PROTEAS.solution);
+  sys_PROTEAS.get_vector("previous_solution").close();
+  // update the current solution
+  sys_PROTEAS.solution->add(sys_PROTEAS.get_vector("rhs"));
+  sys_PROTEAS.solution->close();
+  // update the entire system
+  sys_PROTEAS.update();
+
+  // update the rate solution
+  sys_PROTEAS_dt.solution->zero();
+  sys_PROTEAS_dt.solution->add( reciprocal_dt, *sys_PROTEAS.solution);
+  sys_PROTEAS_dt.solution->add(-reciprocal_dt, sys_PROTEAS.get_vector("previous_solution"));
+  sys_PROTEAS_dt.solution->close();
+  // update the entire system
+  sys_PROTEAS_dt.update();
+
+  // ...done
+}
+
+void initial_aux_data (EquationSystems & es,
+                       const std::string & libmesh_dbg_var(system_name))
+{
+  libmesh_assert_equal_to(system_name, "AUX");
+
+  const MeshBase & mesh = es.get_mesh();
+  libmesh_assert_equal_to(3, mesh.mesh_dimension());
+
+  const unsigned int dim = mesh.mesh_dimension();
+  const int AUX_vars = 2;
+
+  ExplicitSystem & sys_AUX =
+    es.get_system<ExplicitSystem>("AUX");
+  libmesh_assert_equal_to(sys_AUX.n_vars(), AUX_vars);
+
+  std::ifstream fin(es.parameters.get<std::string>("input_nodal_aux"));
+  if (! fin.is_open())
+    {
+      std::cout << "ERROR: Failed to open nodal aux input file "
+                << es.parameters.get<std::string>("input_nodal_aux") << std::endl;
+      exit(1);
+    }
+
+  for (const auto & node : mesh.node_ptr_range())
+    {
+      Real HU_, RTD_;
+
+      std::string line;
+      while ( std::getline(fin,line) )
+        {
+          // ignore empty lines and lines starting with '#'
+          if (line.empty() || line[0] == '#') continue;
+          // read all 2 species in consequtive order
+          std::istringstream iss(line);
+          if (iss >> HU_ >> RTD_)
+            {
+              break;
+            }
+          else
+            {
+              std::cout << "ERROR: Nodal input aux file failed to read line: " << line << std::endl;
+              exit(1);
+            }
+          //
+        }
+
+      const dof_id_type idof[] = { node->dof_number(sys_AUX.number(), 0, 0),
+                                   node->dof_number(sys_AUX.number(), 1, 0) };
+      libmesh_assert( node->n_comp(sys_AUX.number(), 0) == 1 );
+      libmesh_assert( node->n_comp(sys_AUX.number(), 1) == 1 );
+
+      sys_AUX.solution->set(idof[0], HU_);
+      sys_AUX.solution->set(idof[1], RTD_);
+    }
+
+  // close solution vector and update the system
+  sys_AUX.solution->close();
+  sys_AUX.update();
+
+  // ...done
+}
+
+void initial_proteas_model (EquationSystems & es,
+                            const std::string & libmesh_dbg_var(system_name))
+{
+  libmesh_assert_equal_to(system_name, "PROTEAS");
+
+  const MeshBase & mesh = es.get_mesh();
+  libmesh_assert_equal_to(3, mesh.mesh_dimension());
+
+  const unsigned int dim = mesh.mesh_dimension();
+  const int MODEL_vars = 5;
+
+  ExplicitSystem & sys_PROTEAS =
+    es.get_system<ExplicitSystem>("PROTEAS");
+  libmesh_assert_equal_to(sys_PROTEAS.n_vars(), MODEL_vars);
+
+  std::ifstream fin(es.parameters.get<std::string>("input_nodal"));
+  if (! fin.is_open())
+    {
+      std::cout << "ERROR: Failed to open nodal input file "
+                << es.parameters.get<std::string>("input_nodal") << std::endl;
+      exit(1);
+    }
+
+  for (const auto & node : mesh.node_ptr_range())
+    {
+      Real hos_, tum_, nec_, vsc_, oed_;
+
+      std::string line;
+      while (std::getline(fin,line))
+        {
+          // ignore empty lines and lines starting with '#'
+          if (line.empty() || line[0] == '#') continue;
+          // read all 5 species in consequtive order
+          std::istringstream iss(line);
+          if (iss >> hos_ >> tum_ >> nec_ >> vsc_ >> oed_)
+            {
+              break;
+            }
+          else
+            {
+              std::cout << "ERROR: Nodal input file failed to read line: " << line << std::endl;
+              exit(1);
+            }
+          //
+        }
+
+      const dof_id_type idof[] = { node->dof_number(sys_PROTEAS.number(), 0, 0) ,
+                                   node->dof_number(sys_PROTEAS.number(), 1, 0) ,
+                                   node->dof_number(sys_PROTEAS.number(), 2, 0) ,
+                                   node->dof_number(sys_PROTEAS.number(), 3, 0) ,
+                                   node->dof_number(sys_PROTEAS.number(), 4, 0) };
+
+      libmesh_assert( node->n_comp(sys_PROTEAS.number(), 0) == 1 );
+      libmesh_assert( node->n_comp(sys_PROTEAS.number(), 1) == 1 );
+      libmesh_assert( node->n_comp(sys_PROTEAS.number(), 2) == 1 );
+      libmesh_assert( node->n_comp(sys_PROTEAS.number(), 3) == 1 );
+      libmesh_assert( node->n_comp(sys_PROTEAS.number(), 4) == 1 );
+
+      sys_PROTEAS.solution->set(idof[0], hos_);
+      sys_PROTEAS.solution->set(idof[1], tum_);
+      sys_PROTEAS.solution->set(idof[2], nec_);
+      sys_PROTEAS.solution->set(idof[3], vsc_);
+      sys_PROTEAS.solution->set(idof[4], oed_);
+    }
+
+  fin.close();
+  // close solution vector and update the system
+  sys_PROTEAS.solution->close();
+  sys_PROTEAS.update();
+
+  // ...done
 }
 
 void check_solution (EquationSystems & es)
 {
-  const MeshBase& mesh = es.get_mesh();
-  libmesh_assert_equal_to(mesh.mesh_dimension(), 3);
+  const MeshBase & mesh = es.get_mesh();
+  libmesh_assert_equal_to(3, mesh.mesh_dimension());
 
-  TransientLinearImplicitSystem & system =
-    es.get_system<TransientLinearImplicitSystem>("PROTEAS_model");
-  libmesh_assert_equal_to(system.n_vars(), 5);
+  const unsigned int dim = mesh.mesh_dimension();
+  const int MODEL_vars = 5;
+
+  ExplicitSystem & sys_PROTEAS =
+    es.get_system<ExplicitSystem>("PROTEAS");
+  libmesh_assert_equal_to(sys_PROTEAS.n_vars(), MODEL_vars);
 
   std::vector<Number> soln;
-  system.update_global_solution(soln);
+  sys_PROTEAS.update_global_solution(soln);
 
   for (const auto & node : mesh.node_ptr_range())
     {
-      const dof_id_type idof[] = { node->dof_number(system.number(), 0, 0) ,
-                                   node->dof_number(system.number(), 1, 0) ,
-                                   node->dof_number(system.number(), 2, 0) ,
-                                   node->dof_number(system.number(), 3, 0) ,
-                                   node->dof_number(system.number(), 4, 0) };
-      libmesh_assert( node->n_comp(system.number(), 0) == 1 );
-      libmesh_assert( node->n_comp(system.number(), 1) == 1 );
-      libmesh_assert( node->n_comp(system.number(), 2) == 1 );
-      libmesh_assert( node->n_comp(system.number(), 3) == 1 );
-      libmesh_assert( node->n_comp(system.number(), 4) == 1 );
+      const dof_id_type idof[] = { node->dof_number(sys_PROTEAS.number(), 0, 0) ,
+                                   node->dof_number(sys_PROTEAS.number(), 1, 0) ,
+                                   node->dof_number(sys_PROTEAS.number(), 2, 0) ,
+                                   node->dof_number(sys_PROTEAS.number(), 3, 0) ,
+                                   node->dof_number(sys_PROTEAS.number(), 4, 0) };
+      libmesh_assert( node->n_comp(sys_PROTEAS.number(), 0) == 1 );
+      libmesh_assert( node->n_comp(sys_PROTEAS.number(), 1) == 1 );
+      libmesh_assert( node->n_comp(sys_PROTEAS.number(), 2) == 1 );
+      libmesh_assert( node->n_comp(sys_PROTEAS.number(), 3) == 1 );
+      libmesh_assert( node->n_comp(sys_PROTEAS.number(), 4) == 1 );
 
       Real hos_, tum_, nec_, vsc_, oed_;
       hos_ = soln[idof[0]]; if (hos_<0.0) hos_ = 0.0;
@@ -736,24 +768,22 @@ void check_solution (EquationSystems & es)
       vsc_ = soln[idof[3]]; if (vsc_<0.0) vsc_ = 0.0;
       oed_ = soln[idof[4]]; if (oed_<0.0) oed_ = 0.0;
 
-      system.solution->set(idof[0], hos_);
-      system.solution->set(idof[1], tum_);
-      system.solution->set(idof[2], nec_);
-      system.solution->set(idof[3], vsc_);
-      system.solution->set(idof[4], oed_);
+      sys_PROTEAS.solution->set(idof[0], hos_);
+      sys_PROTEAS.solution->set(idof[1], tum_);
+      sys_PROTEAS.solution->set(idof[2], nec_);
+      sys_PROTEAS.solution->set(idof[3], vsc_);
+      sys_PROTEAS.solution->set(idof[4], oed_);
     }
 
   // close solution vector and update the system
-  system.solution->close();
-  system.update();
+  sys_PROTEAS.solution->close();
+  sys_PROTEAS.update();
+
   // ...done
 }
 
-void adaptive_mesh_refinement (EquationSystems & es, MeshRefinement & amr)
+void adaptive_remeshing (EquationSystems & es, MeshRefinement & amr)
 {
-  TransientLinearImplicitSystem & system =
-    es.get_system<TransientLinearImplicitSystem>("PROTEAS_model");
-  libmesh_assert_equal_to(system.n_vars(), 6);
 
   // ...done
 }
