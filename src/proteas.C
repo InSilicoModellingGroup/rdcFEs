@@ -387,14 +387,14 @@ void calc_rhs_vector (EquationSystems & es)
              delta_h = es.parameters.get<Real>("host/RT_death_rate"),
              a_RT_h  = es.parameters.get<Real>("host/RT_exp_a"),
              b_RT_h  = es.parameters.get<Real>("host/RT_exp_b"),
-             nu_h    = es.parameters.get<Real>("host/necrosis_rate");
+             alpha_h = es.parameters.get<Real>("host/necrosis_rate");
 
   const Real vsc_c   = es.parameters.get<Real>("tumour/vsc_threshold"),
              rho_c   = es.parameters.get<Real>("tumour/proliferation"),
              delta_c = es.parameters.get<Real>("tumour/RT_death_rate"),
              a_RT_c  = es.parameters.get<Real>("tumour/RT_exp_a"),
              b_RT_c  = es.parameters.get<Real>("tumour/RT_exp_b"),
-             nu_c    = es.parameters.get<Real>("tumour/necrosis_rate");
+             alpha_c = es.parameters.get<Real>("tumour/necrosis_rate");
   const Real D_c     = es.parameters.get<Real>("tumour/diffusion"),
              D_c_h   = es.parameters.get<Real>("tumour/diffusion_host");
 
@@ -402,14 +402,14 @@ void calc_rhs_vector (EquationSystems & es)
              vsc_k  = es.parameters.get<Real>("necrosis/vsc_slope"),
              iota_n = es.parameters.get<Real>("necrosis/clearance_rate");
 
-  const Real rho_v = es.parameters.get<Real>("vascular/proliferation"),
-             nu_v  = es.parameters.get<Real>("vascular/necrosis_rate");
+  const Real rho_v   = es.parameters.get<Real>("vascular/proliferation"),
+             alpha_v = es.parameters.get<Real>("vascular/necrosis_rate");
 
   const Real vsc_e  = es.parameters.get<Real>("oedema/vsc_threshold"),
              rho_e  = es.parameters.get<Real>("oedema/proliferation"),
-             xi_e   = es.parameters.get<Real>("oedema/RT_inflammation_rate"),
+             chi_e  = es.parameters.get<Real>("oedema/RT_inflammation_rate"),
              c_RT_e = es.parameters.get<Real>("oedema/RT_exp"),
-             psi_e  = es.parameters.get<Real>("oedema/reabsorption_rate");
+             iota_e = es.parameters.get<Real>("oedema/reabsorption_rate");
   const Real D_e    = es.parameters.get<Real>("oedema/diffusion");
 
   // initialize the system rhs vector
@@ -500,7 +500,7 @@ void calc_rhs_vector (EquationSystems & es)
                                       //
                                       - delta_h * Radio * hos * phi[i][qp]
                                       //
-                                      - nu_h * nec * hos * phi[i][qp]
+                                      - alpha_h * nec * hos * phi[i][qp]
                                       );
               // Tumour cells
               Fe_var[1](i) += JxW[qp]*(
@@ -509,7 +509,7 @@ void calc_rhs_vector (EquationSystems & es)
                                       //
                                       - delta_c * Radio * tum * phi[i][qp]
                                       //
-                                      - nu_c * nec * tum * phi[i][qp]
+                                      - alpha_c * nec * tum * phi[i][qp]
                                       //
                                       - D_c * Kappa * (GRAD_tum * dphi[i][qp])
                                       //
@@ -518,9 +518,9 @@ void calc_rhs_vector (EquationSystems & es)
               // Necrotic cells
               Fe_var[2](i) += JxW[qp]*(
                                       //
-                                        nu_h * nec * hos * phi[i][qp]
-                                      + nu_c * nec * tum * phi[i][qp]
-                                      + nu_v * nec * vsc * phi[i][qp]
+                                        alpha_h * nec * hos * phi[i][qp]
+                                      + alpha_c * nec * tum * phi[i][qp]
+                                      + alpha_v * nec * vsc * phi[i][qp]
                                       //
                                       - iota_n * (1.0-tanh(vsc_k*(vsc-vsc_n))) * nec * phi[i][qp]
                                       );
@@ -529,16 +529,16 @@ void calc_rhs_vector (EquationSystems & es)
                                       //
                                         rho_v * Kappa * tum * vsc * phi[i][qp]
                                       //
-                                      - nu_v * nec * vsc * phi[i][qp]
+                                      - alpha_v * nec * vsc * phi[i][qp]
                                       );
               // Oedema
               Fe_var[4](i) += JxW[qp]*(
                                       //
                                         rho_e * tum * (1.0-tum) * oed * phi[i][qp]
                                       //
-                                      - xi_e * Omicron * oed * phi[i][qp]
+                                      - chi_e * Omicron * oed * phi[i][qp]
                                       //
-                                      - psi_e * (1.0-heaviside(vsc-vsc_e)) * oed * phi[i][qp]
+                                      - iota_e * (1.0-heaviside(vsc-vsc_e)) * oed * phi[i][qp]
                                       //
                                       - D_e * (GRAD_oed * dphi[i][qp])
                                       );
