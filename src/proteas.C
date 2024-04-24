@@ -459,6 +459,9 @@ void calc_rhs_vector (EquationSystems & es)
               GRAD_tum.add_scaled(dphi[l][qp], sys_PROTEAS.current_solution(dof_indices_var[1][l]));
               GRAD_oed.add_scaled(dphi[l][qp], sys_PROTEAS.current_solution(dof_indices_var[4][l]));
             }
+          {
+            GRAD_hos = GRAD_hos.norm()>1.0e-6 ? GRAD_hos.unit() : Gradient(0.0, 0.0, 0.0);
+          }
 
           Number HU(0.0), RTD(0.0);
           Gradient GRAD_HU({0.0, 0.0, 0.0}), GRAD_RTD({0.0, 0.0, 0.0});
