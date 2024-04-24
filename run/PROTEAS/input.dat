@@ -34,7 +34,7 @@ tumour/diffusion_host = 0.
 #
 necrosis/vsc_threshold = 0.05
 necrosis/slope = 0.
-necrosis/clearance = 1.0e-5
+necrosis/clearance_rate = 1.0e-5
 #
 vascular/proliferation = 0.
 vascular/necrosis_rate = 0.

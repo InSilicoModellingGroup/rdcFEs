@@ -216,7 +216,7 @@ void input (const std::string & file_name, EquationSystems & es)
 
     name = "necrosis/vsc_threshold"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "necrosis/vsc_slope"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "necrosis/clearance"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "necrosis/clearance_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
 
     name = "vascular/proliferation"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "vascular/necrosis_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
@@ -398,9 +398,9 @@ void calc_rhs_vector (EquationSystems & es)
   const Real D_c     = es.parameters.get<Real>("tumour/diffusion"),
              D_c_h   = es.parameters.get<Real>("tumour/diffusion_host");
 
-  const Real vsc_n = es.parameters.get<Real>("necrosis/vsc_threshold"),
-             vsc_k = es.parameters.get<Real>("necrosis/vsc_slope"),
-             psi_n = es.parameters.get<Real>("necrosis/clearance");
+  const Real vsc_n  = es.parameters.get<Real>("necrosis/vsc_threshold"),
+             vsc_k  = es.parameters.get<Real>("necrosis/vsc_slope"),
+             iota_n = es.parameters.get<Real>("necrosis/clearance_rate");
 
   const Real rho_v = es.parameters.get<Real>("vascular/proliferation"),
              nu_v  = es.parameters.get<Real>("vascular/necrosis_rate");
@@ -519,7 +519,7 @@ void calc_rhs_vector (EquationSystems & es)
                                       + nu_c * nec * tum * phi[i][qp]
                                       + nu_v * nec * vsc * phi[i][qp]
                                       //
-                                      - psi_n * (1.0-tanh(vsc_k*vsc-vsc_n)) * nec * phi[i][qp]
+                                      - iota_n * (1.0-tanh(vsc_k*(vsc-vsc_n))) * nec * phi[i][qp]
                                       );
               // Vascular cells
               Fe_var[3](i) += JxW[qp]*(
