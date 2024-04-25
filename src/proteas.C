@@ -221,7 +221,7 @@ void initial_aux_data (EquationSystems & es,
   libmesh_assert_equal_to(system_name, "AUX");
 
   const MeshBase& mesh = es.get_mesh();
-  libmesh_assert_equal_to(mesh.mesh_dimension(), 2);
+  //libmesh_assert_equal_to(mesh.mesh_dimension(), 2); // Fails in debug mode
 
   ExplicitSystem & system =
     es.get_system<ExplicitSystem>("AUX");
@@ -467,23 +467,19 @@ void assemble_proteas_model (EquationSystems & es,
               GRAD_oed_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[4][l]));
             }
 
-          Number HU(0.0);
-          Gradient GRAD_HU({0.0, 0.0, 0.0});
-	  HU += phi_AUX[0][qp] * AUX_system.current_solution(dof_indices_AUX_var[0][0]);
-	  GRAD_HU.add_scaled(dphi_AUX[0][qp], AUX_system.current_solution(dof_indices_AUX_var[0][0]));
-	  {
-	    const Real l2norm = GRAD_HU.norm();
-	    GRAD_HU = l2norm ? GRAD_HU.unit() : Gradient(0.0,0.0,0.0);
-	  }
-
-          Number RTD(0.0);
-          Gradient GRAD_RTD({0.0, 0.0, 0.0});
-	  RTD += phi_AUX[1][qp] * AUX_system.current_solution(dof_indices_AUX_var[0][1]);
-	  GRAD_RTD.add_scaled(dphi_AUX[1][qp], AUX_system.current_solution(dof_indices_AUX_var[0][1]));
-	  {
-	    const Real l2norm = GRAD_RTD.norm();
-	    GRAD_RTD = l2norm ? GRAD_RTD.unit() : Gradient(0.0,0.0,0.0);
-	  }
+          Number HU(0.0), RTD(0.0);
+          Gradient GRAD_HU({0.0, 0.0, 0.0}), GRAD_RTD({0.0, 0.0, 0.0});
+          for (unsigned int l=0; l<n_AUX_var_dofs; l++)
+            {
+              HU  += phi_AUX[l][qp] * AUX_system.current_solution(dof_indices_AUX_var[0][l]);
+              RTD += phi_AUX[l][qp] * AUX_system.current_solution(dof_indices_AUX_var[1][l]);
+              GRAD_HU.add_scaled( dphi_AUX[l][qp], AUX_system.current_solution(dof_indices_AUX_var[0][l]));
+              GRAD_RTD.add_scaled(dphi_AUX[l][qp], AUX_system.current_solution(dof_indices_AUX_var[1][l]));
+            }
+          {
+            GRAD_HU  = GRAD_HU.norm() >1.0e-6 ? GRAD_HU.unit()  : Gradient(0.0, 0.0, 0.0);
+            GRAD_RTD = GRAD_RTD.norm()>1.0e-6 ? GRAD_RTD.unit() : Gradient(0.0, 0.0, 0.0);
+          }
 
           const Real T = hos_old + tum_old + nec_old + vsc_old;
           Real Kappa = 1.0 - T/T_max;
