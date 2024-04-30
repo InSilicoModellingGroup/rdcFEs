@@ -194,6 +194,7 @@ void input (const std::string & file_name, EquationSystems & es)
 
   {
     name = "cells/total_capacity"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "host/total_capacity"; es.parameters.set<Real>(name) = in(name, 1.0);
 
     name = "radiotherapy/min_dosage"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "radiotherapy/max_dosage"; es.parameters.set<Real>(name) = in(name, 1.0);
@@ -381,6 +382,7 @@ void calc_rhs_vector (EquationSystems & es)
   const Real T_max = es.parameters.get<Real>("cells/total_capacity");
   const Real RT_min = es.parameters.get<Real>("radiotherapy/min_dosage"),
              RT_max = es.parameters.get<Real>("radiotherapy/max_dosage");
+  const Real h_max = es.parameters.get<Real>("host/total_capacity");
 
   const Real vsc_h   = es.parameters.get<Real>("host/vsc_threshold"),
              rho_h   = es.parameters.get<Real>("host/proliferation"),
@@ -496,7 +498,7 @@ void calc_rhs_vector (EquationSystems & es)
               // Host (healthy) cells
               Fe_var[0](i) += JxW[qp]*(
                                       //
-                                        rho_h * heaviside(vsc-vsc_h) * Kappa * hos * (1.0-hos) * phi[i][qp]
+                                        rho_h * heaviside(vsc-vsc_h) * (4.0/h_max) * hos * (1.0-hos/h_max) * phi[i][qp]
                                       //
                                       - delta_h * Radio * hos * phi[i][qp]
                                       //
