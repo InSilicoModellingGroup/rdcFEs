@@ -536,7 +536,7 @@ void calc_rhs_vector (EquationSystems & es)
                                       //
                                         rho_e * tum * (1.0-tum) * oed * phi[i][qp]
                                       //
-                                      - chi_e * Omicron * oed * phi[i][qp]
+                                      + chi_e * Omicron * oed * phi[i][qp]
                                       //
                                       - iota_e * (1.0-heaviside(vsc-vsc_e)) * oed * phi[i][qp]
                                       //
