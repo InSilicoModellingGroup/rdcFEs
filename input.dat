@@ -1,0 +1,47 @@
+#
+directory = 'RP01_modelUpdate_inc3_adj_1'
+input_GMSH      = 'initial_data/RP01/RP01-labeled_brain.msh'
+input_nodal     = 'initial_data/RP01/RP01-nodal_field.dat'
+input_nodal_aux = 'initial_data/RP01/RP01-nodal_field_aux.dat'
+#
+time_step_number = 3600
+time_step = 0.1
+output_step = 300
+#
+linear_solver_tolerance = 1.0e-6
+linear_solver_maximum_iterations = 5000
+#
+cells/total_capacity = 1.0
+#
+radiotherapy/min_dosage =  0.0
+radiotherapy/max_dosage = 25.2249
+#
+host/total_capacity = 0.7
+host/vsc_threshold = 0.03
+host/proliferation = 5.7e-2
+host/RT_death_rate = 1.0e-3
+host/RT_exp_a = 0.006
+host/RT_exp_b = 0.0006
+host/necrosis_rate = 0.0056
+#
+tumour/vsc_threshold = 0.03
+tumour/proliferation = 4.0e-2
+tumour/RT_death_rate = 4.0e-2
+tumour/RT_exp_a = 0.06
+tumour/RT_exp_b = 0.006
+tumour/necrosis_rate = 0.0011
+tumour/diffusion = 1.0
+tumour/haptotaxis = 1.5
+#
+necrosis/clearance_rate = 5.0e-2
+#
+vascular/proliferation = 0.02
+vascular/necrosis_rate = 0.00444
+vascular/scale_value = 0.03
+#
+oedema/RT_inflammation_rate = 0.1
+oedema/proliferation = 0.3e-2
+oedema/RT_exp = 5
+oedema/clearance_rate = 2.5
+oedema/diffusion = 8.5e-3
+#

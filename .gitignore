@@ -35,7 +35,6 @@ rdcFEs.*
 *.app
 
 # Simulation I/O data files
-*.dat
 *.msh
 *.m
 job_output.txt
@@ -52,3 +51,5 @@ PI*
 *.pvd
 *.pvsm
 
+# Output
+RP*/

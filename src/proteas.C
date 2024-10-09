@@ -213,20 +213,18 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "tumour/RT_exp_b"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "tumour/necrosis_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "tumour/diffusion"; es.parameters.set<Real>(name) = in(name, 0.0);
-    name = "tumour/diffusion_host"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "tumour/haptotaxis"; es.parameters.set<Real>(name) = in(name, 0.0);
 
-    name = "necrosis/vsc_threshold"; es.parameters.set<Real>(name) = in(name, 0.0);
-    name = "necrosis/vsc_slope"; es.parameters.set<Real>(name) = in(name, 1.0);
     name = "necrosis/clearance_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
 
     name = "vascular/proliferation"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "vascular/necrosis_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "vascular/scale_value"; es.parameters.set<Real>(name) = in(name, 0.0);
 
-    name = "oedema/vsc_threshold"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "oedema/proliferation"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "oedema/RT_inflammation_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "oedema/RT_exp"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "oedema/reabsorption_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "oedema/clearance_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "oedema/diffusion"; es.parameters.set<Real>(name) = in(name, 0.0);
   }
 
@@ -398,20 +396,18 @@ void calc_rhs_vector (EquationSystems & es)
              b_RT_c  = es.parameters.get<Real>("tumour/RT_exp_b"),
              alpha_c = es.parameters.get<Real>("tumour/necrosis_rate");
   const Real D_c     = es.parameters.get<Real>("tumour/diffusion"),
-             D_c_h   = es.parameters.get<Real>("tumour/diffusion_host");
+             H_c   = es.parameters.get<Real>("tumour/haptotaxis");
 
-  const Real vsc_n  = es.parameters.get<Real>("necrosis/vsc_threshold"),
-             vsc_k  = es.parameters.get<Real>("necrosis/vsc_slope"),
-             iota_n = es.parameters.get<Real>("necrosis/clearance_rate");
+  const Real psi_n = es.parameters.get<Real>("necrosis/clearance_rate");
 
   const Real rho_v   = es.parameters.get<Real>("vascular/proliferation"),
-             alpha_v = es.parameters.get<Real>("vascular/necrosis_rate");
+             alpha_v = es.parameters.get<Real>("vascular/necrosis_rate"),
+             vsc0 = es.parameters.get<Real>("vascular/scale_value");
 
-  const Real vsc_e  = es.parameters.get<Real>("oedema/vsc_threshold"),
-             rho_e  = es.parameters.get<Real>("oedema/proliferation"),
+  const Real rho_e  = es.parameters.get<Real>("oedema/proliferation"),
              chi_e  = es.parameters.get<Real>("oedema/RT_inflammation_rate"),
              c_RT_e = es.parameters.get<Real>("oedema/RT_exp"),
-             iota_e = es.parameters.get<Real>("oedema/reabsorption_rate");
+             psi_e = es.parameters.get<Real>("oedema/clearance_rate");
   const Real D_e    = es.parameters.get<Real>("oedema/diffusion");
 
   // initialize the system rhs vector
@@ -498,7 +494,7 @@ void calc_rhs_vector (EquationSystems & es)
               // Host (healthy) cells
               Fe_var[0](i) += JxW[qp]*(
                                       //
-                                        rho_h * heaviside(vsc-vsc_h) * (4.0/h_max) * hos * (1.0-hos/h_max) * phi[i][qp]
+                                        rho_h * heaviside(vsc-vsc_h) * hos * (1.0-hos/h_max) * phi[i][qp]
                                       //
                                       - delta_h * Radio * hos * phi[i][qp]
                                       //
@@ -515,7 +511,7 @@ void calc_rhs_vector (EquationSystems & es)
                                       //
                                       - D_c * Kappa * (GRAD_tum * dphi[i][qp])
                                       //
-                                      - D_c_h * Kappa * (GRAD_hos * tum * dphi[i][qp])
+                                      - H_c * Kappa * (GRAD_hos * tum * dphi[i][qp])
                                       );
               // Necrotic cells
               Fe_var[2](i) += JxW[qp]*(
@@ -524,7 +520,7 @@ void calc_rhs_vector (EquationSystems & es)
                                       + alpha_c * nec * tum * phi[i][qp]
                                       + alpha_v * nec * vsc * phi[i][qp]
                                       //
-                                      - iota_n * (1.0-tanh(vsc_k*(vsc-vsc_n))) * nec * phi[i][qp]
+                                      - psi_n * tanh(vsc/vsc0) * nec * phi[i][qp]
                                       );
               // Vascular cells
               Fe_var[3](i) += JxW[qp]*(
@@ -536,11 +532,11 @@ void calc_rhs_vector (EquationSystems & es)
               // Oedema
               Fe_var[4](i) += JxW[qp]*(
                                       //
-                                        rho_e * tum * (1.0-tum) * oed * phi[i][qp]
+                                        rho_e * tum * oed * phi[i][qp]
                                       //
                                       + chi_e * Omicron * oed * phi[i][qp]
                                       //
-                                      - iota_e * (1.0-heaviside(vsc-vsc_e)) * oed * phi[i][qp]
+                                      - psi_e * tanh(vsc/vsc0) * oed * phi[i][qp]
                                       //
                                       - D_e * (GRAD_oed * dphi[i][qp])
                                       );
