@@ -1,5 +1,5 @@
 #
-directory = 'RP01_modelUpdate_inc4'
+directory = 'RP01_modelUpdate_inc4_RT-time-depen'
 input_GMSH      = 'initial_data/RP01/RP01-labeled_brain.msh'
 input_nodal     = 'initial_data/RP01/RP01-nodal_field.dat'
 input_nodal_aux = 'initial_data/RP01/RP01-nodal_field_aux.dat'
@@ -15,6 +15,7 @@ cells/total_capacity = 1.0
 #
 radiotherapy/min_dosage =  0.0
 radiotherapy/max_dosage = 25.2249
+radiotherapy/theta = 1.0e-2
 #
 host/total_capacity = 0.7
 host/vsc_threshold = 0.03

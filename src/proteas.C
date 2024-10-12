@@ -78,10 +78,14 @@ void proteas (LibMeshInit & init, const std::string &inputFile)
 
   calc_capacity_matrix(es);
 
+  const Real thetaRT = es.parameters.get<Real>("radiotherapy/theta");
+  const Real timestep = es.parameters.get<Real>("time_step");
+  const Real expTerm = exp(-thetaRT*timestep);
+
   for (int t=1; t<=n_t_step; t++)
     {
       // update the simulation time
-      time += es.parameters.get<Real>("time_step");
+      time += timestep;
 
       libMesh::out << " === Step " << std::setw(4) << t << "/" << std::setw(4) << n_t_step
                    << " (Time=" << std::setw(9) << time << ") === \r" << std::flush;
@@ -98,6 +102,40 @@ void proteas (LibMeshInit & init, const std::string &inputFile)
       // save current solution
       if (otp.end()!=otp.find(t))
         paraview.update_pvd(es, t);
+
+      /*** Modifying the RTD values with exponential decay ***/
+      // Ensure the solution vector is finalized before modification
+      sys_AUX.solution->close();
+      // Get the mesh
+      const MeshBase &mesh = sys_AUX.get_mesh();
+      // Get the DOF map which maps the DOF at a node to the index in the solution vector 
+      const DofMap &dof_map = sys_AUX.get_dof_map();
+      // Get the variable number for RTD (second variable -> variable_id = 1)
+      const unsigned int rtd_var_id = sys_AUX.variable_number("RTD");
+      // Vector to store the DOF indices for a node
+      std::vector<dof_id_type> dof_indices;
+
+      // Loop over all local nodes
+      for (const auto &node : mesh.local_node_ptr_range())
+	{
+	  // Get the DOF indices for the RTD variable at this node
+	  dof_map.dof_indices(node, dof_indices, rtd_var_id);
+
+	  // Loop over the DOFs for the RTD variable
+	  for (const auto &dof : dof_indices)
+	    {
+	      // Retrieve the current value at this DOF
+	      Real current_value = sys_AUX.solution->el(dof);
+	      // Modify value with exponential decay
+	      Real modified_value = current_value*expTerm;
+
+	      // Set the modified value
+	      sys_AUX.solution->set(dof, modified_value);
+	    }
+	}
+      // Finalize the solution vector after modification
+      sys_AUX.solution->close();
+      /*** End of RTD modification ***/
     }
 
   // ...done
@@ -198,6 +236,7 @@ void input (const std::string & file_name, EquationSystems & es)
 
     name = "radiotherapy/min_dosage"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "radiotherapy/max_dosage"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "radiotherapy/theta"; es.parameters.set<Real>(name) = in(name, 1.0);
 
     name = "host/vsc_threshold"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "host/proliferation"; es.parameters.set<Real>(name) = in(name, 0.0);
