@@ -205,6 +205,7 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "host/RT_exp_a"; es.parameters.set<Real>(name) = in(name, 1.0);
     name = "host/RT_exp_b"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "host/necrosis_rate"; es.parameters.set<Real>(name) = in(name, 1.0);
+    name = "host/diffusion"; es.parameters.set<Real>(name) = in(name, 0.0);
 
     name = "tumour/vsc_threshold"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "tumour/proliferation"; es.parameters.set<Real>(name) = in(name, 0.0);
@@ -220,6 +221,7 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "vascular/proliferation"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "vascular/necrosis_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "vascular/scale_value"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "vascular/diffusion"; es.parameters.set<Real>(name) = in(name, 0.0);
 
     name = "oedema/proliferation"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "oedema/RT_inflammation_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
@@ -388,6 +390,7 @@ void calc_rhs_vector (EquationSystems & es)
              a_RT_h  = es.parameters.get<Real>("host/RT_exp_a"),
              b_RT_h  = es.parameters.get<Real>("host/RT_exp_b"),
              alpha_h = es.parameters.get<Real>("host/necrosis_rate");
+  const Real D_h     = es.parameters.get<Real>("host/diffusion");
 
   const Real vsc_c   = es.parameters.get<Real>("tumour/vsc_threshold"),
              rho_c   = es.parameters.get<Real>("tumour/proliferation"),
@@ -402,7 +405,8 @@ void calc_rhs_vector (EquationSystems & es)
 
   const Real rho_v   = es.parameters.get<Real>("vascular/proliferation"),
              alpha_v = es.parameters.get<Real>("vascular/necrosis_rate"),
-             vsc0 = es.parameters.get<Real>("vascular/scale_value");
+             vsc0    = es.parameters.get<Real>("vascular/scale_value");
+  const Real D_v     = es.parameters.get<Real>("vascular/diffusion");
 
   const Real rho_e  = es.parameters.get<Real>("oedema/proliferation"),
              chi_e  = es.parameters.get<Real>("oedema/RT_inflammation_rate"),
@@ -445,7 +449,7 @@ void calc_rhs_vector (EquationSystems & es)
         {
 
           Number hos(0.0), tum(0.0), nec(0.0), vsc(0.0), oed(0.0);
-          Gradient GRAD_hos({0.0, 0.0, 0.0}), GRAD_tum({0.0, 0.0, 0.0}), GRAD_oed({0.0, 0.0, 0.0});
+          Gradient GRAD_hos({0.0, 0.0, 0.0}), GRAD_tum({0.0, 0.0, 0.0}), GRAD_vsc({0.0, 0.0, 0.0}), GRAD_oed({0.0, 0.0, 0.0});
           for (unsigned int l=0; l<n_var_dofs; l++)
             {
               hos += phi[l][qp] * sys_PROTEAS.current_solution(dof_indices_var[0][l]);
@@ -455,6 +459,7 @@ void calc_rhs_vector (EquationSystems & es)
               oed += phi[l][qp] * sys_PROTEAS.current_solution(dof_indices_var[4][l]);
               GRAD_hos.add_scaled(dphi[l][qp], sys_PROTEAS.current_solution(dof_indices_var[0][l]));
               GRAD_tum.add_scaled(dphi[l][qp], sys_PROTEAS.current_solution(dof_indices_var[1][l]));
+              GRAD_vsc.add_scaled(dphi[l][qp], sys_PROTEAS.current_solution(dof_indices_var[3][l]));
               GRAD_oed.add_scaled(dphi[l][qp], sys_PROTEAS.current_solution(dof_indices_var[4][l]));
             }
           {
@@ -499,6 +504,8 @@ void calc_rhs_vector (EquationSystems & es)
                                       - delta_h * Radio * hos * phi[i][qp]
                                       //
                                       - alpha_h * nec * hos * phi[i][qp]
+				      //
+                                      - D_h * Kappa * (GRAD_hos * dphi[i][qp])
                                       );
               // Tumour cells
               Fe_var[1](i) += JxW[qp]*(
@@ -528,6 +535,8 @@ void calc_rhs_vector (EquationSystems & es)
                                         rho_v * Kappa * tum * vsc * phi[i][qp]
                                       //
                                       - alpha_v * nec * vsc * phi[i][qp]
+				      //
+                                      - D_v * Kappa * (GRAD_vsc * dphi[i][qp])
                                       );
               // Oedema
               Fe_var[4](i) += JxW[qp]*(
