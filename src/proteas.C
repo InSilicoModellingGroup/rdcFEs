@@ -511,7 +511,7 @@ void calc_rhs_vector (EquationSystems & es)
                                       //
                                       - D_c * Kappa * (GRAD_tum * dphi[i][qp])
                                       //
-                                      - H_c * Kappa * (GRAD_hos * tum * dphi[i][qp])
+                                      + H_c * Kappa * (GRAD_hos * tum * dphi[i][qp])
                                       );
               // Necrotic cells
               Fe_var[2](i) += JxW[qp]*(

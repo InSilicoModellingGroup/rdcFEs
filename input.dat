@@ -1,5 +1,5 @@
 #
-directory = 'RP01_modelUpdate_inc3_adj_1'
+directory = 'RP01_modelUpdate_inc3_adj_1_haptSign_adj_2'
 input_GMSH      = 'initial_data/RP01/RP01-labeled_brain.msh'
 input_nodal     = 'initial_data/RP01/RP01-nodal_field.dat'
 input_nodal_aux = 'initial_data/RP01/RP01-nodal_field_aux.dat'
@@ -30,8 +30,8 @@ tumour/RT_death_rate = 4.0e-2
 tumour/RT_exp_a = 0.06
 tumour/RT_exp_b = 0.006
 tumour/necrosis_rate = 0.0011
-tumour/diffusion = 1.0
-tumour/haptotaxis = 1.5
+tumour/diffusion = 1e-1
+tumour/haptotaxis = 1e-2
 #
 necrosis/clearance_rate = 5.0e-2
 #
