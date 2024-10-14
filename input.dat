@@ -1,5 +1,5 @@
 #
-directory = 'RP01_modelUpdate_inc4_RT-time-depen'
+directory = 'RP01_modelUpdate_inc4_RT-time-depen_adj1'
 input_GMSH      = 'initial_data/RP01/RP01-labeled_brain.msh'
 input_nodal     = 'initial_data/RP01/RP01-nodal_field.dat'
 input_nodal_aux = 'initial_data/RP01/RP01-nodal_field_aux.dat'
@@ -27,24 +27,27 @@ host/necrosis_rate = 0.0056
 host/diffusion = 1e-2
 #
 tumour/vsc_threshold = 0.03
-tumour/proliferation = 4.0e-2
-tumour/RT_death_rate = 4.0e-2
+tumour/proliferation = 0.2e-2
+tumour/RT_death_rate = 8.0e-2
 tumour/RT_exp_a = 0.06
 tumour/RT_exp_b = 0.006
-tumour/necrosis_rate = 0.0011
+tumour/necrosis_rate = 1.0e-3
 tumour/diffusion = 1e-1
 tumour/haptotaxis = 1e-2
+tumour/threshold = 0.1
 #
 necrosis/clearance_rate = 5.0e-2
+necrosis/threshold = 0.1
 #
 vascular/proliferation = 0.02
 vascular/necrosis_rate = 0.00444
 vascular/scale_value = 0.03
 vascular/diffusion = 1e-1
 #
-oedema/RT_inflammation_rate = 8.0e-3
+oedema/RT_inflammation_rate = 1.0e-2
 oedema/proliferation = 3.0e-3
 oedema/RT_exp = 5
-oedema/clearance_rate = 5.0e-3
+oedema/clearance_rate = 10.0e-3
 oedema/diffusion = 3.0e-2
+oedema/threshold = 0.1
 #

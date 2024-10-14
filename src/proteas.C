@@ -12,6 +12,7 @@ static void initial_aux_data (EquationSystems & , const std::string & );
 static void initial_proteas_model (EquationSystems & , const std::string & );
 static void check_solution (EquationSystems & );
 static void adaptive_remeshing (EquationSystems & , MeshRefinement & );
+static void save_solution (std::ofstream & , EquationSystems & );
 
 extern PerfLog plog;
 static Parallel::Communicator * pm_ptr = 0;
@@ -67,6 +68,7 @@ void proteas (LibMeshInit & init, const std::string &inputFile)
     csv.open(es.parameters.get<std::string>("output_CSV"));
 
   // save initial solution
+  save_solution(csv, es);
   paraview.update_pvd(es);
 
   const std::set<int> otp = export_integers(es.parameters.get<std::string>("output_time_points"));
@@ -86,6 +88,7 @@ void proteas (LibMeshInit & init, const std::string &inputFile)
     {
       // update the simulation time
       time += timestep;
+      sys_PROTEAS.time = es.parameters.set<Real> ("time") = time;
 
       libMesh::out << " === Step " << std::setw(4) << t << "/" << std::setw(4) << n_t_step
                    << " (Time=" << std::setw(9) << time << ") === \r" << std::flush;
@@ -101,7 +104,10 @@ void proteas (LibMeshInit & init, const std::string &inputFile)
 
       // save current solution
       if (otp.end()!=otp.find(t))
-        paraview.update_pvd(es, t);
+	{
+          save_solution(csv, es);
+	  paraview.update_pvd(es, t);
+	}
 
       /*** Modifying the RTD values with exponential decay ***/
       // Ensure the solution vector is finalized before modification
@@ -254,8 +260,10 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "tumour/necrosis_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "tumour/diffusion"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "tumour/haptotaxis"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "tumour/threshold"; es.parameters.set<Real>(name) = in(name, 0.0);
 
     name = "necrosis/clearance_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "necrosis/threshold"; es.parameters.set<Real>(name) = in(name, 0.0);
 
     name = "vascular/proliferation"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "vascular/necrosis_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
@@ -267,6 +275,7 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "oedema/RT_exp"; es.parameters.set<Real>(name) = in(name, 1.0);
     name = "oedema/clearance_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "oedema/diffusion"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "oedema/threshold"; es.parameters.set<Real>(name) = in(name, 0.0);
   }
 
   es.parameters.print();
@@ -724,6 +733,8 @@ void initial_proteas_model (EquationSystems & es,
     es.get_system<ExplicitSystem>("PROTEAS");
   libmesh_assert_equal_to(sys_PROTEAS.n_vars(), MODEL_vars);
 
+  sys_PROTEAS.time = es.parameters.set<Real> ("time") = 0.0;
+
   std::ifstream fin(es.parameters.get<std::string>("input_nodal"));
   if (! fin.is_open())
     {
@@ -834,5 +845,108 @@ void check_solution (EquationSystems & es)
 void adaptive_remeshing (EquationSystems & es, MeshRefinement & amr)
 {
 
+  // ...done
+}
+
+void save_solution (std::ofstream & csv, EquationSystems & es)
+{
+  const MeshBase& mesh = es.get_mesh();
+  libmesh_assert_equal_to(mesh.mesh_dimension(), 3);
+
+  const TransientLinearImplicitSystem & system =
+    es.get_system<TransientLinearImplicitSystem>("PROTEAS");
+  libmesh_assert_equal_to(system.n_vars(), 3);
+
+  std::vector<Number> soln;
+  system.update_global_solution(soln);
+
+  const Real tum_thres = es.parameters.get<Real>("tumour/threshold"),
+             nec_thres = es.parameters.get<Real>("necrosis/threshold"),
+             oed_thres = es.parameters.get<Real>("oedema/threshold");
+
+  pm_ptr->barrier();
+
+  if (0==global_processor_id())
+    {
+      /*
+      // write the header of the CSV file
+      if (0.0==system.time)
+        {
+          // write the header of the CSV file
+          csv << "\"Time\",\"Tumour_Volume\",\"Necrosis_Volume\", \"Oedema_Volume\"" << std::endl;
+        }
+      */
+
+      Real tum_volume = 0.0, nec_volume = 0.0, oed_volume = 0.0;
+
+      for (const auto & elem : mesh.active_element_ptr_range())
+        {
+          std::vector<std::vector<dof_id_type>> dof_indices_var(5);
+          for (unsigned int v=0; v<5; v++)
+            system.get_dof_map().dof_indices(elem, dof_indices_var[v], v);
+          libmesh_assert(elem->n_nodes() == dof_indices_var[0].size());
+          libmesh_assert(elem->n_nodes() == dof_indices_var[1].size());
+          libmesh_assert(elem->n_nodes() == dof_indices_var[2].size());
+          libmesh_assert(elem->n_nodes() == dof_indices_var[3].size());
+          libmesh_assert(elem->n_nodes() == dof_indices_var[4].size());
+
+          std::vector<Real> tum_, nec_, oed_;
+          for (unsigned int l=0; l<elem->n_nodes(); l++)
+            {
+              tum_.push_back( soln[dof_indices_var[1][l]] );
+              nec_.push_back( soln[dof_indices_var[2][l]] );
+              oed_.push_back( soln[dof_indices_var[4][l]] );
+            }
+
+          {
+            bool do_include = true;
+            for (unsigned int l=0; l<elem->n_nodes() && do_include; l++)
+              {
+                if ( tum_[l] < tum_thres ) {
+		  do_include = false;
+		  break;
+		}
+              }
+            if (do_include)
+              tum_volume += elem->volume();
+          }
+
+          {
+            bool do_include = true;
+            for (unsigned int l=0; l<elem->n_nodes() && do_include; l++)
+              {
+                if ( nec_[l] < nec_thres ) {
+		  do_include = false;
+		  break;
+		}
+              }
+            if (do_include)
+              nec_volume += elem->volume();
+          }
+
+          {
+            bool do_include = true;
+            for (unsigned int l=0; l<elem->n_nodes() && do_include; l++)
+              {
+                if ( oed_[l] < oed_thres ) {
+		  do_include = false;
+		  break;
+		}
+              }
+            if (do_include)
+              oed_volume += elem->volume();
+          }
+          // ...end of active finite elements loop
+        }
+
+      // save the data in the CSV file
+      csv << system.time << std::flush;
+      csv << ',' << tum_volume
+          << ',' << nec_volume
+          << ',' << oed_volume << std::flush;
+      csv << std::endl;
+    }
+
+  pm_ptr->barrier();
   // ...done
 }
