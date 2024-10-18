@@ -549,7 +549,7 @@ void calc_rhs_vector (EquationSystems & es)
               // Host (healthy) cells
               Fe_var[0](i) += JxW[qp]*(
                                       //
-                                        rho_h * heaviside(vsc-vsc_h) * hos * (1.0-hos/h_max) * phi[i][qp]
+                                        rho_h * tanh(vsc/vsc0) * hos * (1.0-hos/h_max) * phi[i][qp]
                                       //
                                       - delta_h * Radio * hos * phi[i][qp]
                                       //
@@ -560,7 +560,7 @@ void calc_rhs_vector (EquationSystems & es)
               // Tumour cells
               Fe_var[1](i) += JxW[qp]*(
                                       //
-                                        rho_c * heaviside(vsc-vsc_c) * Kappa * tum * phi[i][qp]
+                                        rho_c * tanh(vsc/vsc0) * Kappa * tum * phi[i][qp]
                                       //
                                       - delta_c * Radio * tum * phi[i][qp]
                                       //

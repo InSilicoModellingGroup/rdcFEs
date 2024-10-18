@@ -1,5 +1,5 @@
 #
-directory = 'RP01-dense_test_newVscDeath-10'
+directory = 'RP01-dense_test_hostumTanhVsc'
 input_GMSH      = 'initial_data/RP01/RPRO-01a_Brain-labeled_brain.msh'
 input_nodal     = 'initial_data/RP01/RPRO-01a_Brain-nodal_field.dat'
 input_nodal_aux = 'initial_data/RP01/RPRO-01a_Brain-nodal_field_aux.dat'
