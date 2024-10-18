@@ -1,12 +1,12 @@
 #
-directory = 'RP01_modelUpdate_inc4_RT-time-depen_adj1'
-input_GMSH      = 'initial_data/RP01/RP01-labeled_brain.msh'
-input_nodal     = 'initial_data/RP01/RP01-nodal_field.dat'
-input_nodal_aux = 'initial_data/RP01/RP01-nodal_field_aux.dat'
+directory = 'RP01-dense_test_newVscDeath-10'
+input_GMSH      = 'initial_data/RP01/RPRO-01a_Brain-labeled_brain.msh'
+input_nodal     = 'initial_data/RP01/RPRO-01a_Brain-nodal_field.dat'
+input_nodal_aux = 'initial_data/RP01/RPRO-01a_Brain-nodal_field_aux.dat'
 #
-time_step_number = 3600
-time_step = 0.1
-output_step = 300
+time_step_number = 720
+time_step = 0.5
+output_step = 60
 #
 linear_solver_tolerance = 1.0e-6
 linear_solver_maximum_iterations = 5000
@@ -41,8 +41,9 @@ necrosis/threshold = 0.1
 #
 vascular/proliferation = 0.02
 vascular/necrosis_rate = 0.00444
-vascular/scale_value = 0.03
+vascular/homeostatic_value = 0.03
 vascular/diffusion = 1e-1
+vascular/death_rate = 10
 #
 oedema/RT_inflammation_rate = 1.0e-2
 oedema/proliferation = 3.0e-3

@@ -267,8 +267,9 @@ void input (const std::string & file_name, EquationSystems & es)
 
     name = "vascular/proliferation"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "vascular/necrosis_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
-    name = "vascular/scale_value"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "vascular/homeostatic_value"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "vascular/diffusion"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "vascular/death_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
 
     name = "oedema/proliferation"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "oedema/RT_inflammation_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
@@ -453,7 +454,8 @@ void calc_rhs_vector (EquationSystems & es)
 
   const Real rho_v   = es.parameters.get<Real>("vascular/proliferation"),
              alpha_v = es.parameters.get<Real>("vascular/necrosis_rate"),
-             vsc0    = es.parameters.get<Real>("vascular/scale_value");
+             vsc0    = es.parameters.get<Real>("vascular/homeostatic_value"),
+             delta_v = es.parameters.get<Real>("vascular/death_rate");
   const Real D_v     = es.parameters.get<Real>("vascular/diffusion");
 
   const Real rho_e  = es.parameters.get<Real>("oedema/proliferation"),
@@ -583,6 +585,8 @@ void calc_rhs_vector (EquationSystems & es)
                                         rho_v * Kappa * tum * vsc * phi[i][qp]
                                       //
                                       - alpha_v * nec * vsc * phi[i][qp]
+				      //
+				      - delta_v * pow(vsc - vsc0, 3) * phi[i][qp]
 				      //
                                       - D_v * Kappa * (GRAD_vsc * dphi[i][qp])
                                       );
