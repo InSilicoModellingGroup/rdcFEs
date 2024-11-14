@@ -1,5 +1,5 @@
 #
-directory = 'RP01-dense_test_hostumTanhVsc'
+directory = 'RP01-newModel-test'
 input_GMSH      = 'initial_data/RP01/RPRO-01a_Brain-labeled_brain.msh'
 input_nodal     = 'initial_data/RP01/RPRO-01a_Brain-nodal_field.dat'
 input_nodal_aux = 'initial_data/RP01/RPRO-01a_Brain-nodal_field_aux.dat'
@@ -13,37 +13,20 @@ linear_solver_maximum_iterations = 5000
 #
 cells/total_capacity = 1.0
 #
-radiotherapy/min_dosage =  0.0
 radiotherapy/max_dosage = 25.2249
 radiotherapy/theta = 1.0e-2
 #
-host/total_capacity = 0.7
-host/vsc_threshold = 0.03
-host/proliferation = 2.5e-2
-host/RT_death_rate = 1.0e-3
-host/RT_exp_a = 0.006
-host/RT_exp_b = 0.0006
-host/necrosis_rate = 0.0056
-host/diffusion = 1e-2
-#
-tumour/vsc_threshold = 0.03
+tumour/diffusion = 1e-1
 tumour/proliferation = 0.2e-2
+tumour/alpha = 1.0
 tumour/RT_death_rate = 8.0e-2
 tumour/RT_exp_a = 0.06
 tumour/RT_exp_b = 0.006
-tumour/necrosis_rate = 1.0e-3
-tumour/diffusion = 1e-1
-tumour/haptotaxis = 1e-2
 tumour/threshold = 0.1
 #
+necrosis/alpha_n = 0.2e-3
 necrosis/clearance_rate = 5.0e-2
 necrosis/threshold = 0.1
-#
-vascular/proliferation = 0.02
-vascular/necrosis_rate = 0.00444
-vascular/homeostatic_value = 0.03
-vascular/diffusion = 1e-1
-vascular/death_rate = 10
 #
 oedema/RT_inflammation_rate = 1.0e-2
 oedema/proliferation = 3.0e-3
