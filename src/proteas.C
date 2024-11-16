@@ -239,13 +239,13 @@ void input (const std::string & file_name, EquationSystems & es)
 
     name = "tumour/diffusion"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "tumour/proliferation"; es.parameters.set<Real>(name) = in(name, 0.0);
-    name = "tumour/alpha"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "tumour/lambda"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "tumour/RT_death_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "tumour/RT_exp_a"; es.parameters.set<Real>(name) = in(name, 1.0);
     name = "tumour/RT_exp_b"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "tumour/threshold"; es.parameters.set<Real>(name) = in(name, 0.0);
 
-    name = "necrosis/alpha_n"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "necrosis/proliferation"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "necrosis/clearance_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "necrosis/threshold"; es.parameters.set<Real>(name) = in(name, 0.0);
 
@@ -403,21 +403,21 @@ void calc_rhs_vector (EquationSystems & es)
   const Real T_max = es.parameters.get<Real>("cells/total_capacity");
   const Real RT_max = es.parameters.get<Real>("radiotherapy/max_dosage");
 
-  const Real D_c     = es.parameters.get<Real>("tumour/diffusion"),
+  const Real d_c     = es.parameters.get<Real>("tumour/diffusion"),
              rho_c   = es.parameters.get<Real>("tumour/proliferation"),
+             lambda  = es.parameters.get<Real>("tumour/lambda"),
              delta_c = es.parameters.get<Real>("tumour/RT_death_rate"),
              a_RT_c  = es.parameters.get<Real>("tumour/RT_exp_a"),
-             b_RT_c  = es.parameters.get<Real>("tumour/RT_exp_b"),
-             alpha = es.parameters.get<Real>("tumour/alpha");
+             b_RT_c  = es.parameters.get<Real>("tumour/RT_exp_b");
 
-  const Real alpha_n = es.parameters.get<Real>("necrosis/clearance_rate"),
+  const Real rho_n = es.parameters.get<Real>("necrosis/proliferation"),
              psi_n = es.parameters.get<Real>("necrosis/clearance_rate");
 
   const Real rho_e  = es.parameters.get<Real>("oedema/proliferation"),
              chi_e  = es.parameters.get<Real>("oedema/RT_inflammation_rate"),
              c_RT_e = es.parameters.get<Real>("oedema/RT_exp"),
              psi_e = es.parameters.get<Real>("oedema/clearance_rate");
-  const Real D_e    = es.parameters.get<Real>("oedema/diffusion");
+  const Real d_e    = es.parameters.get<Real>("oedema/diffusion");
 
   // initialize the system rhs vector
   sys_PROTEAS.rhs->zero();
@@ -492,16 +492,16 @@ void calc_rhs_vector (EquationSystems & es)
               // Tumour cells
               Fe_var[0](i) += JxW[qp]*(
                                       //
-				       rho_c * tum * Kappa * tum * (tum + alpha) * phi[i][qp]
+				       rho_c * tum * Kappa * tum * (tum + lambda) * phi[i][qp]
                                       //
                                       - delta_c * Radio * tum * phi[i][qp]
                                       //
-                                      - D_c * Kappa * (GRAD_tum * dphi[i][qp])
+                                      - d_c * Kappa * (GRAD_tum * dphi[i][qp])
                                       );
               // Necrotic cells
               Fe_var[1](i) += JxW[qp]*(
                                       //
-				       alpha_n * tum * Tau * (tum + alpha) * phi[i][qp]
+				       rho_n * tum * Tau * (tum + lambda) * phi[i][qp]
                                       //
                                       - psi_n *  nec * phi[i][qp]
                                       );
@@ -514,7 +514,7 @@ void calc_rhs_vector (EquationSystems & es)
                                       //
                                       - psi_e *  oed * phi[i][qp]
                                       //
-                                      - D_e * (GRAD_oed * dphi[i][qp])
+                                      - d_e * (GRAD_oed * dphi[i][qp])
                                       );
             }
         }

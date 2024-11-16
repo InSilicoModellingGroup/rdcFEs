@@ -18,13 +18,13 @@ radiotherapy/theta = 1.0e-2
 #
 tumour/diffusion = 1e-1
 tumour/proliferation = 0.2e-2
-tumour/alpha = 1.0
+tumour/lambda = 1.0
 tumour/RT_death_rate = 8.0e-2
 tumour/RT_exp_a = 0.06
 tumour/RT_exp_b = 0.006
 tumour/threshold = 0.1
 #
-necrosis/alpha_n = 0.2e-3
+necrosis/proliferation = 0.2e-3
 necrosis/clearance_rate = 5.0e-2
 necrosis/threshold = 0.1
 #
