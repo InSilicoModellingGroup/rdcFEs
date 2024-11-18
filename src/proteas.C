@@ -239,7 +239,7 @@ void input (const std::string & file_name, EquationSystems & es)
 
     name = "tumour/diffusion"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "tumour/proliferation"; es.parameters.set<Real>(name) = in(name, 0.0);
-    name = "tumour/lambda"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "tumour/alpha"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "tumour/RT_death_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
     name = "tumour/RT_exp_a"; es.parameters.set<Real>(name) = in(name, 1.0);
     name = "tumour/RT_exp_b"; es.parameters.set<Real>(name) = in(name, 0.0);
@@ -405,7 +405,7 @@ void calc_rhs_vector (EquationSystems & es)
 
   const Real d_c     = es.parameters.get<Real>("tumour/diffusion"),
              rho_c   = es.parameters.get<Real>("tumour/proliferation"),
-             lambda  = es.parameters.get<Real>("tumour/lambda"),
+             alpha  = es.parameters.get<Real>("tumour/alpha"),
              delta_c = es.parameters.get<Real>("tumour/RT_death_rate"),
              a_RT_c  = es.parameters.get<Real>("tumour/RT_exp_a"),
              b_RT_c  = es.parameters.get<Real>("tumour/RT_exp_b");
@@ -492,7 +492,7 @@ void calc_rhs_vector (EquationSystems & es)
               // Tumour cells
               Fe_var[0](i) += JxW[qp]*(
                                       //
-				       rho_c * tum * Kappa * tum * (tum + lambda) * phi[i][qp]
+				       rho_c * tum * Kappa * tum * (tum + alpha) * phi[i][qp]
                                       //
                                       - delta_c * Radio * tum * phi[i][qp]
                                       //
@@ -501,7 +501,7 @@ void calc_rhs_vector (EquationSystems & es)
               // Necrotic cells
               Fe_var[1](i) += JxW[qp]*(
                                       //
-				       rho_n * tum * Tau * (tum + lambda) * phi[i][qp]
+				       rho_n * tum * Tau * (tum + alpha) * phi[i][qp]
                                       //
                                       - psi_n *  nec * phi[i][qp]
                                       );
