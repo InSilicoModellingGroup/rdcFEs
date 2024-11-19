@@ -109,7 +109,7 @@ void input (const std::string & file_name, EquationSystems & es)
     std::system(std::string("mkdir "+DIR).c_str());
   // create a copy of the input file containing all model parameters
   if (0==global_processor_id())
-    std::system(std::string("cp "+file_name+" "+DIR+file_name).c_str());
+    std::system(std::string("cp "+file_name+" "+DIR+"/input.dat").c_str());
 
   name = "input_GMSH";
   es.parameters.set<std::string>(name) = in(name, "input.msh");
