@@ -1,10 +1,16 @@
 #include "./utils.h"
 
+#include "libmesh/mesh_refinement.h"
+#include "libmesh/error_vector.h"
+#include "libmesh/kelly_error_estimator.h"
+
 static void input (const std::string & , EquationSystems & );
 static void initial_structure (EquationSystems & , const std::string & );
 static void initial_pihna (EquationSystems & , const std::string & );
 static void assemble_pihna (EquationSystems & , const std::string & );
 static void check_solution (EquationSystems & );
+static void adaptive_mesh_refinement (EquationSystems & , MeshRefinement &);
+static void save_solution (std::ofstream & , EquationSystems & );
 
 extern PerfLog plog;
 static Parallel::Communicator * pm_ptr = 0;
@@ -13,6 +19,7 @@ void pihna (LibMeshInit & init)
 {
   Mesh mesh(init.comm(), 3);
   EquationSystems es(mesh);
+  MeshRefinement amr(mesh);
 
   pm_ptr = & init.comm();
 
@@ -41,14 +48,20 @@ void pihna (LibMeshInit & init)
   es.init();
   es.print_info();
 
-  const std::string ex2_filename =
-    es.parameters.get<std::string>("output_EXODUS");
+  Paraview_IO paraview(mesh);
+  paraview.open_pvd(es.parameters.get<std::string>("output_PARAVIEW"));
 
-  ExodusII_IO ex2(mesh);
-  ex2.write_equation_systems(ex2_filename, es);
-  ex2.append(true);
+  std::ofstream csv;
+  if (0==global_processor_id())
+    csv.open(es.parameters.get<std::string>("output_CSV"));
 
-  const int output_step = es.parameters.get<int>("output_step");
+  // save initial solution
+  save_solution(csv, es);
+  paraview.update_pvd(es);
+
+  const std::set<int> otp = export_integers(es.parameters.get<std::string>("output_time_points"));
+
+  const int refinement_step = es.parameters.get<int>("refinement_step");
   const int n_t_step = es.parameters.get<int>("time_step_number");
   for (int t=1; t<=n_t_step; t++)
     {
@@ -56,18 +69,27 @@ void pihna (LibMeshInit & init)
       es.parameters.set<Real>("time") += es.parameters.get<Real>("time_step");
       model.time = es.parameters.get<Real>("time");
 
-      libMesh::out << " Solving time increment: " << t
-                   << " (time=" << model.time <<  ") ..." << std::endl;
+      libMesh::out << " ==== Step " << std::setw(4) << t << " out of " << std::setw(4) << n_t_step
+                   << " (Time=" << std::setw(9) << model.time << ") ==== "
+                   << std::endl;
 
-      // copy the previously-current solution into the old solution
+      // update the solution (containers) for up to 2 steps behind
+      *(model.older_local_solution) = *(model.old_local_solution);
       *(model.old_local_solution) = *(model.current_local_solution);
       // now solve the AD progression model
       model.solve();
 
       check_solution(es);
 
-      if (0 == t%output_step)
-        ex2.write_timestep(ex2_filename, es, t, model.time);
+      if (0 == t%refinement_step)
+        adaptive_mesh_refinement(es, amr);
+
+      // save current solution
+      if (otp.end()!=otp.find(t))
+        {
+          save_solution(csv, es);
+          paraview.update_pvd(es, t);
+        }
     }
 
   // ...done
@@ -106,8 +128,11 @@ void input (const std::string & file_name, EquationSystems & es)
   if (0==global_processor_id())
     std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+es.parameters.get<std::string>(name)).c_str());
   //
-  name = "output_EXODUS";
-  es.parameters.set<std::string>(name) = DIR + in(name, "output.ex2");
+  name = "output_PARAVIEW";
+  es.parameters.set<std::string>(name) = DIR + in(name, "output4paraview");
+  //
+  name = "output_CSV";
+  es.parameters.set<std::string>(name) = DIR + in(name, "output.csv");
 
   es.parameters.set<Real>("time") = 0.0;
 
@@ -116,10 +141,54 @@ void input (const std::string & file_name, EquationSystems & es)
   name = "time_step_number";
   es.parameters.set<int>(name) = in(name, 1);
   name = "output_step";
-  es.parameters.set<int>(name) = in(name, 1);
+  es.parameters.set<int>(name) = in(name, 0);
+  name = "refinement_step";
+  es.parameters.set<int>(name) = in(name, 1+es.parameters.get<int>("time_step_number"));
 
-  name = "mesh/skip_renumber_nodes_and_elements";
-  es.parameters.set<bool>(name) = in(name, true);
+  std::string otp;
+  if (0==es.parameters.get<int>("output_step"))
+    {
+      name = "output_time_points";
+      otp = in(name, std::to_string(es.parameters.get<int>("time_step_number")));
+      es.parameters.set<std::string>(name) = otp;
+    }
+  else
+    {
+      int t = es.parameters.get<int>("output_step");
+      std::string otp;
+      while (t<=es.parameters.get<int>("time_step_number"))
+        {
+          otp += " " + std::to_string(t) + " ";
+          t += es.parameters.get<int>("output_step");
+        }
+      name = "output_time_points";
+      es.parameters.set<std::string>(name) = otp;
+    }
+
+  {
+    name = "mesh/skip_renumber_nodes_and_elements";
+    es.parameters.set<bool>(name) = in(name, true);
+    //
+    name = "mesh/AMR/max_steps";
+    es.parameters.set<int>(name) = in(name, 0);
+    name = "mesh/AMR/max_level";
+    es.parameters.set<int>(name) = in(name, 3);
+    name = "mesh/AMR/refine_percentage";
+    es.parameters.set<Real>(name) = in(name, 0.5);
+    name = "mesh/AMR/coarsen_percentage";
+    es.parameters.set<Real>(name) = in(name, 0.5);
+  }
+
+  {
+    name = "range/active_tumor/min"; es.parameters.set<Real>(name) = in(name, 1.0e-12);
+    name = "range/active_tumor/max"; es.parameters.set<Real>(name) = in(name, 1.0e+12);
+    name = "range/necrotic/min"; es.parameters.set<Real>(name) = in(name, 1.0e-12);
+    name = "range/necrotic/max"; es.parameters.set<Real>(name) = in(name, 1.0e+12);
+    name = "range/vascularity/min"; es.parameters.set<Real>(name) = in(name, 1.0e-12);
+    name = "range/vascularity/max"; es.parameters.set<Real>(name) = in(name, 1.0e+12);
+    name = "range/total_cell/min"; es.parameters.set<Real>(name) = in(name, 1.0e-12);
+    name = "range/total_cell/max"; es.parameters.set<Real>(name) = in(name, 1.0e+12);
+  }
 
   name = "cells_min_capacity";
   es.parameters.set<Real>(name) = in(name, 0.0);
@@ -372,11 +441,62 @@ void assemble_pihna (EquationSystems & es,
               GRAD_a_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[4][l]));
             }
 
-          const Real Tau = pow(1.0-apply_bounds(0.0, (n_old+c_old+h_old+v_old)/Kappa_k, 1.0), ek),
-                     Tau__dn = -(ek*pow(1.0-apply_bounds(0.0, (n_old+c_old+h_old+v_old)/Kappa_k, 1.0), ek-1.0))/Kappa_k, Tau__dc = Tau__dn, Tau__dh = Tau__dn, Tau__dv = Tau__dn;
-
-          const Real Ve = apply_bounds(0.0, v_old/(c_old+h_old+v_old), 1.0),
-                     Ve__dc = -Ve/(c_old+h_old+v_old), Ve__dh = Ve__dc, Ve__dv = Ve/v_old+Ve__dc;
+          Real Tau(0.0);
+          Real Tau__dn(0.0), Tau__dc(0.0), Tau__dh(0.0), Tau__dv(0.0);
+          {
+            const Real Te_ = (n_old+c_old+h_old+v_old) / Kappa_k;
+            if (Te_<=0.0)
+              {
+                Tau = 1.0;
+                Tau__dn =
+                Tau__dc =
+                Tau__dh =
+                Tau__dv = 0.0;
+              }
+            else if (Te_>=1.0)
+              {
+                Tau = 0.0;
+                Tau__dn =
+                Tau__dc =
+                Tau__dh =
+                Tau__dv = 0.0;
+              }
+            else
+              {
+                Tau = pow(1.0-Te_, ek);
+                Tau__dn =
+                Tau__dc =
+                Tau__dh =
+                Tau__dv = (-ek/Kappa_k) * pow(1.0-Te_, ek-1.0);
+              }
+          }
+          //
+          Real Ve(0.0);
+          Real Ve__dc(0.0), Ve__dh(0.0), Ve__dv(0.0);
+          {
+            const Real Ve_ = v_old / (c_old+h_old+v_old);
+            if (Ve_<=0.0)
+              {
+                Ve = 0.0;
+                Ve__dc =
+                Ve__dh =
+                Ve__dv = 0.0;
+              }
+            else if (Ve_>=1.0)
+              {
+                Ve = 1.0;
+                Ve__dc =
+                Ve__dh =
+                Ve__dv = 0.0;
+              }
+            else
+              {
+                Ve = Ve_;
+                Ve__dc =
+                Ve__dh = -Ve_ / (c_old+h_old+v_old);
+                Ve__dv = (1.0-Ve_) / (c_old+h_old+v_old);
+              }
+          }
 
           const Real Ua = a_old/(a_old+Kappa_a),
                      Ua__da = 1.0/(a_old+Kappa_a)-Ua/(a_old+Kappa_a);
@@ -679,5 +799,178 @@ void check_solution (EquationSystems & es)
   // close solution vector and update the system
   system.solution->close();
   system.update();
+  // ...done
+}
+
+void adaptive_mesh_refinement (EquationSystems & es, MeshRefinement & amr)
+{
+  TransientLinearImplicitSystem & system =
+    es.get_system<TransientLinearImplicitSystem>("PIHNA");
+  libmesh_assert_equal_to(system.n_vars(), 5);
+
+  const unsigned int varno__n = system.variable_number("n"),
+                     varno__c = system.variable_number("c"),
+                     varno__h = system.variable_number("h"),
+                     varno__v = system.variable_number("v");
+
+  const Real refine_pct  = es.parameters.get<Real>("mesh/AMR/refine_percentage"),
+             coarsen_pct = es.parameters.get<Real>("mesh/AMR/coarsen_percentage");
+
+  const int max_steps = es.parameters.get<int>("mesh/AMR/max_steps"),
+            max_level = es.parameters.get<int>("mesh/AMR/max_level");
+  if (0 == max_steps) return;
+
+  for (int r=0; r<max_steps; r++)
+    {
+      ErrorVector err_vector;
+      ErrorEstimator::ErrorMap err_map;
+      err_map.insert(std::make_pair(std::make_pair(&system, varno__c), &err_vector));
+      err_map.insert(std::make_pair(std::make_pair(&system, varno__h), &err_vector));
+      // evaluate the error for each active element using the estimator provided
+      KellyErrorEstimator err_estimator;
+      err_estimator.estimate_errors(es, err_map);
+      // flag elements for coarsening / refinement by mean and std.
+      amr.flag_elements_by_mean_stddev(err_vector, refine_pct, coarsen_pct, max_level);
+      // refine / coarsen the flagged FEs
+      amr.refine_and_coarsen_elements();
+      // reinitializes the equations system object
+      es.reinit();
+    }
+  // ...done
+}
+
+void save_solution (std::ofstream & csv, EquationSystems & es)
+{
+  const MeshBase& mesh = es.get_mesh();
+  libmesh_assert_equal_to(mesh.mesh_dimension(), 3);
+
+  const TransientLinearImplicitSystem & system =
+    es.get_system<TransientLinearImplicitSystem>("PIHNA");
+  libmesh_assert_equal_to(system.n_vars(), 5);
+
+  std::vector<Number> soln;
+  system.update_global_solution(soln);
+
+  const Real active_tumor__min = es.parameters.get<Real>("range/active_tumor/min"),
+             active_tumor__max = es.parameters.get<Real>("range/active_tumor/max");
+  const Real necrotic__min = es.parameters.get<Real>("range/necrotic/min"),
+             necrotic__max = es.parameters.get<Real>("range/necrotic/max");
+  const Real vascularity__min = es.parameters.get<Real>("range/vascularity/min"),
+             vascularity__max = es.parameters.get<Real>("range/vascularity/max");
+  const Real total_cell__min = es.parameters.get<Real>("range/total_cell/min"),
+             total_cell__max = es.parameters.get<Real>("range/total_cell/max");
+  const Real Kappa_k = es.parameters.get<Real>("cells_max_capacity");
+
+  pm_ptr->barrier();
+
+  if (0==global_processor_id())
+    {
+      // write the header of the CSV file
+      if (0.0==system.time)
+        {
+          csv << "\"TIME\"" << std::flush;
+          csv << ",\"DEGREES_OF_FREEDOM\"" << std::flush;
+          csv << ",\"ACTIVE_TUMOR_VOLUME\"" << std::flush;
+          csv << ",\"NECROTIC_VOLUME\"" << std::flush;
+          csv << ",\"VASCULARITY_VOLUME\"" << std::flush;
+          csv << ",\"TOTAL_CELL_VOLUME\"" << std::flush;
+          csv << std::endl;
+        }
+
+      Real active_tumor_volume(0.0), necrotic_volume(0.0), vascularity_volume(0.0);
+      Real total_cell_volume(0.0);
+
+      for (const auto & elem : mesh.active_element_ptr_range())
+        {
+          std::vector<dof_id_type> dof_indices;
+          system.get_dof_map().dof_indices(elem, dof_indices);
+
+          std::vector<std::vector<dof_id_type>> dof_indices_var(5);
+          for (unsigned int v=0; v<5; v++)
+            system.get_dof_map().dof_indices(elem, dof_indices_var[v], v);
+
+          const unsigned int n_var_dofs = dof_indices_var[0].size();
+
+          libmesh_assert(elem->n_nodes() == dof_indices_var[0].size());
+          libmesh_assert(elem->n_nodes() == dof_indices_var[1].size());
+          libmesh_assert(elem->n_nodes() == dof_indices_var[2].size());
+          libmesh_assert(elem->n_nodes() == dof_indices_var[3].size());
+          libmesh_assert(elem->n_nodes() == dof_indices_var[4].size());
+
+          //const subdomain_id_type ID = elem->subdomain_id();
+          const Real Volume = elem->volume();
+
+          bool consider;
+          //
+          consider = true;
+          for (unsigned int n=0; n<n_var_dofs; n++)
+            {
+              const Real c_h_ = soln[dof_indices_var[1][n]]
+                              + soln[dof_indices_var[2][n]];
+              if ( !(c_h_>=active_tumor__min && c_h_<=active_tumor__max) )
+                {
+                  consider = false;
+                  break;
+                }
+            }
+          if (consider)
+            active_tumor_volume += Volume;
+          //
+          consider = true;
+          for (unsigned int n=0; n<n_var_dofs; n++)
+            {
+              const Real n_ = soln[dof_indices_var[0][n]];
+              if ( !(n_>=necrotic__min && n_<=necrotic__max) )
+                {
+                  consider = false;
+                  break;
+                }
+            }
+          if (consider)
+            necrotic_volume += Volume;
+          //
+          consider = true;
+          for (unsigned int n=0; n<n_var_dofs; n++)
+            {
+              const Real v_ = soln[dof_indices_var[3][n]];
+              if ( !(v_>=vascularity__min && v_<=vascularity__max) )
+                {
+                  consider = false;
+                  break;
+                }
+            }
+          if (consider)
+            vascularity_volume += Volume;
+          //
+          consider = true;
+          for (unsigned int n=0; n<n_var_dofs; n++)
+            {
+              const Real T_ = ( soln[dof_indices_var[0][n]]
+                              + soln[dof_indices_var[1][n]]
+                              + soln[dof_indices_var[2][n]]
+                              + soln[dof_indices_var[3][n]] ) / Kappa_k;
+              if ( !(T_>=total_cell__min && T_<=total_cell__max) )
+                {
+                  consider = false;
+                  break;
+                }
+            }
+          if (consider)
+            total_cell_volume += Volume;
+
+          // ...end of active finite elements loop
+        }
+
+      // save the data in the CSV file
+      csv << system.time << std::flush;
+      csv << ',' << (system.n_vars()*mesh.n_nodes()) << std::flush;
+      csv << ',' << active_tumor_volume
+          << ',' << necrotic_volume
+          << ',' << vascularity_volume << std::flush;
+      csv << ',' << total_cell_volume << std::flush;
+      csv << std::endl;
+    }
+
+  pm_ptr->barrier();
   // ...done
 }

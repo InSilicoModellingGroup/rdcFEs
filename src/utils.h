@@ -46,6 +46,7 @@
 #include "libmesh/dense_submatrix.h"
 #include "libmesh/dense_subvector.h"
 #include "libmesh/boundary_info.h"
+#include "libmesh/enum_io_package.h"
 #include "libmesh/gmsh_io.h"
 #include "libmesh/exodusII_io.h"
 #include "libmesh/enum_solver_package.h"
@@ -79,6 +80,8 @@ Real degrees_to_radians (const Real d) { return d*(libMesh::pi/180.0); }
 inline
 Real radians_to_degrees (const Real r) { return r*(180.0/libMesh::pi); }
 //-------------------------------------------------------------------------------------------------
+inline
+Real heaviside (const Real& x) { return ( x > 0 ? 1 : 0 ); }
 inline
 Real apply_lbound (const Real& L, const Real& X) { return ( X < L ? L : X ); }
 inline
@@ -117,6 +120,17 @@ Real SD_(const Real & C, const Real * p_)
   else if (C < c1) return  cM*(c1-C)/(c1-c0);
   else             return  0.0;
 }
+inline // step-decay function - derivative
+Real deriv_SD_(const Real & C, const Real * p_)
+{
+  const Real & cM = p_[0];
+  if (0.0>=cM) return 0.0;
+  const Real & c0 = p_[1];
+  const Real & c1 = p_[2];
+  if      (C < c0) return  0.0;
+  else if (C < c1) return -cM/(c1-c0);
+  else             return  0.0;
+}
 //-------------------------------------------------------------------------------------------------
 inline // step-growth function
 Real SG_(const Real & C, const Real * p_)
@@ -127,6 +141,48 @@ Real SG_(const Real & C, const Real * p_)
   const Real & c1 = p_[2];
   if      (C < c0) return  cM;
   else if (C < c1) return  cM*(C-c0)/(c1-c0);
+  else             return  0.0;
+}
+inline // step-growth function - derivative
+Real deriv_SG_(const Real & C, const Real * p_)
+{
+  const Real & cM = p_[0];
+  if (0.0>=cM) return 0.0;
+  const Real & c0 = p_[1];
+  const Real & c1 = p_[2];
+  if      (C < c0) return  0.0;
+  else if (C < c1) return  cM/(c1-c0);
+  else             return  0.0;
+}
+//-------------------------------------------------------------------------------------------------
+inline // trapezoidal function
+Real Tr_(const Real & C, const Real * p_)
+{
+  const Real & cM = p_[0];
+  if (0.0>=cM) return 0.0;
+  const Real & c0 = p_[1];
+  const Real & c1 = p_[2];
+  const Real & c2 = p_[3];
+  const Real & c3 = p_[4];
+  if      (C < c0) return  0.0;
+  else if (C < c1) return  cM*(C-c0)/(c1-c0);
+  else if (C < c2) return  cM;
+  else if (C < c3) return  cM*(c3-C)/(c3-c2);
+  else             return  0.0;
+}
+inline // trapezoidal function - derivative
+Real deriv_Tr_(const Real & C, const Real * p_)
+{
+  const Real & cM = p_[0];
+  if (0.0>=cM) return 0.0;
+  const Real & c0 = p_[1];
+  const Real & c1 = p_[2];
+  const Real & c2 = p_[3];
+  const Real & c3 = p_[4];
+  if      (C < c0) return  0.0;
+  else if (C < c1) return  cM/(c1-c0);
+  else if (C < c2) return  0.0;
+  else if (C < c3) return -cM/(c3-c2);
   else             return  0.0;
 }
 //-------------------------------------------------------------------------------------------------
@@ -262,6 +318,34 @@ Point rotate (const Point& v, const Real theta_x, const Real theta_y, const Real
 }
 //-------------------------------------------------------------------------------------------------
 inline
+Real trace (const RealTensorValue& m)
+{
+  return (m(0,0)+m(1,1)+m(2,2));
+}
+inline
+Real determinant (const RealTensorValue& m)
+{
+  return (m(0,0)*m(1,1)*m(2,2)-m(0,0)*m(1,2)*m(2,1)
+         -m(0,1)*m(1,0)*m(2,2)+m(0,1)*m(1,2)*m(2,0)
+         +m(0,2)*m(1,0)*m(2,1)-m(0,2)*m(1,1)*m(2,0));
+}
+inline
+RealTensorValue inverse (const RealTensorValue& m)
+{
+  const Real s = 1.0/determinant(m);
+  RealTensorValue n;
+  n(0,0)=  s*(m(1,1)*m(2,2)-m(1,2)*m(2,1));
+  n(0,1)= -s*(m(0,1)*m(2,2)-m(0,2)*m(2,1));
+  n(0,2)=  s*(m(0,1)*m(1,2)-m(0,2)*m(1,1));
+  n(1,0)= -s*(m(1,0)*m(2,2)-m(1,2)*m(2,0));
+  n(1,1)=  s*(m(0,0)*m(2,2)-m(0,2)*m(2,0));
+  n(1,2)= -s*(m(0,0)*m(1,2)-m(0,2)*m(1,0));
+  n(2,0)=  s*(m(1,0)*m(2,1)-m(1,1)*m(2,0));
+  n(2,1)= -s*(m(0,0)*m(2,1)-m(0,1)*m(2,0));
+  n(2,2)=  s*(m(0,0)*m(1,1)-m(0,1)*m(1,0));
+  return n;
+}
+inline
 RealTensorValue tensor (const RealVectorValue& a, const RealVectorValue& b)
 {
   RealTensorValue a_b;
@@ -286,8 +370,12 @@ void undefined_param_error (std::string param_name)
   std::cout << "\n\nERROR: Undefined or wrongly defined parameter: " << param_name << "\n\n" << std::endl;
   exit(1);
 }
+// Symmetric matrix "A":
+// eigenvectors in columns of "eVec" that correspond to eigenvalues in vector "eVal"
+void eigen_decomposition(double A[3][3], double eVec[3][3], double eVal[3]);
 //-------------------------------------------------------------------------------------------------
 
 #include "./ida.h"
+#include "./paraview.h"
 
 #endif // __UTILS_H__

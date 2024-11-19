@@ -47,22 +47,21 @@ void ripf (LibMeshInit & init, std::string input_file)
   es.init();
   es.print_info();
 
-  const std::string ex2_filename =
-    es.parameters.get<std::string>("output_EXODUS");
-
   std::vector<Number> soln;
   model.update_global_solution(soln);
 
   check_solution(es, soln);
 
-  ExodusII_IO ex2(mesh);
-  ex2.write_equation_systems(ex2_filename, es);
-  ex2.append(true);
+  Paraview_IO paraview(mesh);
+  paraview.open_pvd(es.parameters.get<std::string>("output_PARAVIEW"));
 
   std::ofstream csv;
   if (0==global_processor_id())
     csv.open(es.parameters.get<std::string>("output_CSV"));
+
+  // save initial solution
   save_solution(csv, es);
+  paraview.update_pvd(es);
 
   const std::set<int> otp = export_integers(es.parameters.get<std::string>("output_time_points"));
 
@@ -73,10 +72,11 @@ void ripf (LibMeshInit & init, std::string input_file)
       es.parameters.set<Real>("time") += es.parameters.get<Real>("time_step");
       model.time = es.parameters.get<Real>("time");
 
-      libMesh::out << " Solving time increment: " << t
-                   << " (time=" << model.time <<  ") ..." << std::endl;
+      libMesh::out << " ==== Step " << std::setw(4) << t << " out of " << std::setw(4) << n_t_step
+                   << " (Time=" << std::setw(9) << model.time << ") ==== "
+                   << std::endl;
 
-      // copy the previously-current solution into the old solution
+      // update the solution (containers) for up to 2 steps behind
       *(model.older_local_solution) = *(model.old_local_solution);
       *(model.old_local_solution) = *(model.current_local_solution);
       // now solve the AD progression model
@@ -84,10 +84,11 @@ void ripf (LibMeshInit & init, std::string input_file)
 
       check_solution(es, soln);
 
+      // save current solution
       if (otp.end()!=otp.find(t))
         {
-          ex2.write_timestep(ex2_filename, es, t, model.time);
           save_solution(csv, es);
+          paraview.update_pvd(es, t);
         }
     }
 
@@ -127,8 +128,8 @@ void input (const std::string & file_name, EquationSystems & es)
   if (0==global_processor_id())
     std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+es.parameters.get<std::string>(name)).c_str());
   //
-  name = "output_EXODUS";
-  es.parameters.set<std::string>(name) = DIR + in(name, "output.ex2");
+  name = "output_PARAVIEW";
+  es.parameters.set<std::string>(name) = DIR + in(name, "output4paraview");
   //
   name = "output_CSV";
   es.parameters.set<std::string>(name) = DIR + in(name, "output.csv");
@@ -167,10 +168,7 @@ void input (const std::string & file_name, EquationSystems & es)
   name = "mesh/skip_renumber_nodes_and_elements";
   es.parameters.set<bool>(name) = in(name, true);
 
-  name = "mesh/skip_renumber_nodes_and_elements";
-  es.parameters.set<bool>(name) = in(name, true);
-
-  // general parameters including for radiotherapy (RTD)
+  // general parameters including for radiotherapy (RT)
   {
     name = "RTD/broad/fractions"; es.parameters.set<int>(name) = in(name, 1);
     name = "RTD/focus/fractions"; es.parameters.set<int>(name) = in(name, 1);
@@ -250,7 +248,7 @@ void initial_radiotherapy (EquationSystems & es,
              RTD_focus_frac = es.parameters.get<int>("RTD/focus/fractions"),
              RTD_total_frac = RTD_broad_frac + RTD_focus_frac;
   // simulation time is expressed in "days"
-  const int day = std::floor( 0.0 );
+  //const int day = std::floor( 0.0 );
 
   for (const auto & node : mesh.node_ptr_range())
     {

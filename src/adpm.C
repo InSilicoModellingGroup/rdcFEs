@@ -10,6 +10,7 @@ static void save_solution (std::ofstream & , EquationSystems & );
 extern PerfLog plog;
 static Parallel::Communicator * pm_ptr = 0;
 static std::set<subdomain_id_type> parcellation;
+static std::map<subdomain_id_type, Real> parcellation__volume;
 
 void adpm (LibMeshInit & init)
 {
@@ -42,19 +43,19 @@ void adpm (LibMeshInit & init)
   es.init();
   es.print_info();
 
-  const std::string ex2_filename =
-    es.parameters.get<std::string>("output_EXODUS");
-
-  ExodusII_IO ex2(mesh);
-  ex2.write_equation_systems(ex2_filename, es);
-  ex2.append(true);
+  Paraview_IO paraview(mesh);
+  paraview.open_pvd(es.parameters.get<std::string>("output_PARAVIEW"));
 
   std::ofstream csv;
   if (0==global_processor_id())
     csv.open(es.parameters.get<std::string>("output_CSV"));
-  save_solution(csv, es);
 
-  const int output_step = es.parameters.get<int>("output_step");
+  // save initial solution
+  save_solution(csv, es);
+  paraview.update_pvd(es);
+
+  const std::set<int> otp = export_integers(es.parameters.get<std::string>("output_time_points"));
+
   const int n_t_step = es.parameters.get<int>("time_step_number");
   for (int t=1; t<=n_t_step; t++)
     {
@@ -62,20 +63,23 @@ void adpm (LibMeshInit & init)
       es.parameters.set<Real>("time") += es.parameters.get<Real>("time_step");
       model.time = es.parameters.get<Real>("time");
 
-      libMesh::out << " Solving time increment: " << t
-                   << " (time=" << model.time <<  ") ..." << std::endl;
+      libMesh::out << " ==== Step " << std::setw(4) << t << " out of " << std::setw(4) << n_t_step
+                   << " (Time=" << std::setw(9) << model.time << ") ==== "
+                   << std::endl;
 
-      // copy the previously-current solution into the old solution
+      // update the solution (containers) for up to 2 steps behind
+      *(model.older_local_solution) = *(model.old_local_solution);
       *(model.old_local_solution) = *(model.current_local_solution);
       // now solve the AD progression model
       model.solve();
 
       check_solution(es);
 
-      if (0 == t%output_step)
+      // save current solution
+      if (otp.end()!=otp.find(t))
         {
-          ex2.write_timestep(ex2_filename, es, t, model.time);
           save_solution(csv, es);
+          paraview.update_pvd(es, t);
         }
     }
 
@@ -115,8 +119,8 @@ void input (const std::string & file_name, EquationSystems & es)
   if (0==global_processor_id())
     std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+es.parameters.get<std::string>(name)).c_str());
   //
-  name = "output_EXODUS";
-  es.parameters.set<std::string>(name) = DIR + in(name, "output.ex2");
+  name = "output_PARAVIEW";
+  es.parameters.set<std::string>(name) = DIR + in(name, "output4paraview");
   //
   name = "output_CSV";
   es.parameters.set<std::string>(name) = DIR + in(name, "output.csv");
@@ -130,23 +134,54 @@ void input (const std::string & file_name, EquationSystems & es)
   name = "time_step_number";
   es.parameters.set<int>(name) = in(name, 1);
   name = "output_step";
-  es.parameters.set<int>(name) = in(name, 1);
+  es.parameters.set<int>(name) = in(name, 0);
+
+  std::string otp;
+  if (0==es.parameters.get<int>("output_step"))
+    {
+      name = "output_time_points";
+      otp = in(name, std::to_string(es.parameters.get<int>("time_step_number")));
+      es.parameters.set<std::string>(name) = otp;
+    }
+  else
+    {
+      int t = es.parameters.get<int>("output_step");
+      std::string otp;
+      while (t<=es.parameters.get<int>("time_step_number"))
+        {
+          otp += " " + std::to_string(t) + " ";
+          t += es.parameters.get<int>("output_step");
+        }
+      name = "output_time_points";
+      es.parameters.set<std::string>(name) = otp;
+    }
 
   name = "mesh/skip_renumber_nodes_and_elements";
   es.parameters.set<bool>(name) = in(name, true);
 
   {
     name = "range/A_b/min"; es.parameters.set<Real>(name) = in(name, 1.0e-12);
-    name = "range/A_b/max"; es.parameters.set<Real>(name) = in(name, 1.0e+00);
+    name = "range/A_b/max"; es.parameters.set<Real>(name) = in(name, 1.0e+12);
     name = "range/Tau/min"; es.parameters.set<Real>(name) = in(name, 1.0e-12);
-    name = "range/Tau/max"; es.parameters.set<Real>(name) = in(name, 1.0e+00);
+    name = "range/Tau/max"; es.parameters.set<Real>(name) = in(name, 1.0e+12);
   }
 
   // parameters for the species: PrP
   {
-    name = "decay/PrP";             es.parameters.set<Real>(name) = in(name, 0.);
-    name = "decay/PrP/pulse/0";     es.parameters.set<Real>(name) = in(name,-1.0e-20);
-    name = "decay/PrP/pulse/1";     es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "decay/PrP";               es.parameters.set<Real>(name) = in(name, 0.);
+    name = "decay/PrP/pulse/0";       es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "decay/PrP/pulse/1";       es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "decay/PrP/time_exponent"; es.parameters.set<Real>(name) = in(name, 0.);
+    name = "transform/A_b";             es.parameters.set<Real>(name) = in(name, 0.);
+    name = "transform/A_b/trapezoid/0"; es.parameters.set<Real>(name) = in(name,-1.1e-20);
+    name = "transform/A_b/trapezoid/1"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "transform/A_b/trapezoid/2"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "transform/A_b/trapezoid/3"; es.parameters.set<Real>(name) = in(name,+1.1e+20);
+    name = "transform/Tau";             es.parameters.set<Real>(name) = in(name, 0.);
+    name = "transform/Tau/trapezoid/0"; es.parameters.set<Real>(name) = in(name,-1.1e-20);
+    name = "transform/Tau/trapezoid/1"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "transform/Tau/trapezoid/2"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "transform/Tau/trapezoid/3"; es.parameters.set<Real>(name) = in(name,+1.1e+20);
   }
 
   // parameters for the species: A_b
@@ -154,15 +189,16 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "diffuse/A_b";           es.parameters.set<Real>(name) = in(name, 0.);
     name = "diffuse/A_b/pulse/0";   es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "diffuse/A_b/pulse/1";   es.parameters.set<Real>(name) = in(name,+1.0e+20);
-    name = "taxis/A_b";             es.parameters.set<Real>(name) = in(name, 0.);
-    name = "taxis/A_b/pulse/0";     es.parameters.set<Real>(name) = in(name,-1.0e-20);
-    name = "taxis/A_b/pulse/1";     es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "taxis/A_b/angle";       es.parameters.set<Real>(name) = degrees_to_radians(in(name,89.9));
+    name = "taxis_1/A_b";           es.parameters.set<Real>(name) = in(name, 0.);
+    name = "taxis_1/A_b/pulse/0";   es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "taxis_1/A_b/pulse/1";   es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "taxis_2/A_b";           es.parameters.set<Real>(name) = in(name, 0.);
+    name = "taxis_2/A_b/pulse/0";   es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "taxis_2/A_b/pulse/1";   es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "produce/A_b";           es.parameters.set<Real>(name) = in(name, 0.);
-    name = "produce/A_b/sigmoid/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
-    name = "produce/A_b/sigmoid/1"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
-    name = "transform/A_b";         es.parameters.set<Real>(name) = in(name, 0.);
-    name = "transform/A_b/pulse/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
-    name = "transform/A_b/pulse/1"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "produce/A_b/sigmoid/0"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "produce/A_b/sigmoid/1"; es.parameters.set<Real>(name) = in(name,+1.1e+20);
     name = "decay/A_b";             es.parameters.set<Real>(name) = in(name, 0.);
     name = "decay/A_b/pulse/0";     es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "decay/A_b/pulse/1";     es.parameters.set<Real>(name) = in(name,+1.0e+20);
@@ -173,15 +209,16 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "diffuse/Tau";           es.parameters.set<Real>(name) = in(name, 0.);
     name = "diffuse/Tau/pulse/0";   es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "diffuse/Tau/pulse/1";   es.parameters.set<Real>(name) = in(name,+1.0e+20);
-    name = "taxis/Tau";             es.parameters.set<Real>(name) = in(name, 0.);
-    name = "taxis/Tau/pulse/0";     es.parameters.set<Real>(name) = in(name,-1.0e-20);
-    name = "taxis/Tau/pulse/1";     es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "taxis/Tau/angle";       es.parameters.set<Real>(name) = degrees_to_radians(in(name,89.9));
+    name = "taxis_1/Tau";           es.parameters.set<Real>(name) = in(name, 0.);
+    name = "taxis_1/Tau/pulse/0";   es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "taxis_1/Tau/pulse/1";   es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "taxis_2/Tau";           es.parameters.set<Real>(name) = in(name, 0.);
+    name = "taxis_2/Tau/pulse/0";   es.parameters.set<Real>(name) = in(name,-1.0e-20);
+    name = "taxis_2/Tau/pulse/1";   es.parameters.set<Real>(name) = in(name,+1.0e+20);
     name = "produce/Tau";           es.parameters.set<Real>(name) = in(name, 0.);
-    name = "produce/Tau/sigmoid/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
-    name = "produce/Tau/sigmoid/1"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
-    name = "transform/Tau";         es.parameters.set<Real>(name) = in(name, 0.);
-    name = "transform/Tau/pulse/0"; es.parameters.set<Real>(name) = in(name,-1.0e-20);
-    name = "transform/Tau/pulse/1"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "produce/Tau/sigmoid/0"; es.parameters.set<Real>(name) = in(name,+1.0e+20);
+    name = "produce/Tau/sigmoid/1"; es.parameters.set<Real>(name) = in(name,+1.1e+20);
     name = "decay/Tau";             es.parameters.set<Real>(name) = in(name, 0.);
     name = "decay/Tau/pulse/0";     es.parameters.set<Real>(name) = in(name,-1.0e-20);
     name = "decay/Tau/pulse/1";     es.parameters.set<Real>(name) = in(name,+1.0e+20);
@@ -271,6 +308,16 @@ void initial_adpm (EquationSystems & es,
       if (parcellation.end() == parcellation.find(ID))
         parcellation.insert(ID);
     }
+
+  parcellation__volume.clear();
+  for (const auto & ID : parcellation)
+    parcellation__volume.insert( std::make_pair(ID, 0.0) );
+
+  for (const auto & elem : mesh.active_element_ptr_range())
+    {
+      const subdomain_id_type ID = elem->subdomain_id();
+      parcellation__volume[ID] += elem->volume();
+    }
   // ...done
 }
 
@@ -318,39 +365,53 @@ void assemble_adpm (EquationSystems & es,
 
   //const RealVectorValue velocity = es.parameters.get<RealVectorValue>("velocity");
 
-  const Real decay_PrP[] = { es.parameters.get<Real>("decay/PrP")         ,
-                             es.parameters.get<Real>("decay/PrP/pulse/0") ,
-                             es.parameters.get<Real>("decay/PrP/pulse/1") };
+  const Real gamma = es.parameters.get<Real>("decay/PrP/time_exponent");
+  const Real decay_PrP[] = { es.parameters.get<Real>("decay/PrP") * pow(system.time, gamma) ,
+                             es.parameters.get<Real>("decay/PrP/pulse/0")                   ,
+                             es.parameters.get<Real>("decay/PrP/pulse/1")                   };
   const Real diffuse_A_b[] = { es.parameters.get<Real>("diffuse/A_b")         ,
                                es.parameters.get<Real>("diffuse/A_b/pulse/0") ,
                                es.parameters.get<Real>("diffuse/A_b/pulse/1") };
-  const Real taxis_A_b[]   = { es.parameters.get<Real>("taxis/A_b")         ,
-                               es.parameters.get<Real>("taxis/A_b/pulse/0") ,
-                               es.parameters.get<Real>("taxis/A_b/pulse/1") };
+  const Real taxis1_A_b[]   = { es.parameters.get<Real>("taxis_1/A_b")         ,
+                                es.parameters.get<Real>("taxis_1/A_b/pulse/0") ,
+                                es.parameters.get<Real>("taxis_1/A_b/pulse/1") };
+  const Real taxis2_A_b[]   = { es.parameters.get<Real>("taxis_2/A_b")         ,
+                                es.parameters.get<Real>("taxis_2/A_b/pulse/0") ,
+                                es.parameters.get<Real>("taxis_2/A_b/pulse/1") };
   const Real produce_A_b[] = { es.parameters.get<Real>("produce/A_b")           ,
                                es.parameters.get<Real>("produce/A_b/sigmoid/0") ,
                                es.parameters.get<Real>("produce/A_b/sigmoid/1") };
-  const Real transform_A_b[] = { es.parameters.get<Real>("transform/A_b")         ,
-                                 es.parameters.get<Real>("transform/A_b/pulse/0") ,
-                                 es.parameters.get<Real>("transform/A_b/pulse/1") };
+  const Real transform_A_b[] = { es.parameters.get<Real>("transform/A_b")             ,
+                                 es.parameters.get<Real>("transform/A_b/trapezoid/0") ,
+                                 es.parameters.get<Real>("transform/A_b/trapezoid/1") ,
+                                 es.parameters.get<Real>("transform/A_b/trapezoid/2") ,
+                                 es.parameters.get<Real>("transform/A_b/trapezoid/3") };
   const Real decay_A_b[] = { es.parameters.get<Real>("decay/A_b")         ,
                              es.parameters.get<Real>("decay/A_b/pulse/0") ,
                              es.parameters.get<Real>("decay/A_b/pulse/1") };
   const Real diffuse_Tau[] = { es.parameters.get<Real>("diffuse/Tau")         ,
                                es.parameters.get<Real>("diffuse/Tau/pulse/0") ,
                                es.parameters.get<Real>("diffuse/Tau/pulse/1") };
-  const Real taxis_Tau[]   = { es.parameters.get<Real>("taxis/Tau")         ,
-                               es.parameters.get<Real>("taxis/Tau/pulse/0") ,
-                               es.parameters.get<Real>("taxis/Tau/pulse/1") };
+  const Real taxis1_Tau[]   = { es.parameters.get<Real>("taxis_1/Tau")         ,
+                                es.parameters.get<Real>("taxis_1/Tau/pulse/0") ,
+                                es.parameters.get<Real>("taxis_1/Tau/pulse/1") };
+  const Real taxis2_Tau[]   = { es.parameters.get<Real>("taxis_2/Tau")         ,
+                                es.parameters.get<Real>("taxis_2/Tau/pulse/0") ,
+                                es.parameters.get<Real>("taxis_2/Tau/pulse/1") };
   const Real produce_Tau[] = { es.parameters.get<Real>("produce/Tau")           ,
                                es.parameters.get<Real>("produce/Tau/sigmoid/0") ,
                                es.parameters.get<Real>("produce/Tau/sigmoid/1") };
-  const Real transform_Tau[] = { es.parameters.get<Real>("transform/Tau")         ,
-                                 es.parameters.get<Real>("transform/Tau/pulse/0") ,
-                                 es.parameters.get<Real>("transform/Tau/pulse/1") };
+  const Real transform_Tau[] = { es.parameters.get<Real>("transform/Tau")             ,
+                                 es.parameters.get<Real>("transform/Tau/trapezoid/0") ,
+                                 es.parameters.get<Real>("transform/Tau/trapezoid/1") ,
+                                 es.parameters.get<Real>("transform/Tau/trapezoid/2") ,
+                                 es.parameters.get<Real>("transform/Tau/trapezoid/3") };
   const Real decay_Tau[] = { es.parameters.get<Real>("decay/Tau")         ,
                              es.parameters.get<Real>("decay/Tau/pulse/0") ,
                              es.parameters.get<Real>("decay/Tau/pulse/1") };
+  // tolerance angle to allow fibre-oriented propagation of misfolded proteins
+  const Real omega_A_b = cos(es.parameters.get<Real>("taxis/A_b/angle"));
+  const Real omega_Tau = cos(es.parameters.get<Real>("taxis/Tau/angle"));
 
   for (const auto & elem : mesh.active_local_element_ptr_range())
     {
@@ -399,15 +460,35 @@ void assemble_adpm (EquationSystems & es,
       for (unsigned int qp=0; qp<qrule.n_points(); qp++)
         {
           Number PrP_old(0.0), A_b_old(0.0), Tau_old(0.0);
-          Gradient GRAD_PrP_old({0.0, 0.0, 0.0}), GRAD_A_b_old({0.0, 0.0, 0.0}), GRAD_Tau_old({0.0, 0.0, 0.0});
+          Gradient GRAD_A_b_old({0.0, 0.0, 0.0}), GRAD_Tau_old({0.0, 0.0, 0.0});
           for (std::size_t l=0; l<n_var_dofs; l++)
             {
               PrP_old += phi[l][qp] * system.old_solution(dof_indices_var[0][l]);
               A_b_old += phi[l][qp] * system.old_solution(dof_indices_var[1][l]);
               Tau_old += phi[l][qp] * system.old_solution(dof_indices_var[2][l]);
-              GRAD_PrP_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[0][l]));
               GRAD_A_b_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[1][l]));
               GRAD_Tau_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[2][l]));
+            }
+
+          const Real GRAD_A_b_norm(GRAD_A_b_old.norm()), GRAD_Tau_norm(GRAD_Tau_old.norm());
+          Gradient GRAD_A_b_unit({0.0, 0.0, 0.0}), GRAD_Tau_unit({0.0, 0.0, 0.0});
+          Gradient tract_A_b({0.0, 0.0, 0.0}), tract_Tau({0.0, 0.0, 0.0});
+
+          if (GRAD_A_b_norm)
+            {
+              GRAD_A_b_unit = GRAD_A_b_old / GRAD_A_b_norm;
+              //
+              const Real d = GRAD_A_b_unit * tracts;
+              if      (d>+omega_A_b) tract_A_b =  tracts;
+              else if (d<-omega_A_b) tract_A_b = -tracts;
+            }
+          if (GRAD_Tau_norm)
+            {
+              GRAD_Tau_unit = GRAD_Tau_old / GRAD_Tau_norm;
+              //
+              const Real d = GRAD_Tau_unit * tracts;
+              if      (d>+omega_Tau) tract_Tau =  tracts;
+              else if (d<-omega_Tau) tract_Tau = -tracts;
             }
 
           for (std::size_t i=0; i<n_var_dofs; i++)
@@ -416,10 +497,9 @@ void assemble_adpm (EquationSystems & es,
               Fe_var[0](i) += JxW[qp]*(
                                         PrP_old * phi[i][qp] // capacity term
                                       + DT_2*( // transport, source, sink terms
-                                             - Pi_(A_b_old,transform_A_b) * PrP_old * phi[i][qp]
-                                             - Pi_(Tau_old,transform_Tau) * PrP_old * phi[i][qp]
+                                             - Tr_(A_b_old,transform_A_b) * PrP_old * phi[i][qp]
+                                             - Tr_(Tau_old,transform_Tau) * PrP_old * phi[i][qp]
                                              - Pi_(PrP_old,decay_PrP) * PrP_old * phi[i][qp]
-                                             //- (GRAD_PrP_old * velocity) * phi[i][qp]
                                              )
                                       );
               // RHS contribution
@@ -427,10 +507,11 @@ void assemble_adpm (EquationSystems & es,
                                         A_b_old * phi[i][qp] // capacity term
                                       + DT_2*( // transport, source, sink terms
                                                SD_(A_b_old,produce_A_b) * A_b_old * phi[i][qp]
-                                             + Pi_(A_b_old,transform_A_b) * PrP_old * phi[i][qp]
+                                             + Tr_(A_b_old,transform_A_b) * PrP_old * phi[i][qp]
                                              - Pi_(A_b_old,decay_A_b) * A_b_old * phi[i][qp]
                                              - Pi_(A_b_old,diffuse_A_b) * (GRAD_A_b_old * dphi[i][qp])
-                                             - Pi_(A_b_old,taxis_A_b) * (GRAD_A_b_old * tracts) * (tracts * dphi[i][qp])
+                                             - Pi_(A_b_old,taxis1_A_b) * A_b_old * (tract_A_b * dphi[i][qp])
+                                             + Pi_(Tau_old,taxis2_A_b) * A_b_old * (tract_Tau * dphi[i][qp])
                                              //- (GRAD_A_b_old * velocity) * phi[i][qp]
                                              )
                                       );
@@ -439,10 +520,11 @@ void assemble_adpm (EquationSystems & es,
                                         Tau_old * phi[i][qp] // capacity term
                                       + DT_2*( // transport, source, sink terms
                                                SD_(Tau_old,produce_Tau) * Tau_old * phi[i][qp]
-                                             + Pi_(Tau_old,transform_Tau) * PrP_old * phi[i][qp]
+                                             + Tr_(Tau_old,transform_Tau) * PrP_old * phi[i][qp]
                                              - Pi_(Tau_old,decay_Tau) * Tau_old * phi[i][qp]
                                              - Pi_(Tau_old,diffuse_Tau) * (GRAD_Tau_old * dphi[i][qp])
-                                             - Pi_(Tau_old,taxis_Tau) * (GRAD_Tau_old * tracts) * (tracts * dphi[i][qp])
+                                             - Pi_(Tau_old,taxis1_Tau) * Tau_old * (tract_Tau * dphi[i][qp])
+                                             + Pi_(A_b_old,taxis2_Tau) * Tau_old * (tract_A_b * dphi[i][qp])
                                              //- (GRAD_Tau_old * velocity) * phi[i][qp]
                                              )
                                       );
@@ -453,41 +535,56 @@ void assemble_adpm (EquationSystems & es,
                   Ke_var[0][0](i,j) += JxW[qp]*(
                                                  phi[j][qp] * phi[i][qp] // capacity term
                                                - DT_2*( // transport, source, sink terms
-                                                      - Pi_(A_b_old,transform_A_b) * phi[j][qp] * phi[i][qp]
-                                                      - Pi_(Tau_old,transform_Tau) * phi[j][qp] * phi[i][qp]
+                                                      - Tr_(A_b_old,transform_A_b) * phi[j][qp] * phi[i][qp]
+                                                      - Tr_(Tau_old,transform_Tau) * phi[j][qp] * phi[i][qp]
                                                       - Pi_(PrP_old,decay_PrP) * phi[j][qp] * phi[i][qp]
-                                                      //- (dphi[j][qp] * velocity) * phi[i][qp]
+                                                      )
+                                               );
+                  Ke_var[0][1](i,j) += JxW[qp]*(
+                                               - DT_2*( // transport, source, sink terms
+                                                      - deriv_Tr_(A_b_old,transform_A_b) * PrP_old * phi[j][qp] * phi[i][qp]
+                                                      )
+                                               );
+                  Ke_var[0][2](i,j) += JxW[qp]*(
+                                               - DT_2*( // transport, source, sink terms
+                                                      - deriv_Tr_(Tau_old,transform_Tau) * PrP_old * phi[j][qp] * phi[i][qp]
                                                       )
                                                );
                   // Matrix contribution
                   Ke_var[1][0](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
-                                                        Pi_(A_b_old,transform_A_b) * phi[j][qp] * phi[i][qp]
+                                                      + Tr_(A_b_old,transform_A_b) * phi[j][qp] * phi[i][qp]
                                                       )
                                                );
                   Ke_var[1][1](i,j) += JxW[qp]*(
                                                  phi[j][qp] * phi[i][qp] // capacity term
                                                - DT_2*( // transport, source, sink terms
                                                         SD_(A_b_old,produce_A_b) * phi[j][qp] * phi[i][qp]
+                                                      + deriv_SD_(A_b_old,produce_A_b) * A_b_old * phi[j][qp] * phi[i][qp]
+                                                      + deriv_Tr_(A_b_old,transform_A_b) * PrP_old * phi[j][qp] * phi[i][qp]
                                                       - Pi_(A_b_old,decay_A_b) * phi[j][qp] * phi[i][qp]
                                                       - Pi_(A_b_old,diffuse_A_b) * (dphi[j][qp] * dphi[i][qp])
-                                                      - Pi_(A_b_old,taxis_A_b) * (dphi[j][qp] * tracts) * (tracts * dphi[i][qp])
+                                                      - Pi_(A_b_old,taxis1_A_b) * phi[j][qp] * (tract_A_b * dphi[i][qp])
+                                                      + Pi_(Tau_old,taxis2_A_b) * phi[j][qp] * (tract_Tau * dphi[i][qp])
                                                       //- (dphi[j][qp] * velocity) * phi[i][qp]
                                                       )
                                                );
                   // Matrix contribution
                   Ke_var[2][0](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
-                                                        Pi_(Tau_old,transform_Tau) * phi[j][qp] * phi[i][qp]
+                                                      + Tr_(Tau_old,transform_Tau) * phi[j][qp] * phi[i][qp]
                                                       )
                                                );
                   Ke_var[2][2](i,j) += JxW[qp]*(
                                                  phi[j][qp] * phi[i][qp] // capacity term
                                                - DT_2*( // transport, source, sink terms
                                                         SD_(Tau_old,produce_Tau) * phi[j][qp] * phi[i][qp]
+                                                      + deriv_SD_(Tau_old,produce_Tau) * Tau_old * phi[j][qp] * phi[i][qp]
+                                                      + deriv_Tr_(Tau_old,transform_Tau) * PrP_old * phi[j][qp] * phi[i][qp]
                                                       - Pi_(Tau_old,decay_Tau) * phi[j][qp] * phi[i][qp]
                                                       - Pi_(Tau_old,diffuse_Tau) * (dphi[j][qp] * dphi[i][qp])
-                                                      - Pi_(Tau_old,taxis_Tau) * (dphi[j][qp] * tracts) * (tracts * dphi[i][qp])
+                                                      - Pi_(Tau_old,taxis1_Tau) * phi[j][qp] * (tract_Tau * dphi[i][qp])
+                                                      + Pi_(A_b_old,taxis2_Tau) * phi[j][qp] * (tract_A_b * dphi[i][qp])
                                                       //- (dphi[j][qp] * velocity) * phi[i][qp]
                                                       )
                                                );
@@ -593,7 +690,7 @@ void check_solution (EquationSystems & es)
 void save_solution (std::ofstream & csv, EquationSystems & es)
 {
   const MeshBase& mesh = es.get_mesh();
-  libmesh_assert_equal_to(mesh.mesh_dimension(), 3);
+  const unsigned int dim = mesh.mesh_dimension();
 
   const TransientLinearImplicitSystem & system =
     es.get_system<TransientLinearImplicitSystem>("ADPM");
@@ -607,21 +704,37 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
   const Real Tau__min = es.parameters.get<Real>("range/Tau/min"),
              Tau__max = es.parameters.get<Real>("range/Tau/max");
 
+  FEType fe_type = system.variable_type(0);
+
+  std::unique_ptr<FEBase> fe(FEBase::build(dim, fe_type));
+
+  QGauss qrule (dim, fe_type.default_quadrature_order());
+
+  fe->attach_quadrature_rule(&qrule);
+
+  const std::vector<Real> & JxW = fe->get_JxW();
+
+  const std::vector<std::vector<Real>> & phi = fe->get_phi();
+
   pm_ptr->barrier();
 
   if (0==global_processor_id())
     {
-      /*
       // write the header of the CSV file
       if (0.0==system.time)
         {
-          csv << "\"Time\"" << std::flush;
+          csv << "\"TIME\"" << std::flush;
           for (const auto & ID : parcellation)
-            csv << ",\"A_b__" << ID << "\",\"Tau__" << ID << "\"" << std::flush;
+            csv << ",\"CONCENTRATION__A_b__" << ID << "\""
+                << ",\"CONCENTRATION__Tau__" << ID << "\"" << std::flush;
+          for (const auto & ID : parcellation)
+            csv << ",\"VOLUME__A_b__" << ID << "\""
+                << ",\"VOLUME__Tau__" << ID << "\"" << std::flush;
           csv << std::endl;
         }
-      */
 
+      std::map<subdomain_id_type, Real> parcellation__A_b_concentration;
+      std::map<subdomain_id_type, Real> parcellation__Tau_concentration;
       std::map<subdomain_id_type, Real> parcellation__A_b_volume;
       std::map<subdomain_id_type, Real> parcellation__Tau_volume;
       // initialize the map containers
@@ -633,48 +746,78 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
 
       for (const auto & elem : mesh.active_element_ptr_range())
         {
+          std::vector<dof_id_type> dof_indices;
+          system.get_dof_map().dof_indices(elem, dof_indices);
+
           std::vector<std::vector<dof_id_type>> dof_indices_var(3);
           for (unsigned int v=0; v<3; v++)
             system.get_dof_map().dof_indices(elem, dof_indices_var[v], v);
+
+          const unsigned int n_var_dofs = dof_indices_var[0].size();
+
           libmesh_assert(elem->n_nodes() == dof_indices_var[0].size());
           libmesh_assert(elem->n_nodes() == dof_indices_var[1].size());
           libmesh_assert(elem->n_nodes() == dof_indices_var[2].size());
 
-          std::vector<Real> A_b_, Tau_;
-          for (unsigned int l=0; l<elem->n_nodes(); l++)
+          const subdomain_id_type ID = elem->subdomain_id();
+          const Real Volume = elem->volume();
+
+          fe->reinit(elem);
+
+          Number A_b__average(0.0), Tau__average(0.0);
+          for (unsigned int qp=0; qp<qrule.n_points(); qp++)
             {
-              A_b_.push_back( soln[dof_indices_var[1][l]] );
-              Tau_.push_back( soln[dof_indices_var[2][l]] );
+              Number A_b(0.0), Tau(0.0);
+              for (std::size_t l=0; l<n_var_dofs; l++)
+                {
+                  A_b += phi[l][qp] * soln[dof_indices_var[1][l]];
+                  Tau += phi[l][qp] * soln[dof_indices_var[2][l]];
+                }
+              A_b__average += JxW[qp] * A_b;
+              Tau__average += JxW[qp] * Tau;
             }
 
-          const subdomain_id_type ID = elem->subdomain_id();
-
-          {
-            bool do_include = true;
-            for (unsigned int l=0; l<elem->n_nodes() && do_include; l++)
-              {
-                if ( !(  A_b_[l]>=A_b__min && A_b_[l]<=A_b__max ) )
-                  do_include = false;
-              }
-            if (do_include)
-              parcellation__A_b_volume[ID] += elem->volume();
-          }
-
-          {
-            bool do_include = true;
-            for (unsigned int l=0; l<elem->n_nodes() && do_include; l++)
-              {
-                if ( !(  Tau_[l]>=Tau__min && Tau_[l]<=Tau__max ) )
-                  do_include = false;
-              }
-            if (do_include)
-              parcellation__Tau_volume[ID] += elem->volume();
-          }
+          parcellation__A_b_concentration[ID] = A_b__average
+                                              / Volume;
+          //
+          parcellation__Tau_concentration[ID] = Tau__average
+                                              / Volume;
+          //
+          bool consider;
+          //
+          consider = true;
+          for (unsigned int n=0; n<elem->n_nodes(); n++)
+            {
+              const Real A_b = soln[dof_indices_var[1][n]];
+              if ( !(  A_b>=A_b__min && A_b<=A_b__max ) )
+                {
+                  consider = false;
+                  break;
+                }
+            }
+          if (consider)
+            parcellation__A_b_volume[ID] += Volume;
+          //
+          consider = true;
+          for (unsigned int n=0; n<elem->n_nodes(); n++)
+            {
+              const Real Tau = soln[dof_indices_var[2][n]];
+              if ( !(  Tau>=Tau__min && Tau<=Tau__max ) )
+                {
+                  consider = false;
+                  break;
+                }
+            }
+          if (consider)
+            parcellation__Tau_volume[ID] += Volume;
           // ...end of active finite elements loop
         }
 
       // save the data in the CSV file
       csv << system.time << std::flush;
+      for (const auto & ID : parcellation)
+        csv << ',' << parcellation__A_b_concentration[ID]
+            << ',' << parcellation__Tau_concentration[ID] << std::flush;
       for (const auto & ID : parcellation)
         csv << ',' << parcellation__A_b_volume[ID]
             << ',' << parcellation__Tau_volume[ID] << std::flush;

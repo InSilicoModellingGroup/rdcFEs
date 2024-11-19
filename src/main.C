@@ -11,11 +11,18 @@ extern void pihna (LibMeshInit & );
 extern void proteas (LibMeshInit &, const std::string &inputFile );
 extern void ripf (LibMeshInit &, std::string input_file );
 extern void process_mesh (LibMeshInit & );
+extern void solid (LibMeshInit & );
+extern void coupled_hcc (LibMeshInit & );
 
 int main (int argc, char* argv[])
 {
   LibMeshInit init(argc, argv);
   GetPot command_line(argc, argv);
+
+  std::string inputFile = command_line("input", "input.dat");
+  std::cout << std::endl
+    << " ** Input file is: " << inputFile  << "\n"
+    << "    Use 'input=<file>' to specify a different input file.\n" << std::endl;
 
   std::string s;
   if (command_line.search(1, "-m"))
@@ -25,6 +32,8 @@ int main (int argc, char* argv[])
       if ("adpm"==s) adpm(init);
       // PIHNA cancer model
       else if ("pihna"==s) pihna(init);
+      // PROTEAS project cancer model
+      else if ("proteas"==s) proteas(init,inputFile);
       // radiation-induced pulmonary fibrosis model
       else if ("ripf"==s) {
 	std::string input_file;
@@ -34,6 +43,17 @@ int main (int argc, char* argv[])
 	}
 	else ripf(init,"input.dat");
       }
+    }
+  else if (command_line.search(1, "-s"))
+    {
+      solid(init);
+    }
+  else if (command_line.search(1, "-c"))
+    {
+      s = command_line.next(s);
+      // hepato-cellular carcinoma model
+      if ("hcc"==s) coupled_hcc(init);
+      else return 1;
     }
   else if (command_line.search(1, "-u"))
     {
