@@ -55,8 +55,10 @@ void proteas (LibMeshInit & init, const std::string &inputFile)
   es.init();
   es.print_info();
 
-  Paraview_IO paraview(msh);
-  paraview.open_pvd(es.parameters.get<std::string>("output_Paraview"));
+  const std::string ex2_filename = es.parameters.get<std::string>("output_EXODUS");
+  ExodusII_IO ex2(msh);
+  ex2.write_equation_systems(ex2_filename, es);
+  ex2.append(true);
 
   std::ofstream csv;
   if (0==global_processor_id())
@@ -64,7 +66,6 @@ void proteas (LibMeshInit & init, const std::string &inputFile)
 
   // save initial solution
   save_solution(csv, es);
-  paraview.update_pvd(es);
 
   const std::set<int> otp = export_integers(es.parameters.get<std::string>("output_time_points"));
 
@@ -101,7 +102,7 @@ void proteas (LibMeshInit & init, const std::string &inputFile)
       if (otp.end()!=otp.find(t))
 	{
           save_solution(csv, es);
-	  paraview.update_pvd(es, t);
+	  ex2.write_timestep(ex2_filename, es, t, time);
 	}
 
       /*** Modifying the RTD values with exponential decay ***/
@@ -175,8 +176,8 @@ void input (const std::string & file_name, EquationSystems & es)
   if (0==global_processor_id())
     std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+"/input_aux.nd").c_str());
   //
-  name = "output_Paraview";
-  es.parameters.set<std::string>(name) = (DIR+"/output.paraview");
+  name = "output_EXODUS";
+  es.parameters.set<std::string>(name) = DIR + in(name, "/output.ex2");
   //
   name = "output_CSV";
   es.parameters.set<std::string>(name) = (DIR+"/output.csv");
