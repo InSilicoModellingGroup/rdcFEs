@@ -8,6 +8,7 @@ PerfLog plog("rdcFEs");
 
 extern void adpm (LibMeshInit & );
 extern void pihna (LibMeshInit & );
+extern void proteas (LibMeshInit &, const std::string &inputFile );
 extern void ripf (LibMeshInit &, std::string input_file );
 extern void process_mesh (LibMeshInit & );
 

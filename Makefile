@@ -1,5 +1,5 @@
 ######################################################################
-LIBMESH_DIR ?= /home/eioann18/repository/libs/libmesh_installation
+LIBMESH_DIR ?= /Users/vasvav/Work/libmesh-f29b2d11ea0566a17f16e3b8db08169a2004404c
 
 include $(LIBMESH_DIR)/Make.common
 
