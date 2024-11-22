@@ -1,5 +1,5 @@
 #
-directory = 'RP01-newModel-test-oed-Cl-1e-4'
+directory = 'RP01-newModel-initial'
 input_GMSH      = 'initial_data/RP01/RPRO-01a_Brain-labeled_brain.msh'
 input_nodal     = 'initial_data/RP01/RPRO-01a_Brain-nodal_field.dat'
 input_nodal_aux = 'initial_data/RP01/RPRO-01a_Brain-nodal_field_aux.dat'
@@ -28,10 +28,10 @@ necrosis/proliferation = 0.5e-3
 necrosis/clearance_rate = 5.0e-2
 necrosis/threshold = 0.1
 #
-oedema/RT_inflammation_rate = 0.0e-2
-oedema/proliferation = 0.0e-3
-oedema/RT_exp = 5
-oedema/clearance_rate = 1.0e-4
 oedema/diffusion = 5.0e-3
+oedema/proliferation = 1.0e-2
+oedema/RT_inflammation_rate = 1.0e-2
+oedema/RT_exp = 5
+oedema/clearance_rate = 1.0e-2
 oedema/threshold = 0.1
 #
