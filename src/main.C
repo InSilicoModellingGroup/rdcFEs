@@ -21,8 +21,8 @@ int main (int argc, char* argv[])
 
   std::string inputFile = command_line("input", "input.dat");
   std::cout << std::endl
-    << " ** Input file is: " << inputFile  << "\n"
-    << "    Use 'input=<file>' to specify a different input file.\n" << std::endl;
+            << " ** Input file is: " << inputFile  << "\n"
+            << "    Use 'input=<file>' to specify a different input file.\n" << std::endl;
 
   std::string s;
   if (command_line.search(1, "-m"))
@@ -35,14 +35,7 @@ int main (int argc, char* argv[])
       // PROTEAS project cancer model
       else if ("proteas"==s) proteas(init,inputFile);
       // radiation-induced pulmonary fibrosis model
-      else if ("ripf"==s) {
-	std::string input_file;
-	if (command_line.search(1, "-i")) {
-	  input_file = command_line.next(input_file);
-	  ripf(init,input_file);
-	}
-	else ripf(init,"input.dat");
-      }
+      else if ("ripf"==s) ripf(init,inputFile);
     }
   else if (command_line.search(1, "-s"))
     {

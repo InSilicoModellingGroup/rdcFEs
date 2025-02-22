@@ -89,7 +89,7 @@ void ripf (LibMeshInit & init, std::string input_file)
       if (otp.end()!=otp.find(t))
         {
           save_solution(csv, es);
-	  ex2.write_timestep(ex2_filename, es, t, model.time);
+          ex2.write_timestep(ex2_filename, es, t, model.time);
         }
     }
 
@@ -281,12 +281,10 @@ void initial_ripf (EquationSystems & es,
   const MeshBase& mesh = es.get_mesh();
   libmesh_assert_equal_to(mesh.mesh_dimension(), 3);
 
-  TransientLinearImplicitSystem & system =
-    es.get_system<TransientLinearImplicitSystem>("RIPF");
+  TransientLinearImplicitSystem & system = es.get_system<TransientLinearImplicitSystem>("RIPF");
   libmesh_assert_equal_to(system.n_vars(), 3);
 
-  es.parameters.set<Real> ("time") =
-  system.time = 0.0;
+  es.parameters.set<Real> ("time") = system.time = 0.0;
 
   std::ifstream fin(es.parameters.get<std::string>("input_nodal"));
 
@@ -395,20 +393,20 @@ void assemble_ripf (EquationSystems & es,
 
       DenseMatrix<Number> Ke(n_dofs, n_dofs);
       DenseSubMatrix<Number> Ke_var[3][3] =
-      {
-        { DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke) } ,
-        { DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke) } ,
-        { DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke) }
-      };
+        {
+          { DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke) } ,
+          { DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke) } ,
+          { DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke) }
+        };
       for (unsigned int i=0; i<3; i++)
         for (unsigned int j=0; j<3; j++)
           Ke_var[i][j].reposition(i*n_var_dofs, j*n_var_dofs, n_var_dofs, n_var_dofs);
 
       DenseVector<Number> Fe(n_dofs);
       DenseSubVector<Number> Fe_var[3] =
-      {
-        DenseSubVector<Number>(Fe), DenseSubVector<Number>(Fe), DenseSubVector<Number>(Fe)
-      };
+        {
+          DenseSubVector<Number>(Fe), DenseSubVector<Number>(Fe), DenseSubVector<Number>(Fe)
+        };
       for (unsigned int i=0; i<3; i++)
         Fe_var[i].reposition(i*n_var_dofs, n_var_dofs);
 
@@ -438,16 +436,16 @@ void assemble_ripf (EquationSystems & es,
           for (std::size_t l=0; l<n_var_dofs; l++)
             {
               cc__dtime += phi[l][qp] * TD_system.current_solution(dof_indices_var[0][l]);
-	      // if ( cc__dtime > 1e-6 )
-	      // 	{
-	      // 	  std::cout << "Positive cc derivative. cc_dtime=" << cc__dtime << ", cc_old=" << cc_old << ", cc_older=" << cc_older << std::endl;
-	      // 	}
+              // if ( cc__dtime > 1e-6 )
+              //        {
+              //          std::cout << "Positive cc derivative. cc_dtime=" << cc__dtime << ", cc_old=" << cc_old << ", cc_older=" << cc_older << std::endl;
+              //        }
               fb__dtime += phi[l][qp] * TD_system.current_solution(dof_indices_var[1][l]);
-	      if ( fb__dtime < -1e-2 )
-		{
-		  std::cout << "Negative fb derivative. fb_dtime=" << fb__dtime << ", fb_old=" << fb_old << ", fb_older=" << fb_older << std::endl;
-		  fb__dtime = 0.0;
-		}
+              if ( fb__dtime < -1e-2 )
+                {
+                  std::cout << "Negative fb derivative. fb_dtime=" << fb__dtime << ", fb_old=" << fb_old << ", fb_older=" << fb_older << std::endl;
+                  fb__dtime = 0.0;
+                }
             }
           Number RTD_td(0.0);
           Gradient GRAD_RTD_td({0.0, 0.0, 0.0});
@@ -470,12 +468,12 @@ void assemble_ripf (EquationSystems & es,
             {
               Tau = 1.0 - pow(total_cells, capacity_exponent);
               Tau_dcc = Tau_dfb = -capacity_exponent * pow(total_cells, capacity_exponent-1.0);
-	      Tau_dhu = -capacity_exponent * pow(total_cells, capacity_exponent-1.0)*0.5/hu_ref;
+              Tau_dhu = -capacity_exponent * pow(total_cells, capacity_exponent-1.0)*0.5/hu_ref;
             }
-	  //	  std::cout << "Tau = " << Tau << ", Tau_dfb = " << Tau_dfb << ", Tau_dhu = " << Tau_dhu <<  std::endl;
+          //      std::cout << "Tau = " << Tau << ", Tau_dfb = " << Tau_dfb << ", Tau_dhu = " << Tau_dhu <<  std::endl;
 
-	  // cc terms
-	  const Real normRTD_cc = RTD_td/RTD_ref_cc;
+          // cc terms
+          const Real normRTD_cc = RTD_td/RTD_ref_cc;
           const Real theta_cc_Qc = theta_cc * (1.0 - exp(-alpha*normRTD_cc-beta*pow2(normRTD_cc)));
           Real cc_prol = 0.0;
           Real cc_prol_dcc = 0.0;
@@ -486,8 +484,8 @@ void assemble_ripf (EquationSystems & es,
               cc_prol_dcc = 1.0-2.0*cc_old;
             }
 
-	  // fb terms
-	  const Real normRTD_fb = RTD_td/RTD_ref_fb;
+          // fb terms
+          const Real normRTD_fb = RTD_td/RTD_ref_fb;
           const Real kappa_fb_RTD = kappa_fb * normRTD_fb;
           const Real lambda_fb_RTD = lambda_fb * normRTD_fb;
           Real fb_recruit = 0.0;
@@ -496,18 +494,18 @@ void assemble_ripf (EquationSystems & es,
           Real fb_prol_dcc = 0.0, fb_prol_dfb = 0.0, fb_prol_dhu = 0.0;
           if (fb_old >= 0.0 && fb_old < 1.0)
             {
-	      fb_recruit = pow(1.0-fb_old,mu);
-	      fb_recruit_dfb = mu*pow(1-fb_old,mu-1)*(-1.0);
+              fb_recruit = pow(1.0-fb_old,mu);
+              fb_recruit_dfb = mu*pow(1-fb_old,mu-1)*(-1.0);
 
-	      fb_prol = pow(fb_old,nu)*(1-fb_old);
-	      if ( fb_old > 0 ) fb_prol_dfb = nu*pow(fb_old,nu-1)*(1-fb_old) + pow(fb_old,nu)*(-1.0);
+              fb_prol = pow(fb_old,nu)*(1-fb_old);
+              if ( fb_old > 0 ) fb_prol_dfb = nu*pow(fb_old,nu-1)*(1-fb_old) + pow(fb_old,nu)*(-1.0);
             }
 
-	  // hu terms
-	  const Real hu_cc_term = hu_phi_cc * (hu_old + hu_ref)/hu_ref;
-	  const Real hu_cc_term_dhu = 0.0; //hu_phi_cc / hu_ref;
-	  const Real hu_fb_term = hu_phi_fb * (hu_old + hu_ref)/hu_ref;
-	  const Real hu_fb_term_dhu = 0.0; //hu_phi_fb / hu_ref;
+          // hu terms
+          const Real hu_cc_term = hu_phi_cc * (hu_old + hu_ref)/hu_ref;
+          const Real hu_cc_term_dhu = 0.0; //hu_phi_cc / hu_ref;
+          const Real hu_fb_term = hu_phi_fb * (hu_old + hu_ref)/hu_ref;
+          const Real hu_fb_term_dhu = 0.0; //hu_phi_fb / hu_ref;
 
           for (std::size_t i=0; i<n_var_dofs; i++)
             {
@@ -517,7 +515,7 @@ void assemble_ripf (EquationSystems & es,
                                       + DT_2*( // source, sink terms
                                                lambda_cc * cc_prol * Tau * phi[i][qp]
                                              - theta_cc_Qc * cc_old * phi[i][qp]
-					     - diffusion_cc * Tau * (GRAD_cc_old * dphi[i][qp])
+                                             - diffusion_cc * Tau * (GRAD_cc_old * dphi[i][qp])
                                              )
                                       );
               // RHS contribution
@@ -550,7 +548,7 @@ void assemble_ripf (EquationSystems & es,
                                                         lambda_cc * cc_prol * Tau_dcc * phi[j][qp] * phi[i][qp]
                                                       + lambda_cc * cc_prol_dcc * Tau * phi[j][qp] * phi[i][qp]
                                                       - theta_cc_Qc * phi[j][qp] * phi[i][qp]
-						      - diffusion_cc * Tau_dcc * phi[j][qp] * (GRAD_cc_old * dphi[i][qp])
+                                                      - diffusion_cc * Tau_dcc * phi[j][qp] * (GRAD_cc_old * dphi[i][qp])
                                                       - diffusion_cc * Tau * (dphi[j][qp] * dphi[i][qp])
                                                       )
                                                );
@@ -562,9 +560,9 @@ void assemble_ripf (EquationSystems & es,
                                                );
                   Ke_var[0][2](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
-						       lambda_cc * cc_prol * Tau_dhu * phi[j][qp] * phi[i][qp]
+                                                       lambda_cc * cc_prol * Tau_dhu * phi[j][qp] * phi[i][qp]
                                                       )
-						);
+                                                );
                   // Matrix contribution
                   Ke_var[1][0](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
@@ -596,9 +594,9 @@ void assemble_ripf (EquationSystems & es,
                   Ke_var[1][2](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
                                                         kappa_fb_RTD * fb_recruit_dhu * Tau * phi[j][qp] * phi[i][qp]
-						      + kappa_fb_RTD * fb_recruit * Tau_dhu * phi[j][qp] * phi[i][qp]
+                                                      + kappa_fb_RTD * fb_recruit * Tau_dhu * phi[j][qp] * phi[i][qp]
                                                       + lambda_fb_RTD * fb_prol_dhu * Tau * phi[j][qp] * phi[i][qp]
-						      + lambda_fb_RTD * fb_prol * Tau_dhu * phi[j][qp] * phi[i][qp]
+                                                      + lambda_fb_RTD * fb_prol * Tau_dhu * phi[j][qp] * phi[i][qp]
                                                       - haptotaxis_fb * Tau * (dphi[j][qp] * fb_old * dphi[i][qp])
                                                       )
                                                );
@@ -610,15 +608,15 @@ void assemble_ripf (EquationSystems & es,
                                                );
                   Ke_var[2][1](i,j) += JxW[qp]*(
                                                - DT_2*( // source, sink terms
-						       0.0 //epsilon_fb * phi[j][qp] * phi[i][qp]
+                                                       0.0 //epsilon_fb * phi[j][qp] * phi[i][qp]
                                                       )
                                                );
 
                   Ke_var[2][2](i,j) += JxW[qp]*(
                                                  phi[j][qp] * phi[i][qp] // capacity term
                                                - DT_2*(
-						       + hu_cc_term_dhu * cc__dtime * phi[j][qp] * phi[i][qp]
-						       + hu_fb_term_dhu * fb__dtime * phi[j][qp] * phi[i][qp]
+                                                       + hu_cc_term_dhu * cc__dtime * phi[j][qp] * phi[i][qp]
+                                                       + hu_fb_term_dhu * fb__dtime * phi[j][qp] * phi[i][qp]
                                                       )
                                                );
                 }
@@ -682,8 +680,8 @@ void check_solution (EquationSystems & es, std::vector<Number> & prev_soln)
       hu_ = soln[idof[2]]; if (hu_<hu_min) hu_ = hu_min; else if (hu_>hu_max) hu_ = hu_max;
 
       if (fb_>1.0) {
-	std::cout << "fb has overshoot: " << fb_ << " (not changed)" << std::endl;
-	//fb_ = 1.0;
+        std::cout << "fb has overshoot: " << fb_ << " (not changed)" << std::endl;
+        //fb_ = 1.0;
       }
 
       Real cc_p_, fb_p_, hu_p_;
@@ -778,21 +776,21 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
           libmesh_assert(elem->n_nodes() == dof_indices_var[2].size());
 
           Real cc_, fb_, hu_;
-	  const Real cc_thres = es.parameters.get<Real>("cc/threshold");
-	  const Real fb_thres = es.parameters.get<Real>("fb/threshold");
+          const Real cc_thres = es.parameters.get<Real>("cc/threshold");
+          const Real fb_thres = es.parameters.get<Real>("fb/threshold");
           bool cc_cell=true, fb_cell=true;
           for (unsigned int l=0; l<elem->n_nodes(); l++)
             {
               cc_ = soln[dof_indices_var[0][l]];
               fb_ = soln[dof_indices_var[1][l]];
               hu_ = soln[dof_indices_var[2][l]];
-	      if ( cc_ < cc_thres ) cc_cell = false;
-	      if ( fb_ < fb_thres ) fb_cell = false;
-	      if ( !cc_cell && !fb_cell ) break;
+              if ( cc_ < cc_thres ) cc_cell = false;
+              if ( fb_ < fb_thres ) fb_cell = false;
+              if ( !cc_cell && !fb_cell ) break;
             }
 
-	  if (cc_cell) tumour_volume += elem->volume();
-	  if (fb_cell) fibrosis_volume += elem->volume();
+          if (cc_cell) tumour_volume += elem->volume();
+          if (fb_cell) fibrosis_volume += elem->volume();
 
           // ...end of active finite elements loop
         }
