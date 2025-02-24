@@ -9,7 +9,7 @@ PerfLog plog("rdcFEs");
 extern void adpm (LibMeshInit & );
 extern void pihna (LibMeshInit & );
 extern void proteas (LibMeshInit &, const std::string &inputFile );
-extern void ripf (LibMeshInit & );
+extern void ripf (LibMeshInit &, std::string input_file );
 extern void process_mesh (LibMeshInit & );
 extern void solid (LibMeshInit & );
 extern void coupled_hcc (LibMeshInit & );
@@ -21,8 +21,8 @@ int main (int argc, char* argv[])
 
   std::string inputFile = command_line("input", "input.dat");
   std::cout << std::endl
-    << " ** Input file is: " << inputFile  << "\n"
-    << "    Use 'input=<file>' to specify a different input file.\n" << std::endl;
+            << " ** Input file is: " << inputFile  << "\n"
+            << "    Use 'input=<file>' to specify a different input file.\n" << std::endl;
 
   std::string s;
   if (command_line.search(1, "-m"))
@@ -35,7 +35,7 @@ int main (int argc, char* argv[])
       // PROTEAS project cancer model
       else if ("proteas"==s) proteas(init,inputFile);
       // radiation-induced pulmonary fibrosis model
-      else if ("ripf"==s) ripf(init);
+      else if ("ripf"==s) ripf(init,inputFile);
     }
   else if (command_line.search(1, "-s"))
     {

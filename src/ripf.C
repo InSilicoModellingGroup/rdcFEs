@@ -10,34 +10,34 @@ static void save_solution (std::ofstream & , EquationSystems & );
 extern PerfLog plog;
 static Parallel::Communicator * pm_ptr = 0;
 
-void ripf (LibMeshInit & init)
+void ripf (LibMeshInit & init, std::string input_file)
 {
   Mesh mesh(init.comm(), 3);
   EquationSystems es(mesh);
 
   pm_ptr = & init.comm();
 
-  input("input.dat", es);
+  input(input_file, es);
 
   TransientLinearImplicitSystem & model =
     es.add_system<TransientLinearImplicitSystem>("RIPF");
-  model.add_variable("HU", FIRST, LAGRANGE);
   model.add_variable("cc", FIRST, LAGRANGE);
   model.add_variable("fb", FIRST, LAGRANGE);
+  model.add_variable("hu", FIRST, LAGRANGE);
   model.attach_assemble_function(assemble_ripf);
   model.attach_init_function(initial_ripf);
 
   System & model_rates =
-    es.add_system<System>("RIPF-TimeDeriv");
-  model_rates.add_variable("HU_TimeDeriv", FIRST, LAGRANGE);
-  model_rates.add_variable("cc_TimeDeriv", FIRST, LAGRANGE);
-  model_rates.add_variable("fb_TimeDeriv", FIRST, LAGRANGE);
+    es.add_system<System>("RIPF-dot");
+  model_rates.add_variable("cc-dot", FIRST, LAGRANGE);
+  model_rates.add_variable("fb-dot", FIRST, LAGRANGE);
+  model_rates.add_variable("hu-dot", FIRST, LAGRANGE);
 
   ExplicitSystem & radiotherapy =
-    es.add_system<ExplicitSystem>("RT");
-  radiotherapy.add_variable("RT_dose/broad", FIRST, LAGRANGE);
-  radiotherapy.add_variable("RT_dose/focus", FIRST, LAGRANGE);
-  radiotherapy.add_variable("RT_dose/total", FIRST, LAGRANGE);
+    es.add_system<ExplicitSystem>("RTD");
+  radiotherapy.add_variable("RTD/broad", FIRST, LAGRANGE);
+  radiotherapy.add_variable("RTD/focus", FIRST, LAGRANGE);
+  radiotherapy.add_variable("RTD/total", FIRST, LAGRANGE);
   radiotherapy.attach_init_function(initial_radiotherapy);
 
   GmshIO(mesh).read(es.parameters.get<std::string>("input_GMSH"));
@@ -47,13 +47,15 @@ void ripf (LibMeshInit & init)
   es.init();
   es.print_info();
 
+  const std::string ex2_filename = es.parameters.get<std::string>("output_EXODUS");
+  ExodusII_IO ex2(mesh);
+  ex2.write_equation_systems(ex2_filename, es);
+  ex2.append(true);
+
   std::vector<Number> soln;
   model.update_global_solution(soln);
 
   check_solution(es, soln);
-
-  Paraview_IO paraview(mesh);
-  paraview.open_pvd(es.parameters.get<std::string>("output_PARAVIEW"));
 
   std::ofstream csv;
   if (0==global_processor_id())
@@ -61,7 +63,6 @@ void ripf (LibMeshInit & init)
 
   // save initial solution
   save_solution(csv, es);
-  paraview.update_pvd(es);
 
   const std::set<int> otp = export_integers(es.parameters.get<std::string>("output_time_points"));
 
@@ -88,7 +89,7 @@ void ripf (LibMeshInit & init)
       if (otp.end()!=otp.find(t))
         {
           save_solution(csv, es);
-          paraview.update_pvd(es, t);
+          ex2.write_timestep(ex2_filename, es, t, model.time);
         }
     }
 
@@ -110,7 +111,7 @@ void input (const std::string & file_name, EquationSystems & es)
     std::system(std::string("mkdir "+DIR).c_str());
   // create a copy of the input file containing all model parameters
   if (0==global_processor_id())
-    std::system(std::string("cp "+file_name+" "+DIR+file_name).c_str());
+    std::system(std::string("cp "+file_name+" "+DIR+"/input.dat").c_str());
 
   name = "input_GMSH";
   es.parameters.set<std::string>(name) = in(name, "input.msh");
@@ -128,8 +129,8 @@ void input (const std::string & file_name, EquationSystems & es)
   if (0==global_processor_id())
     std::system(std::string("cp "+es.parameters.get<std::string>(name)+" "+DIR+es.parameters.get<std::string>(name)).c_str());
   //
-  name = "output_PARAVIEW";
-  es.parameters.set<std::string>(name) = DIR + in(name, "output4paraview");
+  name = "output_EXODUS";
+  es.parameters.set<std::string>(name) = DIR + in(name, "output.ex2");
   //
   name = "output_CSV";
   es.parameters.set<std::string>(name) = DIR + in(name, "output.csv");
@@ -170,112 +171,90 @@ void input (const std::string & file_name, EquationSystems & es)
 
   // general parameters including for radiotherapy (RT)
   {
-    name = "RT_dose/broad/fractions"; es.parameters.set<int>(name) = in(name, 1);
-    name = "RT_dose/focus/fractions"; es.parameters.set<int>(name) = in(name, 1);
+    name = "RTD/broad/fractions"; es.parameters.set<int>(name) = in(name, 1);
+    name = "RTD/focus/fractions"; es.parameters.set<int>(name) = in(name, 1);
     //
-    name = "volume_fraction/stroma";     es.parameters.set<Real>(name) = in(name, 0.);
-    name = "volume_fraction/parenchyma"; es.parameters.set<Real>(name) = in(name, 0.);
-    name = "volume_fraction/exponent";   es.parameters.set<Real>(name) = in(name, 1.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "volume_fraction/min_vacant"; es.parameters.set<Real>(name) = in(name, 1.e-12);
-    const Real VF_ = es.parameters.get<Real>(name);
-    name = "volume_fraction/max_vacant"; es.parameters.set<Real>(name) = in(name, 1.-VF_);
-    //
-    name = "HU/min"; es.parameters.set<Real>(name) = in(name, -1000.);
-    name = "HU/max"; es.parameters.set<Real>(name) = in(name, +1000.);
-    //
-    name = "range_cc/HU/min"; es.parameters.set<Real>(name) = in(name, es.parameters.get<Real>("HU/min"));
-    name = "range_cc/HU/max"; es.parameters.set<Real>(name) = in(name, es.parameters.get<Real>("HU/max"));
-    name = "range_cc/min"; es.parameters.set<Real>(name) = in(name, 1.0e-9);
-    //
-    name = "range_fb/HU/min"; es.parameters.set<Real>(name) = in(name, es.parameters.get<Real>("HU/min"));
-    name = "range_fb/HU/max"; es.parameters.set<Real>(name) = in(name, es.parameters.get<Real>("HU/max"));
-    name = "range_fb/min"; es.parameters.set<Real>(name) = in(name, 1.0e-9);
-  }
-
-  // parameters for the species: HU
-  {
-    name = "HU/phi/cc/build";  es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "HU/phi/cc/decay";  es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)>0.0) libmesh_error();
-    name = "HU/phi/cc/rate";   es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "HU/phi/fb/build";  es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "HU/phi/fb/decay";  es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)>0.0) libmesh_error();
-    name = "HU/phi/fb/rate";   es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "HU/phi/tolerance"; es.parameters.set<Real>(name) = in(name, 0.);
+    name = "capacity/exponent";   es.parameters.set<Real>(name) = in(name, 1.);
     if (es.parameters.get<Real>(name)<0.0) libmesh_error();
   }
 
   // parameters for the species: cc
   {
-    name = "cc/kappa";      es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "cc/kappa/RT/c"; es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "cc/delta";      es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "cc/delta/RT/a"; es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<=0.0) libmesh_error();
-    name = "cc/delta/RT/b"; es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<=0.0) libmesh_error();
+    name = "cc/diffusion";      es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "cc/lambda"; es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "cc/theta"; es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "cc/Qc/alpha"; es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<=0.0) undefined_param_error(name);
+    name = "cc/Qc/beta"; es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<=0.0) undefined_param_error(name);
+    name = "cc/RTD/ref"; es.parameters.set<Real>(name) = in(name, 1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "cc/threshold"; es.parameters.set<Real>(name) = in(name, 1.0e-9);
   }
 
   // parameters for the species: fb
   {
-    name = "fb/lambda";      es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "fb/lambda/RT/r"; es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "fb/lambda/HU/r"; es.parameters.set<Real>(name) = in(name, -1.);
-    if (es.parameters.get<Real>(name)>=0.0) libmesh_error();
-    name = "fb/omicro";      es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "fb/omicro/RT/r"; es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "fb/omicro/fb/b"; es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0||es.parameters.get<Real>(name)>1.0) libmesh_error();
-    name = "fb/omega";       es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "fb/diffusion";   es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
-    name = "fb/haptotaxis";  es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
+    name = "fb/diffusion";   es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "fb/haptotaxis";  es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
     name = "fb/radiotaxis";  es.parameters.set<Real>(name) = in(name, 0.);
-    if (es.parameters.get<Real>(name)<0.0) libmesh_error();
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "fb/kappa";      es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "fb/mu";   es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "fb/lambda";      es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "fb/nu";   es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "fb/theta";       es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "fb/RTD/ref"; es.parameters.set<Real>(name) = in(name, 1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "fb/threshold"; es.parameters.set<Real>(name) = in(name, 1.0e-9);
   }
 
-  // ...done
+  // parameters for the species: hu
+  {
+    name = "hu/min"; es.parameters.set<Real>(name) = in(name, -1000.);
+    name = "hu/max"; es.parameters.set<Real>(name) = in(name, +1000.);
+    name = "hu/phi/cc";   es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "hu/phi/fb";   es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)<0.0) undefined_param_error(name);
+    name = "hu/ref"; es.parameters.set<Real>(name) = in(name, -1.);
+    if (es.parameters.get<Real>(name)==0.0) undefined_param_error(name);
+  }
 }
 
 void initial_radiotherapy (EquationSystems & es,
                            const std::string & libmesh_dbg_var(system_name))
 {
-  libmesh_assert_equal_to(system_name, "RT");
+  libmesh_assert_equal_to(system_name, "RTD");
 
   const MeshBase& mesh = es.get_mesh();
   libmesh_assert_equal_to(mesh.mesh_dimension(), 3);
 
   ExplicitSystem & system =
-    es.get_system<ExplicitSystem>("RT");
+    es.get_system<ExplicitSystem>("RTD");
   libmesh_assert_equal_to(system.n_vars(), 3);
 
   std::ifstream fin(es.parameters.get<std::string>("input_nodal_RT"));
 
-  const Real RT_broad_frac = es.parameters.get<int>("RT_dose/broad/fractions"),
-             RT_focus_frac = es.parameters.get<int>("RT_dose/focus/fractions"),
-             RT_total_frac = RT_broad_frac + RT_focus_frac;
+  const Real RTD_broad_frac = es.parameters.get<int>("RTD/broad/fractions"),
+             RTD_focus_frac = es.parameters.get<int>("RTD/focus/fractions"),
+             RTD_total_frac = RTD_broad_frac + RTD_focus_frac;
   // simulation time is expressed in "days"
   //const int day = std::floor( 0.0 );
 
   for (const auto & node : mesh.node_ptr_range())
     {
-      Real RT_broad_, RT_focus_;
-      fin >> RT_broad_ >> RT_focus_;
+      Real RTD_broad_, RTD_focus_;
+      fin >> RTD_broad_ >> RTD_focus_;
 
       const dof_id_type idof[] = { node->dof_number(system.number(), 0, 0) ,
                                    node->dof_number(system.number(), 1, 0) ,
@@ -284,8 +263,8 @@ void initial_radiotherapy (EquationSystems & es,
       libmesh_assert( node->n_comp(system.number(), 1) == 1 );
       libmesh_assert( node->n_comp(system.number(), 2) == 1 );
 
-      system.solution->set(idof[0], RT_broad_);
-      system.solution->set(idof[1], RT_focus_);
+      system.solution->set(idof[0], RTD_broad_);
+      system.solution->set(idof[1], RTD_focus_);
     }
 
   // close solution vector and update the system
@@ -302,19 +281,17 @@ void initial_ripf (EquationSystems & es,
   const MeshBase& mesh = es.get_mesh();
   libmesh_assert_equal_to(mesh.mesh_dimension(), 3);
 
-  TransientLinearImplicitSystem & system =
-    es.get_system<TransientLinearImplicitSystem>("RIPF");
+  TransientLinearImplicitSystem & system = es.get_system<TransientLinearImplicitSystem>("RIPF");
   libmesh_assert_equal_to(system.n_vars(), 3);
 
-  es.parameters.set<Real> ("time") =
-  system.time = 0.0;
+  es.parameters.set<Real> ("time") = system.time = 0.0;
 
   std::ifstream fin(es.parameters.get<std::string>("input_nodal"));
 
   for (const auto & node : mesh.node_ptr_range())
     {
-      Real HU_, cc_, fb_;
-      fin >> HU_ >> cc_ >> fb_;
+      Real cc_, fb_, hu_;
+      fin >> hu_ >> cc_ >> fb_;
 
       const dof_id_type idof[] = { node->dof_number(system.number(), 0, 0) ,
                                    node->dof_number(system.number(), 1, 0) ,
@@ -323,9 +300,9 @@ void initial_ripf (EquationSystems & es,
       libmesh_assert( node->n_comp(system.number(), 1) == 1 );
       libmesh_assert( node->n_comp(system.number(), 2) == 1 );
 
-      system.solution->set(idof[0], HU_);
-      system.solution->set(idof[1], cc_);
-      system.solution->set(idof[2], fb_);
+      system.solution->set(idof[0], cc_);
+      system.solution->set(idof[1], fb_);
+      system.solution->set(idof[2], hu_);
     }
 
   // close solution vector and update the system
@@ -348,64 +325,54 @@ void assemble_ripf (EquationSystems & es,
   libmesh_assert_equal_to(system.n_vars(), 3);
 
   System & TD_system =
-    es.get_system<System>("RIPF-TimeDeriv");
+    es.get_system<System>("RIPF-dot");
   libmesh_assert_equal_to(TD_system.n_vars(), 3);
 
-  const ExplicitSystem & RT_system =
-    es.get_system<ExplicitSystem>("RT");
-  libmesh_assert_equal_to(RT_system.n_vars(), 3);
+  const ExplicitSystem & RTD_system =
+    es.get_system<ExplicitSystem>("RTD");
+  libmesh_assert_equal_to(RTD_system.n_vars(), 3);
 
   FEType fe_type = system.variable_type(0);
-  FEType fe_type_RT = RT_system.variable_type(0);
+  FEType fe_type_RTD = RTD_system.variable_type(0);
 
   std::unique_ptr<FEBase> fe(FEBase::build(dim, fe_type));
-  std::unique_ptr<FEBase> fe_RT(FEBase::build(dim, fe_type_RT));
+  std::unique_ptr<FEBase> fe_RTD(FEBase::build(dim, fe_type_RTD));
 
   QGauss qrule(dim, fe_type.default_quadrature_order());
 
   fe->attach_quadrature_rule(&qrule);
-  fe_RT->attach_quadrature_rule(&qrule);
+  fe_RTD->attach_quadrature_rule(&qrule);
 
   const std::vector<Real> & JxW = fe->get_JxW();
 
   const std::vector<std::vector<Real>> & phi = fe->get_phi();
-  const std::vector<std::vector<Real>> & theta = fe_RT->get_phi();
+  const std::vector<std::vector<Real>> & theta = fe_RTD->get_phi();
 
   const std::vector<std::vector<RealGradient>> & dphi = fe->get_dphi();
-  const std::vector<std::vector<RealGradient>> & dtheta = fe_RT->get_dphi();
+  const std::vector<std::vector<RealGradient>> & dtheta = fe_RTD->get_dphi();
 
   const Real DT_2 = es.parameters.get<Real>("time_step") / 2.0;
 
-  const Real VolFr_stroma     = es.parameters.get<Real>("volume_fraction/stroma"),
-             VolFr_parenchyma = es.parameters.get<Real>("volume_fraction/parenchyma"),
-             VolFr_exponent   = es.parameters.get<Real>("volume_fraction/exponent"),
-             VolFr_min_vacant = es.parameters.get<Real>("volume_fraction/min_vacant"),
-             VolFr_max_vacant = es.parameters.get<Real>("volume_fraction/max_vacant");
+  const Real capacity_exponent = es.parameters.get<Real>("capacity/exponent");
 
-  const Real phi_cc_B = es.parameters.get<Real>("HU/phi/cc/build"),
-             phi_cc_D = es.parameters.get<Real>("HU/phi/cc/decay"),
-             phi_cc   = es.parameters.get<Real>("HU/phi/cc/rate"),
-             phi_fb_B = es.parameters.get<Real>("HU/phi/fb/build"),
-             phi_fb_D = es.parameters.get<Real>("HU/phi/fb/decay"),
-             phi_fb   = es.parameters.get<Real>("HU/phi/fb/rate"),
-             phi_tol  = es.parameters.get<Real>("HU/phi/tolerance");
-  const Real kappa      = es.parameters.get<Real>("cc/kappa"),
-             kappa_RT_c = es.parameters.get<Real>("cc/kappa/RT/c"),
-             delta      = es.parameters.get<Real>("cc/delta"),
-             delta_RT_a = es.parameters.get<Real>("cc/delta/RT/a"),
-             delta_RT_b = es.parameters.get<Real>("cc/delta/RT/b");
-  const Real lambda      = es.parameters.get<Real>("fb/lambda"),
-             lambda_RT_r = es.parameters.get<Real>("fb/lambda/RT/r")
-                         ? es.parameters.get<Real>("fb/lambda/RT/r") : es.parameters.get<int>("RT_dose/total/max"),
-             lambda_HU_r = es.parameters.get<Real>("fb/lambda/HU/r"),
-             omicro      = es.parameters.get<Real>("fb/omicro"),
-             omicro_RT_r = es.parameters.get<Real>("fb/omicro/RT/r")
-                         ? es.parameters.get<Real>("fb/omicro/RT/r") : es.parameters.get<int>("RT_dose/total/max"),
-             omicro_fb_b = es.parameters.get<Real>("fb/omicro/fb/b"),
-             omega       = es.parameters.get<Real>("fb/omega"),
-             diffusion   = es.parameters.get<Real>("fb/diffusion"),
-             haptotaxis  = es.parameters.get<Real>("fb/haptotaxis"),
-             radiotaxis  = es.parameters.get<Real>("fb/radiotaxis");
+  const Real diffusion_cc  = es.parameters.get<Real>("cc/diffusion"),
+             lambda_cc = es.parameters.get<Real>("cc/lambda"),
+             theta_cc = es.parameters.get<Real>("cc/theta"),
+             alpha = es.parameters.get<Real>("cc/Qc/alpha"),
+             beta = es.parameters.get<Real>("cc/Qc/beta"),
+             RTD_ref_cc = es.parameters.get<Real>("cc/RTD/ref");
+  const Real diffusion_fb = es.parameters.get<Real>("fb/diffusion"),
+             haptotaxis_fb = es.parameters.get<Real>("fb/haptotaxis"),
+             radiotaxis_fb = es.parameters.get<Real>("fb/radiotaxis"),
+             kappa_fb = es.parameters.get<Real>("fb/kappa"),
+             mu = es.parameters.get<Real>("fb/mu"),
+             lambda_fb = es.parameters.get<Real>("fb/lambda"),
+             nu = es.parameters.get<Real>("fb/nu"),
+             theta_fb = es.parameters.get<Real>("fb/theta"),
+             RTD_ref_fb = es.parameters.get<Real>("fb/RTD/ref");
+  const Real hu_phi_cc   = es.parameters.get<Real>("hu/phi/cc"),
+             hu_phi_fb   = es.parameters.get<Real>("hu/phi/fb"),
+             hu_ref = es.parameters.get<Real>("hu/ref");
 
   for (const auto & elem : mesh.active_local_element_ptr_range())
     {
@@ -416,180 +383,155 @@ void assemble_ripf (EquationSystems & es,
       for (unsigned int v=0; v<3; v++)
         system.get_dof_map().dof_indices(elem, dof_indices_var[v], v);
 
-      std::vector<std::vector<dof_id_type>> dof_indices_RT_var(3);
+      std::vector<std::vector<dof_id_type>> dof_indices_RTD_var(3);
       for (unsigned int l=0; l<3; l++)
-        RT_system.get_dof_map().dof_indices(elem, dof_indices_RT_var[l], l);
+        RTD_system.get_dof_map().dof_indices(elem, dof_indices_RTD_var[l], l);
 
       const unsigned int n_dofs     = dof_indices.size();
       const unsigned int n_var_dofs = dof_indices_var[0].size();
-      const unsigned int n_RT_var_dofs = dof_indices_RT_var[0].size();
+      const unsigned int n_RTD_var_dofs = dof_indices_RTD_var[0].size();
 
       DenseMatrix<Number> Ke(n_dofs, n_dofs);
       DenseSubMatrix<Number> Ke_var[3][3] =
-      {
-        { DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke) } ,
-        { DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke) } ,
-        { DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke) }
-      };
+        {
+          { DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke) } ,
+          { DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke) } ,
+          { DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke), DenseSubMatrix<Number>(Ke) }
+        };
       for (unsigned int i=0; i<3; i++)
         for (unsigned int j=0; j<3; j++)
           Ke_var[i][j].reposition(i*n_var_dofs, j*n_var_dofs, n_var_dofs, n_var_dofs);
 
       DenseVector<Number> Fe(n_dofs);
       DenseSubVector<Number> Fe_var[3] =
-      {
-        DenseSubVector<Number>(Fe), DenseSubVector<Number>(Fe), DenseSubVector<Number>(Fe)
-      };
+        {
+          DenseSubVector<Number>(Fe), DenseSubVector<Number>(Fe), DenseSubVector<Number>(Fe)
+        };
       for (unsigned int i=0; i<3; i++)
         Fe_var[i].reposition(i*n_var_dofs, n_var_dofs);
 
       fe->reinit(elem);
-      fe_RT->reinit(elem);
+      fe_RTD->reinit(elem);
 
       for (unsigned int qp=0; qp<qrule.n_points(); qp++)
         {
-          Number HU_old(0.0), cc_old(0.0), fb_old(0.0);
-          Gradient GRAD_HU_old({0.0, 0.0, 0.0}), GRAD_fb_old({0.0, 0.0, 0.0});
+          Number cc_old(0.0), fb_old(0.0), hu_old(0.0);
+          Gradient GRAD_cc_old({0.0, 0.0, 0.0}), GRAD_fb_old({0.0, 0.0, 0.0}),GRAD_hu_old({0.0, 0.0, 0.0});
           for (std::size_t l=0; l<n_var_dofs; l++)
             {
-              HU_old += phi[l][qp] * system.old_solution(dof_indices_var[0][l]);
-              cc_old += phi[l][qp] * system.old_solution(dof_indices_var[1][l]);
-              fb_old += phi[l][qp] * system.old_solution(dof_indices_var[2][l]);
-              GRAD_HU_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[0][l]));
-              GRAD_fb_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[2][l]));
+              cc_old += phi[l][qp] * system.old_solution(dof_indices_var[0][l]);
+              fb_old += phi[l][qp] * system.old_solution(dof_indices_var[1][l]);
+              hu_old += phi[l][qp] * system.old_solution(dof_indices_var[2][l]);
+              GRAD_cc_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[0][l]));
+              GRAD_fb_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[1][l]));
+              GRAD_hu_old.add_scaled(dphi[l][qp], system.old_solution(dof_indices_var[2][l]));
             }
-          //Number cc_older(0.0), fb_older(0.0);
-          //for (std::size_t l=0; l<n_var_dofs; l++)
-          //  {
-          //    cc_older += phi[l][qp] * system.older_solution(dof_indices_var[1][l]);
-          //    fb_older += phi[l][qp] * system.older_solution(dof_indices_var[2][l]);
-          //  }
+          Number cc_older(0.0), fb_older(0.0);
+          for (std::size_t l=0; l<n_var_dofs; l++)
+            {
+              cc_older += phi[l][qp] * system.older_solution(dof_indices_var[0][l]);
+              fb_older += phi[l][qp] * system.older_solution(dof_indices_var[1][l]);
+            }
           Number cc__dtime(0.0), fb__dtime(0.0);
           for (std::size_t l=0; l<n_var_dofs; l++)
             {
-              cc__dtime += phi[l][qp] * TD_system.current_solution(dof_indices_var[1][l]);
-              fb__dtime += phi[l][qp] * TD_system.current_solution(dof_indices_var[2][l]);
+              cc__dtime += phi[l][qp] * TD_system.current_solution(dof_indices_var[0][l]);
+              fb__dtime += phi[l][qp] * TD_system.current_solution(dof_indices_var[1][l]);
             }
-          Number RT_td(0.0);
-          Gradient GRAD_RT_td({0.0, 0.0, 0.0});
-          for (std::size_t l=0; l<n_RT_var_dofs; l++)
+          if ( fb__dtime < -1e-2 )
             {
-              RT_td += theta[l][qp] * RT_system.current_solution(dof_indices_RT_var[2][l]);
-              GRAD_RT_td.add_scaled(dtheta[l][qp], RT_system.current_solution(dof_indices_RT_var[2][l]));
+              std::cout << "Negative fb derivative. fb_dtime=" << fb__dtime << ", fb_old=" << fb_old << ", fb_older=" << fb_older << std::endl;
+              fb__dtime = 0.0;
+            }
+          Number RTD_td(0.0);
+          Gradient GRAD_RTD_td({0.0, 0.0, 0.0});
+          for (std::size_t l=0; l<n_RTD_var_dofs; l++)
+            {
+              RTD_td += theta[l][qp] * RTD_system.current_solution(dof_indices_RTD_var[2][l]);
+              GRAD_RTD_td.add_scaled(dtheta[l][qp], RTD_system.current_solution(dof_indices_RTD_var[2][l]));
             }
           // normalize the gradient vector
           {
-            const Real l2norm = GRAD_RT_td.norm();
-            GRAD_RT_td = l2norm ? GRAD_RT_td.unit() : Gradient(0.0,0.0,0.0);
+            const Real l2norm = GRAD_RTD_td.norm();
+            GRAD_RTD_td = l2norm ? GRAD_RTD_td.unit() : Gradient(0.0,0.0,0.0);
           }
 
-          const Real kappa_RT = kappa * exp(-kappa_RT_c*RT_td);
-          const Real delta_RT = delta * (1.0 - exp(-delta_RT_a*RT_td-delta_RT_b*pow2(RT_td)));
-          const Real lambda_RT = lambda * (RT_td/lambda_RT_r);
-          const Real omicro_RT = omicro * apply_lbound(0.0, 4.0*((RT_td/omicro_RT_r)-pow2(RT_td/omicro_RT_r)));
-          //
-          Real epsilon_cc = 0.0;
-          if      (cc__dtime> phi_tol) epsilon_cc = phi_cc_B;
-          else if (cc__dtime<-phi_tol) epsilon_cc = phi_cc_D;
-          Real epsilon_fb = 0.0;
-          if      (fb__dtime> phi_tol) epsilon_fb = phi_fb_B;
-          else if (fb__dtime<-phi_tol) epsilon_fb = phi_fb_D;
-          //
-          const Real VolFr_cells = cc_old + fb_old;
-          const Real VolFr_TOTAL = VolFr_stroma + VolFr_parenchyma + VolFr_cells;
-          //
+          // Capacity function
           Real Tau = 0.0;
-          Real Tau__dcc = 0.0, Tau__dfb = 0.0;
-          if (VolFr_TOTAL<1.0)
+          Real Tau_dcc = 0.0, Tau_dfb = 0.0, Tau_dhu = 0.0;
+          const Real total_cells = cc_old + fb_old + 0.5*(hu_old + hu_ref)/hu_ref;
+          if (total_cells<1.0)
             {
-              Tau = pow(1.0-VolFr_TOTAL, VolFr_exponent);
-              Tau__dcc =
-              Tau__dfb = -VolFr_exponent * pow(1.0-VolFr_TOTAL, VolFr_exponent-1.0);
-              if ( Tau < VolFr_min_vacant )
-                {
-                  Tau = 0.0;
-                  Tau__dcc =
-                  Tau__dfb = 0.0;
-                }
+              Tau = 1.0 - pow(total_cells, capacity_exponent);
+              Tau_dcc = Tau_dfb = -capacity_exponent * pow(total_cells, capacity_exponent-1.0);
+              Tau_dhu = -capacity_exponent * pow(total_cells, capacity_exponent-1.0)*0.5/hu_ref;
             }
-          //
-          Real Koppa = 0.0;
-          Real Koppa__dcc = 0.0;
-          if      (cc_old<0.0) ;
+          //      std::cout << "Tau = " << Tau << ", Tau_dfb = " << Tau_dfb << ", Tau_dhu = " << Tau_dhu <<  std::endl;
+
+          // cc terms
+          const Real normRTD_cc = RTD_td/RTD_ref_cc;
+          const Real theta_cc_Qc = theta_cc * (1.0 - exp(-alpha*normRTD_cc-beta*pow2(normRTD_cc)));
+          Real cc_prol = 0.0;
+          Real cc_prol_dcc = 0.0;
+          if      (cc_old<1e-2) ;
           else if (cc_old<1.0)
             {
-              Koppa = 4.0*(cc_old-cc_old*cc_old);
-              Koppa__dcc = 4.0-8.0*cc_old;
+              cc_prol = (cc_old-cc_old*cc_old);
+              cc_prol_dcc = 1.0-2.0*cc_old;
             }
-          //
-          Real Lombda = 0.0;
-          Real Lombda__dHU = 0.0, Lombda__dcc = 0.0, Lombda__dfb = 0.0;
-          Real Omecro = 0.0;
-          Real Omecro__dHU = 0.0, Omecro__dcc = 0.0, Omecro__dfb = 0.0;
-          if      (fb_old<0.0) ;
-          else if (fb_old<1.0)
+
+          // fb terms
+          const Real normRTD_fb = RTD_td/RTD_ref_fb;
+          const Real kappa_fb_RTD = kappa_fb * normRTD_fb;
+          const Real lambda_fb_RTD = lambda_fb * normRTD_fb;
+          Real fb_recruit = 0.0;
+          Real fb_recruit_dcc = 0.0, fb_recruit_dfb = 0.0, fb_recruit_dhu = 0.0;
+          Real fb_prol = 0.0;
+          Real fb_prol_dcc = 0.0, fb_prol_dfb = 0.0, fb_prol_dhu = 0.0;
+          if (fb_old >= 0.0 && fb_old < 1.0)
             {
-              if (HU_old>lambda_HU_r && HU_old<0.0)
-                {
-                  Lombda = (1.0-pow2(fb_old))*(HU_old/lambda_HU_r);
-                  Lombda__dHU = (1.0-pow2(fb_old))/lambda_HU_r;
-                  Lombda__dcc = 0.0;
-                  Lombda__dfb = -(2.0*fb_old)*(HU_old/lambda_HU_r);
-                }
-              else if (HU_old<lambda_HU_r)
-                {
-                  Lombda = (1.0-pow2(fb_old));
-                  Lombda__dHU = 0.0;
-                  Lombda__dcc = 0.0;
-                  Lombda__dfb = -(2.0*fb_old);
-                }
-              //
-              if (fb_old<=omicro_fb_b)
-                {
-                  Omecro = 4.0*(omicro_fb_b-pow2(omicro_fb_b));
-                  Omecro__dHU = 0.0;
-                  Omecro__dcc = 0.0;
-                  Omecro__dfb = 0.0;
-                }
-              else
-                {
-                  Omecro = 4.0*(fb_old-pow2(fb_old));
-                  Omecro__dHU = 0.0;
-                  Omecro__dcc = 0.0;
-                  Omecro__dfb = 4.0-8.0*fb_old;
-                }
+              fb_recruit = pow(1.0-fb_old,mu);
+              fb_recruit_dfb = mu*pow(1-fb_old,mu-1)*(-1.0);
+
+              fb_prol = pow(fb_old,nu)*(1-fb_old);
+              if ( fb_old > 0 ) fb_prol_dfb = nu*pow(fb_old,nu-1)*(1-fb_old) + pow(fb_old,nu)*(-1.0);
             }
+
+          // hu terms
+          const Real hu_cc_term = hu_phi_cc * (hu_old + hu_ref)/hu_ref;
+          const Real hu_cc_term_dhu = 0.0; //hu_phi_cc / hu_ref;
+          const Real hu_fb_term = hu_phi_fb * (hu_old + hu_ref)/hu_ref;
+          const Real hu_fb_term_dhu = 0.0; //hu_phi_fb / hu_ref;
 
           for (std::size_t i=0; i<n_var_dofs; i++)
             {
               // RHS contribution
               Fe_var[0](i) += JxW[qp]*(
-                                        HU_old * phi[i][qp] // capacity term
+                                        cc_old * phi[i][qp] // capacity term
                                       + DT_2*( // source, sink terms
-                                               epsilon_cc * cc_old * phi[i][qp]
-                                             + epsilon_fb * fb_old * phi[i][qp]
-                                             + phi_cc * cc__dtime * phi[i][qp]
-                                             + phi_fb * fb__dtime * phi[i][qp]
+                                               lambda_cc * cc_prol * Tau * phi[i][qp]
+                                             - theta_cc_Qc * cc_old * phi[i][qp]
+                                             - diffusion_cc * Tau * (GRAD_cc_old * dphi[i][qp])
                                              )
                                       );
               // RHS contribution
               Fe_var[1](i) += JxW[qp]*(
-                                        cc_old * phi[i][qp] // capacity term
-                                      + DT_2*( // source, sink terms
-                                               kappa_RT * Tau * Koppa * phi[i][qp]
-                                             - delta_RT * cc_old * phi[i][qp]
+                                        fb_old * phi[i][qp] // capacity term
+                                      + DT_2*( // transport, source, sink terms
+                                               kappa_fb_RTD * fb_recruit * Tau * phi[i][qp]
+                                             + lambda_fb_RTD * fb_prol * Tau * phi[i][qp]
+                                             - theta_fb * fb_old * phi[i][qp]
+                                             - diffusion_fb * Tau * (GRAD_fb_old * dphi[i][qp])
+                                             - haptotaxis_fb * Tau * (GRAD_hu_old * fb_old * dphi[i][qp])
+                                             - radiotaxis_fb * Tau * (GRAD_RTD_td  * fb_old * dphi[i][qp])
                                              )
                                       );
               // RHS contribution
               Fe_var[2](i) += JxW[qp]*(
-                                        fb_old * phi[i][qp] // capacity term
-                                      + DT_2*( // transport, source, sink terms
-                                               lambda_RT * Tau * Lombda * phi[i][qp]
-                                             + omicro_RT * Tau * Omecro * phi[i][qp]
-                                             - omega * fb_old * phi[i][qp]
-                                             - diffusion * Tau * (GRAD_fb_old * dphi[i][qp])
-                                             - haptotaxis * Tau * (GRAD_HU_old * fb_old * dphi[i][qp])
-                                             - radiotaxis * Tau * (GRAD_RT_td  * fb_old * dphi[i][qp])
+                                        hu_old * phi[i][qp] // capacity term
+                                      + DT_2*( // source, sink terms
+                                             + hu_cc_term * cc__dtime * phi[i][qp]
+                                             + hu_fb_term * fb__dtime * phi[i][qp]
                                              )
                                       );
 
@@ -598,66 +540,79 @@ void assemble_ripf (EquationSystems & es,
                   // Matrix contribution
                   Ke_var[0][0](i,j) += JxW[qp]*(
                                                  phi[j][qp] * phi[i][qp] // capacity term
-                                               //- DT_2*( // source, sink terms
-                                               //       )
+                                               - DT_2*( // transport, source, sink terms
+                                                        lambda_cc * cc_prol * Tau_dcc * phi[j][qp] * phi[i][qp]
+                                                      + lambda_cc * cc_prol_dcc * Tau * phi[j][qp] * phi[i][qp]
+                                                      - theta_cc_Qc * phi[j][qp] * phi[i][qp]
+                                                      - diffusion_cc * Tau_dcc * phi[j][qp] * (GRAD_cc_old * dphi[i][qp])
+                                                      - diffusion_cc * Tau * (dphi[j][qp] * dphi[i][qp])
+                                                      )
                                                );
                   Ke_var[0][1](i,j) += JxW[qp]*(
-                                               - DT_2*( // source, sink terms
-                                                        epsilon_cc * phi[j][qp] * phi[i][qp]
+                                               - DT_2*( // transport, source, sink terms
+                                                        lambda_cc * cc_prol * Tau_dfb * phi[j][qp] * phi[i][qp]
+                                                      - diffusion_cc * Tau_dfb * phi[j][qp] * (GRAD_cc_old * dphi[i][qp])
                                                       )
                                                );
                   Ke_var[0][2](i,j) += JxW[qp]*(
-                                               - DT_2*( // source, sink terms
-                                                        epsilon_fb * phi[j][qp] * phi[i][qp]
+                                               - DT_2*( // transport, source, sink terms
+                                                       lambda_cc * cc_prol * Tau_dhu * phi[j][qp] * phi[i][qp]
+                                                      )
+                                                );
+                  // Matrix contribution
+                  Ke_var[1][0](i,j) += JxW[qp]*(
+                                               - DT_2*( // transport, source, sink terms
+                                                        kappa_fb_RTD * fb_recruit * Tau_dcc * phi[j][qp] * phi[i][qp]
+                                                      + kappa_fb_RTD * fb_recruit_dcc * Tau * phi[j][qp] * phi[i][qp]
+                                                      + lambda_fb_RTD * fb_prol * Tau_dcc * phi[j][qp] * phi[i][qp]
+                                                      + lambda_fb_RTD * fb_prol_dcc * Tau * phi[j][qp] * phi[i][qp]
+                                                      - diffusion_fb * Tau_dcc * phi[j][qp] * (GRAD_fb_old * dphi[i][qp])
+                                                      - haptotaxis_fb * Tau_dcc * phi[j][qp] * (GRAD_hu_old * fb_old * dphi[i][qp])
+                                                      - radiotaxis_fb * Tau_dcc * phi[j][qp] * (GRAD_RTD_td  * fb_old * dphi[i][qp])
                                                       )
                                                );
-                  // Matrix contribution
                   Ke_var[1][1](i,j) += JxW[qp]*(
                                                  phi[j][qp] * phi[i][qp] // capacity term
                                                - DT_2*( // transport, source, sink terms
-                                                        kappa_RT * Tau__dcc * Koppa * phi[j][qp] * phi[i][qp]
-                                                      + kappa_RT * Tau * Koppa__dcc * phi[j][qp] * phi[i][qp]
-                                                      - delta_RT * phi[j][qp] * phi[i][qp]
+                                                        kappa_fb_RTD * fb_recruit * Tau_dfb * phi[j][qp] * phi[i][qp]
+                                                      + kappa_fb_RTD * fb_recruit_dfb * Tau * phi[j][qp] * phi[i][qp]
+                                                      + lambda_fb_RTD * fb_prol * Tau_dfb * phi[j][qp] * phi[i][qp]
+                                                      + lambda_fb_RTD * fb_prol_dfb * Tau * phi[j][qp] * phi[i][qp]
+                                                      - theta_fb * phi[j][qp] * phi[i][qp]
+                                                      - diffusion_fb * Tau_dfb * phi[j][qp] * (GRAD_fb_old * dphi[i][qp])
+                                                      - diffusion_fb * Tau * (dphi[j][qp] * dphi[i][qp])
+                                                      - haptotaxis_fb * Tau_dfb * phi[j][qp] * (GRAD_hu_old * fb_old * dphi[i][qp])
+                                                      - haptotaxis_fb * Tau * (GRAD_hu_old * phi[j][qp] * dphi[i][qp])
+                                                      - radiotaxis_fb * Tau_dfb * phi[j][qp] * (GRAD_RTD_td  * fb_old * dphi[i][qp])
+                                                      - radiotaxis_fb * Tau * (GRAD_RTD_td  * phi[j][qp] * dphi[i][qp])
                                                       )
                                                );
                   Ke_var[1][2](i,j) += JxW[qp]*(
                                                - DT_2*( // transport, source, sink terms
-                                                        kappa_RT * Tau__dfb * Koppa * phi[j][qp] * phi[i][qp]
+                                                        kappa_fb_RTD * fb_recruit_dhu * Tau * phi[j][qp] * phi[i][qp]
+                                                      + kappa_fb_RTD * fb_recruit * Tau_dhu * phi[j][qp] * phi[i][qp]
+                                                      + lambda_fb_RTD * fb_prol_dhu * Tau * phi[j][qp] * phi[i][qp]
+                                                      + lambda_fb_RTD * fb_prol * Tau_dhu * phi[j][qp] * phi[i][qp]
+                                                      - haptotaxis_fb * Tau * (dphi[j][qp] * fb_old * dphi[i][qp])
                                                       )
                                                );
                   // Matrix contribution
                   Ke_var[2][0](i,j) += JxW[qp]*(
-                                               - DT_2*( // transport, source, sink terms
-                                                        lambda_RT * Tau * Lombda__dHU * phi[j][qp] * phi[i][qp]
-                                                      + omicro_RT * Tau * Omecro__dHU * phi[j][qp] * phi[i][qp]
-                                                      - haptotaxis * Tau * (dphi[j][qp] * fb_old * dphi[i][qp])
+                                               - DT_2*( // source, sink terms
+                                                        0.0//epsilon_cc * phi[j][qp] * phi[i][qp]
                                                       )
                                                );
                   Ke_var[2][1](i,j) += JxW[qp]*(
-                                               - DT_2*( // transport, source, sink terms
-                                                        lambda_RT * Tau__dcc * Lombda * phi[j][qp] * phi[i][qp]
-                                                      + lambda_RT * Tau * Lombda__dcc * phi[j][qp] * phi[i][qp]
-                                                      + omicro_RT * Tau__dcc * Omecro * phi[j][qp] * phi[i][qp]
-                                                      + omicro_RT * Tau * Omecro__dcc * phi[j][qp] * phi[i][qp]
-                                                      - diffusion * Tau__dcc * phi[j][qp] * (GRAD_fb_old * dphi[i][qp])
-                                                      - haptotaxis * Tau__dcc * phi[j][qp] * (GRAD_HU_old * fb_old * dphi[i][qp])
-                                                      - radiotaxis * Tau__dcc * phi[j][qp] * (GRAD_RT_td  * fb_old * dphi[i][qp])
+                                               - DT_2*( // source, sink terms
+                                                       0.0 //epsilon_fb * phi[j][qp] * phi[i][qp]
                                                       )
                                                );
+
                   Ke_var[2][2](i,j) += JxW[qp]*(
                                                  phi[j][qp] * phi[i][qp] // capacity term
-                                               - DT_2*( // transport, source, sink terms
-                                                        lambda_RT * Tau__dfb * Lombda * phi[j][qp] * phi[i][qp]
-                                                      + lambda_RT * Tau * Lombda__dfb * phi[j][qp] * phi[i][qp]
-                                                      + omicro_RT * Tau__dfb * Omecro * phi[j][qp] * phi[i][qp]
-                                                      + omicro_RT * Tau * Omecro__dfb * phi[j][qp] * phi[i][qp]
-                                                      - omega * phi[j][qp] * phi[i][qp]
-                                                      - diffusion * Tau__dfb * phi[j][qp] * (GRAD_fb_old * dphi[i][qp])
-                                                      - diffusion * Tau * (dphi[j][qp] * dphi[i][qp])
-                                                      - haptotaxis * Tau__dfb * phi[j][qp] * (GRAD_HU_old * fb_old * dphi[i][qp])
-                                                      - haptotaxis * Tau * (GRAD_HU_old * phi[j][qp] * dphi[i][qp])
-                                                      - radiotaxis * Tau__dfb * phi[j][qp] * (GRAD_RT_td  * fb_old * dphi[i][qp])
-                                                      - radiotaxis * Tau * (GRAD_RT_td  * phi[j][qp] * dphi[i][qp])
+                                               - DT_2*(
+                                                       + hu_cc_term_dhu * cc__dtime * phi[j][qp] * phi[i][qp]
+                                                       + hu_fb_term_dhu * fb__dtime * phi[j][qp] * phi[i][qp]
                                                       )
                                                );
                 }
@@ -681,30 +636,30 @@ void check_solution (EquationSystems & es, std::vector<Number> & prev_soln)
   libmesh_assert_equal_to(system.n_vars(), 3);
 
   System & TD_system =
-    es.get_system<System>("RIPF-TimeDeriv");
+    es.get_system<System>("RIPF-dot");
   libmesh_assert_equal_to(TD_system.n_vars(), 3);
 
-  ExplicitSystem & RT_system =
-    es.get_system<ExplicitSystem>("RT");
-  libmesh_assert_equal_to(RT_system.n_vars(), 3);
+  ExplicitSystem & RTD_system =
+    es.get_system<ExplicitSystem>("RTD");
+  libmesh_assert_equal_to(RTD_system.n_vars(), 3);
 
   std::vector<Number> soln;
   system.update_global_solution(soln);
 
-  std::vector<Number> RT_soln;
-  RT_system.update_global_solution(RT_soln);
+  std::vector<Number> RTD_soln;
+  RTD_system.update_global_solution(RTD_soln);
 
   const Real DT_R = 1.0 / es.parameters.get<Real>("time_step");
 
-  const Real HU_min = es.parameters.get<Real>("HU/min"),
-             HU_max = es.parameters.get<Real>("HU/max");
-  const Real RT_broad_frac = es.parameters.get<int>("RT_dose/broad/fractions"),
-             RT_focus_frac = es.parameters.get<int>("RT_dose/focus/fractions"),
-             RT_total_frac = RT_broad_frac + RT_focus_frac;
+  const Real hu_min = es.parameters.get<Real>("hu/min"),
+             hu_max = es.parameters.get<Real>("hu/max");
+  const Real RTD_broad_frac = es.parameters.get<int>("RTD/broad/fractions"),
+             RTD_focus_frac = es.parameters.get<int>("RTD/focus/fractions"),
+             RTD_total_frac = RTD_broad_frac + RTD_focus_frac;
   // simulation time is expressed in "days"
   const int day = std::floor( system.time );
-  // calculate the maximum total RT dose
-  Real RT_total_max = -1.0;
+  // calculate the maximum total RTD dose
+  Real RTD_total_max = -1.0;
 
   for (const auto & node : mesh.node_ptr_range())
     {
@@ -715,19 +670,24 @@ void check_solution (EquationSystems & es, std::vector<Number> & prev_soln)
       libmesh_assert( node->n_comp(system.number(), 1) == 1 );
       libmesh_assert( node->n_comp(system.number(), 2) == 1 );
 
-      Real HU_, cc_, fb_;
-      HU_ = soln[idof[0]]; if (HU_<HU_min) HU_ = HU_min; else if (HU_>HU_max) HU_ = HU_max;
-      cc_ = soln[idof[1]]; if (cc_<0.0) cc_ = 0.0;
-      fb_ = soln[idof[2]]; if (fb_<0.0) fb_ = 0.0;
+      Real cc_, fb_, hu_;
+      cc_ = soln[idof[0]]; if (cc_<0.0) cc_ = 0.0;
+      fb_ = soln[idof[1]]; if (fb_<0.0) fb_ = 0.0;
+      hu_ = soln[idof[2]]; if (hu_<hu_min) hu_ = hu_min; else if (hu_>hu_max) hu_ = hu_max;
 
-      Real HU_p_, cc_p_, fb_p_;
-      HU_p_ = prev_soln[idof[0]];
-      cc_p_ = prev_soln[idof[1]];
-      fb_p_ = prev_soln[idof[2]];
+      if (fb_>1.0) {
+        std::cout << "fb has overshoot: " << fb_ << " (not changed)" << std::endl;
+        //fb_ = 1.0;
+      }
 
-      system.solution->set(idof[0], HU_);
-      system.solution->set(idof[1], cc_);
-      system.solution->set(idof[2], fb_);
+      Real cc_p_, fb_p_, hu_p_;
+      cc_p_ = prev_soln[idof[0]];
+      fb_p_ = prev_soln[idof[1]];
+      hu_p_ = prev_soln[idof[2]];
+
+      system.solution->set(idof[0], cc_);
+      system.solution->set(idof[1], fb_);
+      system.solution->set(idof[2], hu_);
 
       const dof_id_type TD_idof[] = { node->dof_number(TD_system.number(), 0, 0) ,
                                       node->dof_number(TD_system.number(), 1, 0) ,
@@ -736,27 +696,27 @@ void check_solution (EquationSystems & es, std::vector<Number> & prev_soln)
       libmesh_assert( node->n_comp(TD_system.number(), 1) == 1 );
       libmesh_assert( node->n_comp(TD_system.number(), 2) == 1 );
 
-      TD_system.solution->set(TD_idof[0], (HU_-HU_p_)*DT_R);
-      TD_system.solution->set(TD_idof[1], (cc_-cc_p_)*DT_R);
-      TD_system.solution->set(TD_idof[2], (fb_-fb_p_)*DT_R);
+      TD_system.solution->set(TD_idof[0], (cc_-cc_p_)*DT_R);
+      TD_system.solution->set(TD_idof[1], (fb_-fb_p_)*DT_R);
+      TD_system.solution->set(TD_idof[2], (hu_-hu_p_)*DT_R);
 
-      const dof_id_type RT_idof[] = { node->dof_number(RT_system.number(), 0, 0) ,
-                                      node->dof_number(RT_system.number(), 1, 0) ,
-                                      node->dof_number(RT_system.number(), 2, 0) };
-      libmesh_assert( node->n_comp(RT_system.number(), 0) == 1 );
-      libmesh_assert( node->n_comp(RT_system.number(), 1) == 1 );
-      libmesh_assert( node->n_comp(RT_system.number(), 2) == 1 );
+      const dof_id_type RTD_idof[] = { node->dof_number(RTD_system.number(), 0, 0) ,
+                                      node->dof_number(RTD_system.number(), 1, 0) ,
+                                      node->dof_number(RTD_system.number(), 2, 0) };
+      libmesh_assert( node->n_comp(RTD_system.number(), 0) == 1 );
+      libmesh_assert( node->n_comp(RTD_system.number(), 1) == 1 );
+      libmesh_assert( node->n_comp(RTD_system.number(), 2) == 1 );
 
-      const Real RT_broad_ = RT_soln[RT_idof[0]],
-                 RT_focus_ = RT_soln[RT_idof[1]];
-      Real RT_total_ = 0.0; // radiation therapy (RT) dose per fraction
-      if      ( day < RT_broad_frac ) RT_total_ = RT_broad_ / RT_broad_frac * (day+1);
-      else if ( day < RT_total_frac ) RT_total_ = RT_focus_ / RT_focus_frac * ((day+1)-RT_broad_frac) + RT_broad_;
-      else                            RT_total_ = RT_broad_ + RT_focus_;
+      const Real RTD_broad_ = RTD_soln[RTD_idof[0]],
+                 RTD_focus_ = RTD_soln[RTD_idof[1]];
+      Real RTD_total_ = 0.0; // radiation therapy (RTD) dose per fraction
+      if      ( day < RTD_broad_frac ) RTD_total_ = RTD_broad_ / RTD_broad_frac * (day+1);
+      else if ( day < RTD_total_frac ) RTD_total_ = RTD_focus_ / RTD_focus_frac * ((day+1)-RTD_broad_frac) + RTD_broad_;
+      else                            RTD_total_ = RTD_broad_ + RTD_focus_;
 
-      RT_system.solution->set(RT_idof[2], RT_total_);
+      RTD_system.solution->set(RTD_idof[2], RTD_total_);
       // ...is it the maximum value?
-      RT_total_max = std::max(RT_total_max, RT_total_);
+      RTD_total_max = std::max(RTD_total_max, RTD_total_);
     }
 
   // close solution vector and update the system
@@ -764,13 +724,13 @@ void check_solution (EquationSystems & es, std::vector<Number> & prev_soln)
   system.update();
   TD_system.solution->close();
   TD_system.update();
-  RT_system.solution->close();
-  RT_system.update();
+  RTD_system.solution->close();
+  RTD_system.update();
   // copy current solution (vector) into previous one
   prev_soln = soln;
   //
-  es.parameters.set<int>("RT_dose/total/max") = RT_total_max;
-  if (RT_total_max<=0.0) libmesh_error();
+  es.parameters.set<int>("RTD/total/max") = RTD_total_max;
+  if (RTD_total_max<=0.0) libmesh_error();
   // ...done
 }
 
@@ -785,13 +745,6 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
 
   std::vector<Number> soln;
   system.update_global_solution(soln);
-
-  const Real cc__HU_min = es.parameters.get<Real>("range_cc/HU/min"),
-             cc__HU_max = es.parameters.get<Real>("range_cc/HU/max"),
-             cc__min = es.parameters.get<Real>("range_cc/min");
-  const Real fb__HU_min = es.parameters.get<Real>("range_fb/HU/min"),
-             fb__HU_max = es.parameters.get<Real>("range_fb/HU/max"),
-             fb__min = es.parameters.get<Real>("range_fb/min");
 
   pm_ptr->barrier();
 
@@ -818,37 +771,23 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
           libmesh_assert(elem->n_nodes() == dof_indices_var[1].size());
           libmesh_assert(elem->n_nodes() == dof_indices_var[2].size());
 
-          std::vector<Real> HU_, cc_, fb_;
+          Real cc_, fb_, hu_;
+          const Real cc_thres = es.parameters.get<Real>("cc/threshold");
+          const Real fb_thres = es.parameters.get<Real>("fb/threshold");
+          bool cc_cell=true, fb_cell=true;
           for (unsigned int l=0; l<elem->n_nodes(); l++)
             {
-              HU_.push_back( soln[dof_indices_var[0][l]] );
-              cc_.push_back( soln[dof_indices_var[1][l]] );
-              fb_.push_back( soln[dof_indices_var[2][l]] );
+              cc_ = soln[dof_indices_var[0][l]];
+              fb_ = soln[dof_indices_var[1][l]];
+              hu_ = soln[dof_indices_var[2][l]];
+              if ( cc_ < cc_thres ) cc_cell = false;
+              if ( fb_ < fb_thres ) fb_cell = false;
+              if ( !cc_cell && !fb_cell ) break;
             }
 
-          {
-            bool do_include = true;
-            for (unsigned int l=0; l<elem->n_nodes() && do_include; l++)
-              {
-                if ( !(  HU_[l]>=cc__HU_min && HU_[l]<=cc__HU_max
-                      && cc_[l]>=cc__min ) )
-                  do_include = false;
-              }
-            if (do_include)
-              tumour_volume += elem->volume();
-          }
+          if (cc_cell) tumour_volume += elem->volume();
+          if (fb_cell) fibrosis_volume += elem->volume();
 
-          {
-            bool do_include = true;
-            for (unsigned int l=0; l<elem->n_nodes() && do_include; l++)
-              {
-                if ( !(  HU_[l]>=fb__HU_min && HU_[l]<=fb__HU_max
-                      && fb_[l]>=fb__min ) )
-                  do_include = false;
-              }
-            if (do_include)
-              fibrosis_volume += elem->volume();
-          }
           // ...end of active finite elements loop
         }
 

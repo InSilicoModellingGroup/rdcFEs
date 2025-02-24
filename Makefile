@@ -24,7 +24,6 @@ $(notdir $(target)): $(objects)
 ###############################################################################
 dust:
 	@echo "Deleting old output and runtime files"
-	@rm $(this_project)/src/*.o
 	@rm -f out*.m job_output.txt output.txt* *.gmv.* *.plt.* out*.xdr* out*.xda* PI* *.e *.ex2 *.vtk *.vtu *.pvd $(target)
 
 clean: dust

@@ -364,6 +364,12 @@ RealTensorValue tensor (const RealVectorValue& a)
   return a_a;
 }
 //-------------------------------------------------------------------------------------------------
+inline
+void undefined_param_error (std::string param_name)
+{
+  std::cout << "\n\nERROR: Undefined or wrongly defined parameter: " << param_name << "\n\n" << std::endl;
+  exit(1);
+}
 // Symmetric matrix "A":
 // eigenvectors in columns of "eVec" that correspond to eigenvalues in vector "eVal"
 void eigen_decomposition(double A[3][3], double eVec[3][3], double eVal[3]);
