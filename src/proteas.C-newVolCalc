@@ -234,7 +234,6 @@ void input (const std::string & file_name, EquationSystems & es)
 
   {
     name = "cells/total_capacity"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "roiVolCalc/integral"; es.parameters.set<bool>(name) = in(name, false);
 
     name = "radiotherapy/max_dosage"; es.parameters.set<Real>(name) = in(name, 1.0);
     name = "radiotherapy/theta"; es.parameters.set<Real>(name) = in(name, 1.0);
@@ -764,8 +763,6 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
   std::vector<Number> soln;
   system.update_global_solution(soln);
 
-  const bool integralVolCalc = es.parameters.get<bool>("roiVolCalc/integral");
-
   const Real tum_thres = es.parameters.get<Real>("tumour/threshold"),
              nec_thres = es.parameters.get<Real>("necrosis/threshold"),
              oed_thres = es.parameters.get<Real>("oedema/threshold");
@@ -800,85 +797,19 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
               oed_.push_back( soln[dof_indices_var[2][l]] );
             }
 
-          if (integralVolCalc)
+          for (unsigned int l=0; l<elem->n_nodes(); l++)
             {
-              bool tum_include = true;
-              bool nec_include = true;
-              bool oed_include = true;
-              Real temp_tum_volume = 0.0;
-              Real temp_nec_volume = 0.0;
-              Real temp_oed_volume = 0.0;
-
-              for (unsigned int l=0; l<elem->n_nodes(); l++)
-                {
-                  if ( tum_[l] > 0.01 && tum_include ) {
-                    temp_tum_volume += tum_[l]*elem->volume()/4.0;
-                  }
-                  else {
-                    tum_include = false;
-                    temp_tum_volume = 0.0;
-                  }
-                  if ( nec_[l] > 0.01 && nec_include ) {
-                    temp_nec_volume += nec_[l]*elem->volume()/4.0;
-                  }
-                  else {
-                    nec_include = false;
-                    temp_nec_volume = 0.0;
-                  }
-                  if ( oed_[l] > 0.01 && oed_include ) {
-                    temp_oed_volume += oed_[l]*elem->volume()/4.0;
-                  }
-                  else {
-                    oed_include = false;
-                    temp_oed_volume = 0.0;
-                  }
-                }
-              if (tum_include) tum_volume += temp_tum_volume;
-              if (nec_include) nec_volume += temp_nec_volume;
-              if (oed_include) oed_volume += temp_oed_volume;
-            }
-          else
-            {
-              {
-                bool do_include = true;
-                for (unsigned int l=0; l<elem->n_nodes() && do_include; l++)
-                  {
-                    if ( tum_[l] < tum_thres ) {
-                      do_include = false;
-                      break;
-                    }
-                  }
-                if (do_include)
-                  tum_volume += elem->volume();
+              if ( tum_[l] > 0.01 ) {
+                tum_volume += tum_[l]*elem->volume()/4.0;
               }
-
-              {
-                bool do_include = true;
-                for (unsigned int l=0; l<elem->n_nodes() && do_include; l++)
-                  {
-                    if ( nec_[l] < nec_thres ) {
-                      do_include = false;
-                      break;
-                    }
-                  }
-                if (do_include)
-                  nec_volume += elem->volume();
+              if ( nec_[l] > 0.01 ) {
+                nec_volume += nec_[l]*elem->volume()/4.0;
               }
-
-              {
-                bool do_include = true;
-                for (unsigned int l=0; l<elem->n_nodes() && do_include; l++)
-                  {
-                    if ( oed_[l] < oed_thres ) {
-                      do_include = false;
-                      break;
-                    }
-                  }
-                if (do_include)
-                  oed_volume += elem->volume();
+              if ( oed_[l] > 0.01 ) {
+                oed_volume += oed_[l]*elem->volume()/4.0;
               }
             }
-              // ...end of active finite elements loop
+          // ...end of active finite elements loop
         }
 
       // save the data in the CSV file
