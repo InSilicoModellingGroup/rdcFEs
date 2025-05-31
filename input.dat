@@ -1,17 +1,20 @@
 #
-directory = 'RP01-newModel-initial'
-input_GMSH      = 'initial_data/RP01/RPRO-01a_Brain-labeled_brain.msh'
-input_nodal     = 'initial_data/RP01/RPRO-01a_Brain-nodal_field.dat'
-input_nodal_aux = 'initial_data/RP01/RPRO-01a_Brain-nodal_field_aux.dat'
+directory = 'output/proteas-v2-preopt/RP04b'
+input_GMSH      = 'initial_data/RP04b/RP04b_brain-labelled.msh'
+input_nodal     = 'initial_data/RP04b/RP04b_brain-nodal_field.dat'
+input_nodal_aux = 'initial_data/RP04b/RP04b_brain-nodal_field_aux.dat'
 #
 time_step_number = 720
 time_step = 0.5
-output_step = 60
+#output_step = 7
+output_time_points = '60 120 240 480 720'
 #
 linear_solver_tolerance = 1.0e-6
 linear_solver_maximum_iterations = 5000
 #
 cells/total_capacity = 1.0
+#
+roiVolCalc/integral = true
 #
 radiotherapy/max_dosage = 25.2249
 radiotherapy/theta = 1.0e-2
@@ -24,7 +27,7 @@ tumour/RT_exp_a = 0.07
 tumour/RT_exp_b = 0.007
 tumour/threshold = 0.1
 #
-necrosis/proliferation = 0.5e-3
+necrosis/proliferation_coeff = 0.1
 necrosis/clearance_rate = 5.0e-2
 necrosis/threshold = 0.1
 #

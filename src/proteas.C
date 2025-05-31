@@ -239,24 +239,40 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "radiotherapy/max_dosage"; es.parameters.set<Real>(name) = in(name, 1.0);
     name = "radiotherapy/theta"; es.parameters.set<Real>(name) = in(name, 1.0);
 
-    name = "tumour/diffusion"; es.parameters.set<Real>(name) = in(name, 0.0);
-    name = "tumour/proliferation"; es.parameters.set<Real>(name) = in(name, 0.0);
-    name = "tumour/alpha"; es.parameters.set<Real>(name) = in(name, 0.0);
-    name = "tumour/RT_death_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "tumour/diffusion"; es.parameters.set<Real>(name) = in(name, -1.0);
+    if (es.parameters.get<Real>(name)<0.0 && es.comm().rank()) libmesh_error_msg("Invalid or undefined parameter: " << name);
+    name = "tumour/proliferation"; es.parameters.set<Real>(name) = in(name, -1.0);
+    if (es.parameters.get<Real>(name)<0.0 && es.comm().rank()) libmesh_error_msg("Invalid or undefined parameter: " << name);
+    name = "tumour/alpha"; es.parameters.set<Real>(name) = in(name, -1.0);
+    if (es.parameters.get<Real>(name)<0.0 && es.comm().rank()) libmesh_error_msg("Invalid or undefined parameter: " << name);
+    name = "tumour/RT_death_rate"; es.parameters.set<Real>(name) = in(name, -1.0);
+    if (es.parameters.get<Real>(name)<0.0 && es.comm().rank()) libmesh_error_msg("Invalid or undefined parameter: " << name);
     name = "tumour/RT_exp_a"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "tumour/RT_exp_b"; es.parameters.set<Real>(name) = in(name, 0.0);
-    name = "tumour/threshold"; es.parameters.set<Real>(name) = in(name, 0.0);
+    if (es.parameters.get<Real>(name)<0.0 && es.comm().rank()) libmesh_error_msg("Invalid or undefined parameter: " << name);
+    name = "tumour/RT_exp_b"; es.parameters.set<Real>(name) = in(name, -1.0);
+    if (es.parameters.get<Real>(name)<0.0 && es.comm().rank()) libmesh_error_msg("Invalid or undefined parameter: " << name);
+    name = "tumour/threshold"; es.parameters.set<Real>(name) = in(name, -1.0);
+    if (es.parameters.get<Real>(name)<0.0 && es.comm().rank()) libmesh_error_msg("Invalid or undefined parameter: " << name);
 
-    name = "necrosis/proliferation"; es.parameters.set<Real>(name) = in(name, 0.0);
-    name = "necrosis/clearance_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
-    name = "necrosis/threshold"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "necrosis/proliferation_coeff"; es.parameters.set<Real>(name) = in(name, -1.0);
+    if (es.parameters.get<Real>(name)<0.0 && es.comm().rank()) libmesh_error_msg("Invalid or undefined parameter: " << name);
+    name = "necrosis/clearance_rate"; es.parameters.set<Real>(name) = in(name, -1.0);
+    if (es.parameters.get<Real>(name)<0.0 && es.comm().rank()) libmesh_error_msg("Invalid or undefined parameter: " << name);
+    name = "necrosis/threshold"; es.parameters.set<Real>(name) = in(name, -1.0);
+    if (es.parameters.get<Real>(name)<0.0 && es.comm().rank()) libmesh_error_msg("Invalid or undefined parameter: " << name);
 
-    name = "oedema/proliferation"; es.parameters.set<Real>(name) = in(name, 0.0);
-    name = "oedema/RT_inflammation_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
+    name = "oedema/proliferation"; es.parameters.set<Real>(name) = in(name, -1.0);
+    if (es.parameters.get<Real>(name)<0.0 && es.comm().rank()) libmesh_error_msg("Invalid or undefined parameter: " << name);
+    name = "oedema/RT_inflammation_rate"; es.parameters.set<Real>(name) = in(name, -1.0);
+    if (es.parameters.get<Real>(name)<0.0 && es.comm().rank()) libmesh_error_msg("Invalid or undefined parameter: " << name);
     name = "oedema/RT_exp"; es.parameters.set<Real>(name) = in(name, 1.0);
-    name = "oedema/clearance_rate"; es.parameters.set<Real>(name) = in(name, 0.0);
-    name = "oedema/diffusion"; es.parameters.set<Real>(name) = in(name, 0.0);
-    name = "oedema/threshold"; es.parameters.set<Real>(name) = in(name, 0.0);
+    if (es.parameters.get<Real>(name)<0.0 && es.comm().rank()) libmesh_error_msg("Invalid or undefined parameter: " << name);
+    name = "oedema/clearance_rate"; es.parameters.set<Real>(name) = in(name, -1.0);
+    if (es.parameters.get<Real>(name)<0.0 && es.comm().rank()) libmesh_error_msg("Invalid or undefined parameter: " << name);
+    name = "oedema/diffusion"; es.parameters.set<Real>(name) = in(name, -1.0);
+    if (es.parameters.get<Real>(name)<0.0 && es.comm().rank()) libmesh_error_msg("Invalid or undefined parameter: " << name);
+    name = "oedema/threshold"; es.parameters.set<Real>(name) = in(name, -1.0);
+    if (es.parameters.get<Real>(name)<0.0 && es.comm().rank()) libmesh_error_msg("Invalid or undefined parameter: " << name);
   }
 
   es.parameters.print();
@@ -412,8 +428,9 @@ void calc_rhs_vector (EquationSystems & es)
              a_RT_c  = es.parameters.get<Real>("tumour/RT_exp_a"),
              b_RT_c  = es.parameters.get<Real>("tumour/RT_exp_b");
 
-  const Real rho_n = es.parameters.get<Real>("necrosis/proliferation"),
+  const Real k_n = es.parameters.get<Real>("necrosis/proliferation_coeff"),
              psi_n = es.parameters.get<Real>("necrosis/clearance_rate");
+  const Real rho_n = k_n*rho_c;
 
   const Real rho_e  = es.parameters.get<Real>("oedema/proliferation"),
              chi_e  = es.parameters.get<Real>("oedema/RT_inflammation_rate"),
@@ -802,6 +819,8 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
 
           if (integralVolCalc)
             {
+              Real value_threshold = 0.01;
+
               bool tum_include = true;
               bool nec_include = true;
               bool oed_include = true;
@@ -811,21 +830,21 @@ void save_solution (std::ofstream & csv, EquationSystems & es)
 
               for (unsigned int l=0; l<elem->n_nodes(); l++)
                 {
-                  if ( tum_[l] > 0.01 && tum_include ) {
+                  if ( tum_[l] > value_threshold && tum_include ) {
                     temp_tum_volume += tum_[l]*elem->volume()/4.0;
                   }
                   else {
                     tum_include = false;
                     temp_tum_volume = 0.0;
                   }
-                  if ( nec_[l] > 0.01 && nec_include ) {
+                  if ( nec_[l] > value_threshold && nec_include ) {
                     temp_nec_volume += nec_[l]*elem->volume()/4.0;
                   }
                   else {
                     nec_include = false;
                     temp_nec_volume = 0.0;
                   }
-                  if ( oed_[l] > 0.01 && oed_include ) {
+                  if ( oed_[l] > value_threshold && oed_include ) {
                     temp_oed_volume += oed_[l]*elem->volume()/4.0;
                   }
                   else {
