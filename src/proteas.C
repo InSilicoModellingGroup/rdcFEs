@@ -244,7 +244,7 @@ void input (const std::string & file_name, EquationSystems & es)
     name = "tumour/proliferation"; es.parameters.set<Real>(name) = in(name, -1.0);
     if (es.parameters.get<Real>(name)<0.0 && es.comm().rank()) libmesh_error_msg("Invalid or undefined parameter: " << name);
     name = "tumour/alpha"; es.parameters.set<Real>(name) = in(name, -1.0);
-    if (es.parameters.get<Real>(name)<0.0 && es.comm().rank()) libmesh_error_msg("Invalid or undefined parameter: " << name);
+    if (es.parameters.get<Real>(name)<-0.5 && es.comm().rank()) libmesh_error_msg("Invalid or undefined parameter: " << name);
     name = "tumour/RT_death_rate"; es.parameters.set<Real>(name) = in(name, -1.0);
     if (es.parameters.get<Real>(name)<0.0 && es.comm().rank()) libmesh_error_msg("Invalid or undefined parameter: " << name);
     name = "tumour/RT_exp_a"; es.parameters.set<Real>(name) = in(name, 1.0);
